@@ -100,4 +100,4 @@ dist/
 
 .claude
 /.venv/
-spruzhyk_backend
+/spruzhyk_backend/
