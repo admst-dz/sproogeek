@@ -1,18 +1,52 @@
 import { useState, useEffect } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { Experience } from './components/Experience'
-import { Interface, ZoomControls } from './components/Interface'
-import { Home } from './components/Home'
-import { Order } from './components/Order'
-import { DealerDashboard } from './components/DealerDashboard'
-import { AuthModal } from './components/AuthModal'
-import { ClientDashboard } from './components/ClientDashboard' // ПРОВЕРЬТЕ ЭТОТ ИМПОРТ
+import { Experience } from './components/configurator/Experience'
+import { Interface, ZoomControls } from './components/configurator/Interface'
+import { Home } from './components/home/Home'
+import { Order } from './components/order/Order'
+import { DealerDashboard } from './components/dashboard/DealerDashboard'
+import { AuthModal } from './components/auth/AuthModal'
+import { ClientDashboard } from './components/dashboard/ClientDashboard'
 import { useConfigurator } from './store'
 import { restoreSession } from './api'
-import { Sketchbook } from './components/Sketchbook'
-import { SketchbookInterface } from './components/SketchbookInterface'
+import { SketchbookInterface } from './components/sketchbook/SketchbookInterface'
 import { ThermosInterface } from './components/thermos/ThermosInterface'
-import { CookieBanner } from './components/CookieBanner'
+import { CookieBanner } from './components/shared/CookieBanner'
+import { AdminAuth } from './components/auth/AdminAuth'
+
+const SCREEN_TO_PATH = {
+    home: '/',
+    configurator: '/configurator',
+    order: '/order',
+    dealer: '/dealer',
+    client_dashboard: '/dashboard',
+    sketchbook_configurator: '/sketchbook',
+    admin_auth: '/borodazaebal',
+};
+
+const PATH_TO_SCREEN = Object.fromEntries(
+    Object.entries(SCREEN_TO_PATH).map(([k, v]) => [v, k])
+);
+
+const TAB_TO_PATH = {
+    catalog: '/dashboard/catalog',
+    cart: '/dashboard/cart',
+    orders: '/dashboard/orders',
+};
+
+const PATH_TO_TAB = {
+    '/dashboard/catalog': 'catalog',
+    '/dashboard/cart': 'cart',
+    '/dashboard/orders': 'orders',
+};
+
+function getInitialState() {
+    const path = window.location.pathname;
+    if (path.startsWith('/dashboard/')) {
+        return { screen: 'client_dashboard', tab: PATH_TO_TAB[path] ?? null };
+    }
+    return { screen: PATH_TO_SCREEN[path] ?? 'home', tab: null };
+}
 
 function App() {
 

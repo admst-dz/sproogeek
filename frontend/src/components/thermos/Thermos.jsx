@@ -1,24 +1,31 @@
-import React, { useRef, useMemo } from 'react'
+import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { easing } from 'maath'
 import { useConfigurator } from '../../store'
 import { Decal, useTexture, useGLTF } from '@react-three/drei'
 import termosModelUrl from '../../assets/termos3.glb?url'
 
-function LogoDecal({ texture, position, rotation = 0, scale = 0.6, bodyRadius = 0.4 }) {
+function LogoDecal({ texture, position, rotation = 0, scale = 0.6, bodyRadius = 0.4, bodyCenterY = 0, bodyTopY = 999 }) {
     const map = useTexture(texture);
 
     const theta = (position[0] / 0.35) * (Math.PI * 0.45);
     const posX = Math.sin(theta) * bodyRadius;
     const posZ = Math.cos(theta) * bodyRadius;
-    const posY = position[1];
+    const cylinderTop = bodyCenterY + (bodyTopY - bodyCenterY) * 0.4;
+    const posY = Math.min(cylinderTop, position[1] + bodyCenterY);
+
+    // Слегка выносим декаль наружу от поверхности
+    const offset = 0.002;
+    const finalX = posX + Math.sin(theta) * offset;
+    const finalZ = posZ + Math.cos(theta) * offset;
 
     return (
         <Decal
-            position={[posX, posY, posZ]}
+            position={[finalX, posY, finalZ]}
             rotation={[0, theta, rotation]}
             scale={[scale, scale, scale * 0.6]}
-            renderOrder={2}
+            renderOrder={10}
+            depthTest={false}
         >
             <meshStandardMaterial
                 map={map}
@@ -26,8 +33,8 @@ function LogoDecal({ texture, position, rotation = 0, scale = 0.6, bodyRadius = 
                 alphaTest={0.15}
                 depthWrite={false}
                 polygonOffset
-                polygonOffsetFactor={-4}
-                polygonOffsetUnits={-4}
+                polygonOffsetFactor={-2}
+                polygonOffsetUnits={-2}
                 roughness={0.4}
                 metalness={0.1}
             />
@@ -35,7 +42,7 @@ function LogoDecal({ texture, position, rotation = 0, scale = 0.6, bodyRadius = 
     );
 }
 
-function ThermosMesh({ geo, matRef, color, metalness = 0.7, roughness = 0.25, logos = [], bodyRadius = 0.4, visible = true }) {
+function ThermosMesh({ geo, matRef, color, metalness = 0.0, roughness = 0.92, logos = [], bodyRadius = 0.4, bodyCenterY = 0, bodyTopY = 999, visible = true }) {
     return (
         <mesh geometry={geo} visible={visible}>
             <meshStandardMaterial ref={matRef} color={color} metalness={metalness} roughness={roughness} />
@@ -47,6 +54,8 @@ function ThermosMesh({ geo, matRef, color, metalness = 0.7, roughness = 0.25, lo
                     rotation={logo.rotation ?? 0}
                     scale={logo.scale ?? 0.6}
                     bodyRadius={bodyRadius}
+                    bodyCenterY={bodyCenterY}
+                    bodyTopY={bodyTopY}
                 />
             ))}
         </mesh>
@@ -57,8 +66,8 @@ export function Thermos(props) {
     const { thermosBodyColor, thermosCapColor, thermosCapVisible, thermosLogos } = useConfigurator();
     const { nodes } = useGLTF(termosModelUrl);
 
-    const { bodyGeo, capGeo, bodyRadius } = useMemo(() => {
-        if (!nodes) return { bodyGeo: null, capGeo: null, bodyRadius: 0.4 };
+    const { bodyGeo, capGeo, bodyRadius, bodyCenterY, bodyTopY } = useMemo(() => {
+        if (!nodes) return { bodyGeo: null, capGeo: null, bodyRadius: 0.4, bodyCenterY: 0, bodyTopY: 999 };
 
         const meshEntries = Object.entries(nodes)
             .filter(([, n]) => n.geometry)
@@ -74,12 +83,12 @@ export function Thermos(props) {
             vol: ((e.bbox.max.x - e.bbox.min.x) * (e.bbox.max.y - e.bbox.min.y) * (e.bbox.max.z - e.bbox.min.z)).toFixed(3),
         })));
 
-        if (meshEntries.length === 0) return { bodyGeo: null, capGeo: null, bodyRadius: 0.4 };
+        if (meshEntries.length === 0) return { bodyGeo: null, capGeo: null, bodyRadius: 0.4, bodyCenterY: 0, bodyTopY: 999 };
 
         if (meshEntries.length === 1) {
             const b = meshEntries[0].bbox;
             const r = Math.max(Math.abs(b.max.x), Math.abs(b.min.x), Math.abs(b.max.z), Math.abs(b.min.z));
-            return { bodyGeo: meshEntries[0].geo, capGeo: null, bodyRadius: r || 0.4 };
+            return { bodyGeo: meshEntries[0].geo, capGeo: null, bodyRadius: r || 0.4, bodyCenterY: (b.max.y + b.min.y) / 2, bodyTopY: b.max.y };
         }
 
         // Name-based detection
@@ -132,13 +141,16 @@ export function Thermos(props) {
         const bodyEntry = meshEntries[bodyIdx];
         const bb = bodyEntry.bbox;
         const radius = Math.max(Math.abs(bb.max.x), Math.abs(bb.min.x), Math.abs(bb.max.z), Math.abs(bb.min.z)) || 0.4;
+        const centerY = (bb.max.y + bb.min.y) / 2;
 
-        console.log('[Thermos] body:', meshEntries[bodyIdx]?.name, '| cap:', meshEntries[capIdx]?.name);
+        console.log('[Thermos] body:', meshEntries[bodyIdx]?.name, '| cap:', meshEntries[capIdx]?.name, '| bodyCenterY:', centerY.toFixed(3));
 
         return {
             bodyGeo: bodyEntry.geo,
             capGeo: capIdx >= 0 ? meshEntries[capIdx].geo : null,
             bodyRadius: radius,
+            bodyCenterY: centerY,
+            bodyTopY: bb.max.y,
         };
     }, [nodes]);
 
@@ -159,6 +171,8 @@ export function Thermos(props) {
                     color={thermosBodyColor}
                     logos={thermosLogos}
                     bodyRadius={bodyRadius}
+                    bodyCenterY={bodyCenterY}
+                    bodyTopY={bodyTopY}
                 />
             )}
             {capGeo && (

@@ -1,18 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useConfigurator } from "../store";
-import {
-    fetchAdminOrders,
-    fetchAllOrders,
-    fetchDealerProducts,
-    fetchOrderType,
-    fetchOrderTypes,
-    saveOrderType,
-    updateOrderStatus,
-    saveProduct,
-    updateProduct,
-    deleteProduct,
-} from '../api';
-import { getUserSecondaryLabel } from '../utils/user';
+import { useConfigurator } from "../../store";
+import { fetchAllOrders, updateOrderStatus, updateOrderPrice, fetchDealerProducts, saveProduct, updateProduct, deleteProduct } from '../../api';
+import { getUserSecondaryLabel } from '../../utils/user';
+import { Canvas } from '@react-three/fiber';
+import { PresentationControls, Stage, Environment } from '@react-three/drei';
+import { Notebook } from '../shared/Notebook';
+import { Sketchbook } from '../sketchbook/Sketchbook';
+import { Thermos } from '../thermos/Thermos';
 
 const ORDER_STAGES = [
     { key: 'new',         text: 'Новый',          color: 'bg-white/10 text-gray-400 border-white/10',            icon: '🕐' },

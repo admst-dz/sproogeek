@@ -1,10 +1,10 @@
 import React, { useRef, useEffect, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { easing } from 'maath'
-import { useConfigurator } from '../store'
+import { useConfigurator } from '../../store'
 import { Decal, useTexture, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
-import spiralModelUrl from '../assets/spiral.glb?url'
+import spiralModelUrl from '../../assets/spiral.glb?url'
 
 function LogoDecal({ texture, x, y, z, rotation = 0, scale = 0.6 }) {
     const map = useTexture(texture);

@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useConfigurator } from "../store";
-import { orderApi } from '../api';
+import { useConfigurator } from "../../store";
+import { orderApi } from '../../api';
 import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';
-import { Notebook } from './Notebook';
-import { Sketchbook } from './Sketchbook';
-import { Thermos } from './thermos/Thermos';
+import { Notebook } from '../shared/Notebook';
+import { Sketchbook } from '../sketchbook/Sketchbook';
+import { Thermos } from '../thermos/Thermos';
 
 export const Order = ({ onBack, onSuccess }) => {
     const {

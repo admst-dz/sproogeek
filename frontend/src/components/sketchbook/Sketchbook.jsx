@@ -1,7 +1,7 @@
 import React, { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { easing } from 'maath'
-import { useConfigurator } from '../store'
+import { useConfigurator } from '../../store'
 import { Decal, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 

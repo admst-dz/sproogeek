@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
-import { loginUser, registerUser, updateUserRole } from '../api';
-import apiClient from '../api';
+import { loginUser, registerUser, updateUserRole } from '../../api';
+import apiClient from '../../api';
 
 export const AuthModal = ({ onClose, onRoleCreated }) => {
     const [step, setStep] = useState(1);
