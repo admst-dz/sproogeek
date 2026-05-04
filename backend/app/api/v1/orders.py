@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi_pagination import Page, paginate
@@ -6,53 +6,57 @@ import httpx
 import uuid
 import os
 
-from app.database import get_db
-from app.schemas.order import OrderCreate, OrderResponse, OrderStatusUpdate
+from app.database import get_db, AsyncSessionLocal
+from app.schemas.order import OrderCreate, OrderResponse, OrderStatusUpdate, OrderPriceUpdate
 from app.services.order_service import OrderService
+from app.services.storage import s3_storage
 from app.crud import order as crud_order
+from app.crud import user as crud_user
 from app.core.deps import get_current_user
 
 from app.core.kafka import kafka_producer
 
 router = APIRouter()
 
-os.makedirs("uploads/renders", exist_ok=True)
+RENDERER_URL = os.getenv("RENDERER_URL", "http://renderer:3000/render")
 
 
-async def generate_backend_render(config: dict) -> str:
+async def generate_backend_render(config: dict) -> Optional[str]:
     try:
         async with httpx.AsyncClient() as client:
-            res = await client.post("http://renderer:3000/render", json={"config": config}, timeout=20.0)
+            res = await client.post(RENDERER_URL, json={"config": config}, timeout=25.0)
             res.raise_for_status()
-
-            filename = f"render_{uuid.uuid4().hex}.png"
-            filepath = f"uploads/renders/{filename}"
-            with open(filepath, "wb") as f:
-                f.write(res.content)
-
-            return f"/uploads/renders/{filename}"
-    except Exception as e:
+    except httpx.HTTPError as e:
         print(f"Error generating render: {e}")
         return None
+
+    filename = f"render_{uuid.uuid4().hex}.png"
+    uploaded = await s3_storage.upload_bytes(
+        content=res.content,
+        folder="renders",
+        filename=filename,
+        content_type=res.headers.get("content-type") or "image/png",
+    )
+    return uploaded["url"]
+
+
+async def _render_and_save(order_id: str, config: dict):
+    render_url = await generate_backend_render(config)
+    if render_url:
+        async with AsyncSessionLocal() as db:
+            await crud_order.update_render_url(db, order_id, render_url)
+        print(f"Render saved for order {order_id}: {render_url}")
 
 
 @router.post("/", response_model=OrderResponse)
 async def create_order(
         order: OrderCreate,
+        background_tasks: BackgroundTasks,
         db: AsyncSession = Depends(get_db),
         current_user=Depends(get_current_user),
 ):
-    config_for_3d = order.configuration.get("productConfig", {})
-    render_url = await generate_backend_render(config_for_3d)
+    new_order = await OrderService.create_new_order(db, order, current_user.id, render_url=None)
 
-    if render_url:
-        order.configuration["server_render_url"] = render_url
-
-    new_order = await OrderService.create_new_order(db, order, current_user.id)
-
-    # 3. ОТПРАВЛЯЕМ СОБЫТИЕ В KAFKA
-    # Это позволяет другим микросервисам (например, сервису отправки email
-    # или интеграции с Битрикс24) узнать, что заказ создан, и начать работу в фоне.
     await kafka_producer.send_message(
         topic="order_events",
         message={
@@ -60,10 +64,14 @@ async def create_order(
             "order_id": str(new_order.id),
             "user_id": current_user.id,
             "user_email": current_user.email,
-            "render_url": render_url,
+            "render_url": None,
             "status": new_order.status
         }
     )
+
+    configuration = order.configuration or {}
+    config_for_3d = configuration.get("productConfig", {})
+    background_tasks.add_task(_render_and_save, str(new_order.id), config_for_3d)
 
     return new_order
 
@@ -76,7 +84,8 @@ async def get_all_orders(
 ):
     if current_user.role not in ["admin", "dealer", "owner"]:
         raise HTTPException(status_code=403, detail="Access denied")
-    orders = await crud_order.get_all(db)
+
+    orders = await crud_order.get_all(db, dealer_id=dealer_id)
     return paginate(orders)
 
 
@@ -86,7 +95,16 @@ async def get_user_orders(
         db: AsyncSession = Depends(get_db),
         current_user=Depends(get_current_user),
 ):
-    if current_user.id != user_id and current_user.role not in ["admin", "dealer", "owner"]:
+    if current_user.id == user_id:
+        return await crud_order.get_orders_by_user(db, user_id)
+
+    if current_user.role == "dealer":
+        user = await crud_user.get_user(db, user_id)
+        if not user or user.dealer_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        return await crud_order.get_orders_by_user(db, user_id)
+
+    if current_user.role not in ["admin", "owner"]:
         raise HTTPException(status_code=403, detail="Access denied")
     return await crud_order.get_orders_by_user(db, user_id)
 
@@ -115,4 +133,20 @@ async def update_order_status(
         }
     )
 
+    return order
+
+
+@router.patch("/{order_id}/price", response_model=OrderResponse)
+async def update_order_price(
+        order_id: str,
+        price_data: OrderPriceUpdate,
+        db: AsyncSession = Depends(get_db),
+        current_user=Depends(get_current_user),
+):
+    if current_user.role not in ["admin", "dealer", "owner"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    order = await crud_order.update_price(db, order_id, price_data.dealer_price, price_data.dealer_comment)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
     return order

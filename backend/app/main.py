@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
-from app.api.v1 import users, products, orders, auth
+from app.api.v1 import users, products, orders, auth, files
 from app.database import get_db
 from fastapi_pagination import add_pagination
 
@@ -79,5 +79,6 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["Orders"])
 app.include_router(products.router, prefix="/api/v1/products", tags=["Products"])
+app.include_router(files.router, prefix="/api/v1/files", tags=["Files"])
 
 add_pagination(app)

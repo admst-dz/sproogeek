@@ -11,6 +11,7 @@ class UserRegister(BaseModel):
     # Не даем юзеру передать role="admin" при регистрации
     role: str = Field("client", pattern="^(client|dealer)$")
     sub_role: Optional[str] = Field(None, max_length=20)
+    dealer_id: Optional[str] = Field(None, max_length=64)
 
     @field_validator('password')
     @classmethod
@@ -31,9 +32,14 @@ class UserResponse(BaseModel):
     display_name: Optional[str] = None
     role: str
     sub_role: Optional[str] = None
+    dealer_id: Optional[str] = None
     token_balance: float = 0.0
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserDealerUpdate(BaseModel):
+    dealer_id: Optional[str] = Field(None, max_length=64)
 
 class TokenResponse(BaseModel):
     access_token: str

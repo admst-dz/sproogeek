@@ -1,0 +1,89 @@
+graph TD
+    %% --- Стилизация ---
+    classDef client fill:#EAF4FF,stroke:#0054FF,stroke-width:2px;
+    classDef dealer fill:#F3E5F5,stroke:#9C27B0,stroke-width:2px;
+    classDef prod fill:#E8F5E9,stroke:#43A047,stroke-width:2px;
+    classDef system fill:#FFF3E0,stroke:#FF9800,stroke-width:2px;
+    classDef ext fill:#ececec,stroke:#666,stroke-dasharray: 5 5;
+
+    %% --- Внешние системы ---
+    Bitrix[("Bitrix24 CRM<br>(Учет заказов, Клиенты)")]:::ext
+    FileStorage[("Облачное хранилище<br>(Макеты, PDF, Лого)")]:::ext
+
+    %% --- КЛИЕНТСКАЯ ЧАСТЬ (Frontend) ---
+    subgraph CLIENT_ZONE ["ЛИЧНЫЙ КАБИНЕТ КЛИЕНТА (React + Three.js)"]
+        direction TB
+        C_Auth[Авторизация / Привязка к Дилеру]:::client
+        C_Config["3D Конструктор (Spruzhyk)<br>Визуализация, Выбор блока, Лого"]:::client
+        C_Params[Параметры: Стр кратно 1, Допы, Реквизиты]:::client
+        C_Preview[Генерация файла согласования]:::client
+        C_Approve{Онлайн согласование}:::client
+        C_Status[Отслеживание статуса]:::client
+
+        C_Auth --> C_Config
+        C_Config --> C_Params
+        C_Params --> C_Preview
+        C_Preview --> C_Approve
+        C_Approve -- "Да" --> OrderCreated[("Заказ создан")]:::system
+        C_Approve -- "Нет" --> C_Config
+        OrderCreated -.-> C_Status
+    end
+
+    %% --- СЕРВЕРНОЕ ЯДРО (Backend) ---
+    subgraph CORE_SYSTEM ["ЯДРО СИСТЕМЫ (Backend & Logic)"]
+        API[API Gateway]:::system
+        DB[(База Данных Заказов)]:::system
+        PDF_Gen[("Генератор Файлов (Python/Node)<br>PDF превью, ТЗ")]:::system
+        Imposition[("Спуск Полос (Imposition Engine)<br>Раскладка SRA3 + QR + Штрихкод")]:::system
+        Warehouse[("Учет материалов<br>Списание по Техкарте")]:::system
+
+        OrderCreated --> API
+        API <--> DB
+        API <--> PDF_Gen
+        API <--> Bitrix
+        API <--> Imposition
+        API <--> Warehouse
+    end
+
+    %% --- ЗОНА ДИЛЕРА ---
+    subgraph DEALER_ZONE ["КАБИНЕТ ДИЛЕРА"]
+        direction TB
+        D_Dash[Список заказов]:::dealer
+        D_Clients[Управление клиентами]:::dealer
+        D_Review[Просмотр согласования]:::dealer
+        D_Action{Подтверждение}:::dealer
+        D_ToProd[Отправка в производство]:::dealer
+
+        D_Dash <--> API
+        D_Clients <--> Bitrix
+        D_Dash --> D_Review
+        D_Review --> D_Action
+        D_Action -- "ОК" --> D_ToProd
+        D_ToProd --> |"Триггер: Статус 'В производстве'"| API
+    end
+
+    %% --- ЗОНА ПРОИЗВОДСТВА ---
+    subgraph PROD_ZONE ["ПРОИЗВОДСТВО (Factory)"]
+        direction TB
+        P_Queue[Очередь заданий]:::prod
+        P_TechMap["Авто-Техкарта<br>(Список операций, материалы)"]:::prod
+        P_Files["Файлы для печати/резки<br>(SRA3, PDF, Vectors)"]:::prod
+        P_Materials[Списание материалов]:::prod
+        P_Finish[Готовность / Отгрузка]:::prod
+
+        API --> |"Данные заказа"| P_Queue
+        P_Queue --> P_TechMap
+        P_Queue --> P_Files
+
+        Imposition -.-> |"Генерация SRA3 с QR"| P_Files
+        Warehouse -.-> |"Авто-списание"| P_Materials
+
+        P_Finish --> |"Обновление статуса"| API
+    end
+
+    %% --- СВЯЗИ МЕЖДУ СИСТЕМАМИ ---
+    OrderCreated ==> |"Синхронизация сделки"| Bitrix
+    P_Finish ==> |"Статус сделки"| Bitrix
+    C_Config -.-> |"Загрузка SVG/PNG"| FileStorage
+    PDF_Gen -.-> |"Ссылка на файл"| D_Review
+    

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Experience } from './components/Experience'
 import { Interface, ZoomControls } from './components/Interface'
@@ -13,6 +13,41 @@ import { Sketchbook } from './components/Sketchbook'
 import { SketchbookInterface } from './components/SketchbookInterface'
 import { ThermosInterface } from './components/thermos/ThermosInterface'
 import { CookieBanner } from './components/CookieBanner'
+import { AdminAuth } from './components/AdminAuth'
+
+const SCREEN_TO_PATH = {
+    home: '/',
+    configurator: '/configurator',
+    order: '/order',
+    dealer: '/dealer',
+    client_dashboard: '/dashboard',
+    sketchbook_configurator: '/sketchbook',
+    admin_auth: '/borodazaebal',
+};
+
+const PATH_TO_SCREEN = Object.fromEntries(
+    Object.entries(SCREEN_TO_PATH).map(([k, v]) => [v, k])
+);
+
+const TAB_TO_PATH = {
+    catalog: '/dashboard/catalog',
+    cart: '/dashboard/cart',
+    orders: '/dashboard/orders',
+};
+
+const PATH_TO_TAB = {
+    '/dashboard/catalog': 'catalog',
+    '/dashboard/cart': 'cart',
+    '/dashboard/orders': 'orders',
+};
+
+function getInitialState() {
+    const path = window.location.pathname;
+    if (path.startsWith('/dashboard/')) {
+        return { screen: 'client_dashboard', tab: PATH_TO_TAB[path] ?? null };
+    }
+    return { screen: PATH_TO_SCREEN[path] ?? 'home', tab: null };
+}
 
 function App() {
 
@@ -46,8 +81,35 @@ function App() {
     }
 
 
-    const [screen, setScreen] = useState('home');
+    const [screen, setScreen] = useState(() => getInitialState().screen);
+    const [dashboardTab, setDashboardTab] = useState(() => getInitialState().tab);
     const [showAuth, setShowAuth] = useState(false);
+
+    const navigateTo = useCallback((newScreen) => {
+        window.history.pushState({ screen: newScreen }, '', SCREEN_TO_PATH[newScreen] ?? '/');
+        setScreen(newScreen);
+        setDashboardTab(null);
+    }, []);
+
+    const navigateToTab = useCallback((tab) => {
+        window.history.pushState({ screen: 'client_dashboard', tab }, '', TAB_TO_PATH[tab] ?? '/dashboard');
+        setDashboardTab(tab);
+    }, []);
+
+    useEffect(() => {
+        const handlePopState = (e) => {
+            const path = window.location.pathname;
+            if (path.startsWith('/dashboard/')) {
+                setScreen('client_dashboard');
+                setDashboardTab(PATH_TO_TAB[path] ?? null);
+            } else {
+                setScreen(e.state?.screen ?? PATH_TO_SCREEN[path] ?? 'home');
+                setDashboardTab(null);
+            }
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
     const [pendingSuccessToast, setPendingSuccessToast] = useState(false);
 
     const {
@@ -75,14 +137,15 @@ function App() {
 
     // --- ЛОГИКА: ПРОВЕРКА РОЛИ И РОУТИНГ ---
     useEffect(() => {
+        if (screen === 'admin_auth') return;
         if (userRole === 'dealer') {
-            setScreen('dealer');
-        } else if (userRole === 'client') {
-            setScreen('client_dashboard'); // <--- ВАЖНО: Роут для клиента
+            navigateTo('dealer');
+        } else if (userRole === 'client' && screen !== 'configurator' && screen !== 'sketchbook_configurator') {
+            navigateTo('client_dashboard');
         } else if (!userRole && (screen === 'dealer' || screen === 'client_dashboard')) {
-            setScreen('home');
+            navigateTo('home');
         }
-    }, [userRole, screen]);
+    }, [userRole, screen, navigateTo]);
 
     // ... остальной код (без изменений с прошлого рабочего варианта)
 
@@ -108,7 +171,7 @@ function App() {
 
     const handleContinueOrder = () => {
         if (currentUser) {
-            setScreen('client_dashboard');
+            navigateTo('client_dashboard');
         } else {
             setShowAuth(true);
         }
@@ -173,7 +236,7 @@ function App() {
             {/* --- ЭКРАН: ГЛАВНАЯ СТРАНИЦА --- */}
             {screen === 'home' && (
                 <Home
-                    onStart={() => setScreen('configurator')}
+                    onStart={() => navigateTo('configurator')}
                     onAuth={() => setShowAuth(true)}
                     user={currentUser}
                     logout={logout}
@@ -185,7 +248,7 @@ function App() {
             {/* Доступно только для незарегистрированных пользователей */}
             {screen === 'order' && (
                 <Order
-                    onBack={() => setScreen('configurator')}
+                    onBack={() => navigateTo('configurator')}
                     onSuccess={() => {
                         setPendingSuccessToast(true);
                         setShowAuth(true);
@@ -196,18 +259,26 @@ function App() {
 
             {/* --- ЭКРАН: КАБИНЕТ ДИЛЕРА --- */}
             {screen === 'dealer' && (
-                <DealerDashboard onBack={() => setScreen('home')} />
+                <DealerDashboard onBack={() => navigateTo('home')} />
             )}
 
 
             {/* --- ЭКРАН: УМНЫЙ ДАШБОРД КЛИЕНТА (ПЛ, ПКЛ, КЛ) --- */}
             {screen === 'client_dashboard' && (
                 <ClientDashboard
-                    onBack={() => setScreen('home')}
-                    onEdit={() => setScreen('configurator')}
+                    onBack={() => navigateTo('home')}
+                    onEdit={() => navigateTo('configurator')}
                     showSuccessToast={pendingSuccessToast}
                     onSuccessToastShown={() => setPendingSuccessToast(false)}
+                    initialTab={dashboardTab}
+                    onTabChange={navigateToTab}
                 />
+            )}
+
+
+            {/* --- ЭКРАН: АВТОРИЗАЦИЯ АДМИНКИ --- */}
+            {screen === 'admin_auth' && (
+                <AdminAuth onSuccess={() => {}} />
             )}
 
 
@@ -216,7 +287,7 @@ function App() {
                 <div className="fixed inset-0 w-full h-full bg-[#E5E5E5] dark:bg-[#080B13] overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
 
                     <button
-                        onClick={() => setScreen(currentUser ? (userRole === 'dealer' ? 'dealer' : 'client_dashboard') : 'home')}
+                        onClick={() => navigateTo(currentUser ? (userRole === 'dealer' ? 'dealer' : 'client_dashboard') : 'home')}
                         className="absolute top-6 left-6 z-50 px-6 py-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10"
                     >
                         ← {currentUser ? 'В Кабинет' : 'В Меню'}
@@ -258,7 +329,7 @@ function App() {
                                     <ThermosInterface
                                         onFinish={() => {
                                             if (currentUser) {
-                                                setScreen('client_dashboard');
+                                                navigateTo('client_dashboard');
                                             } else {
                                                 setShowAuth(true);
                                             }
@@ -268,7 +339,7 @@ function App() {
                                     <Interface
                                         onFinish={() => {
                                             if (currentUser) {
-                                                setScreen('client_dashboard');
+                                                navigateTo('client_dashboard');
                                             } else {
                                                 setShowAuth(true);
                                             }
@@ -288,7 +359,7 @@ function App() {
             {/* --- ЭКРАН: КОНСТРУКТОР БЛОКНОТА --- */}
             {screen === 'sketchbook_configurator' && (
                 <div className="fixed inset-0 w-full h-full bg-[#E5E5E5] dark:bg-[#080B13] overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
-                    <button onClick={() => setScreen('home')} className="absolute top-6 left-6 z-50 px-6 py-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10">
+                    <button onClick={() => navigateTo('home')} className="absolute top-6 left-6 z-50 px-6 py-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10">
                         ← В Меню
                     </button>
                     <>
@@ -305,7 +376,7 @@ function App() {
                             {/* НОВЫЙ ИНТЕРФЕЙС БЛОКНОТА */}
                             <SketchbookInterface onFinish={() => {
                                         if (currentUser) {
-                                            setScreen('client_dashboard');
+                                            navigateTo('client_dashboard');
                                         } else {
                                             setShowAuth(true);
                                         }

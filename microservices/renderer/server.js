@@ -12,8 +12,9 @@ async function init() {
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--use-gl=angle',
+            '--use-gl=swiftshader',
             '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
             '--window-size=1024,1024'
         ]
     });

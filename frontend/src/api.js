@@ -36,6 +36,7 @@ export const orderApi = {
     },
     getUserOrders: (userId) => apiClient.get(`/orders/user/${userId}`),
     updateStatus: (orderId, status, comment = null) => apiClient.patch(`/orders/${orderId}/status`, { status, comment }),
+    updatePrice: (orderId, dealerPrice, dealerComment = null) => apiClient.patch(`/orders/${orderId}/price`, { dealer_price: dealerPrice, dealer_comment: dealerComment }),
 };
 
 export const productApi = {
@@ -108,6 +109,8 @@ const normalizeOrder = (o) => ({
     userEmail: o.user_email || '',
     role: o.configuration?.clientType || '',
     createdAt: o.created_at ? { seconds: new Date(o.created_at).getTime() / 1000 } : null,
+    quantity: o.quantity || null,
+    configuration: o.configuration || null,
 });
 
 export const createOrderInDB = async (orderData) => {
@@ -128,6 +131,11 @@ export const fetchAllOrders = async (dealerId = null) => {
 
 export const updateOrderStatus = async (orderId, status, comment = null) => {
     return await orderApi.updateStatus(orderId, status, comment);
+};
+
+export const updateOrderPrice = async (orderId, dealerPrice, dealerComment = null) => {
+    const { data } = await orderApi.updatePrice(orderId, dealerPrice, dealerComment);
+    return data;
 };
 
 // ─── Product helpers ──────────────────────────────────────────────────────────

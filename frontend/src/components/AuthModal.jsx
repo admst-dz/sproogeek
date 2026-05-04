@@ -187,7 +187,7 @@ export const AuthModal = ({ onClose, onRoleCreated }) => {
                     <div className="relative z-10 flex flex-col items-center animate-fade-in text-center">
                          <h2 className="text-2xl font-bold text-white mb-2">Как будете заказывать?</h2>
                          <button onClick={() => selectSubRole('PL')} className="w-full p-4 border border-white/10 rounded-[16px] mb-2 hover:bg-white/5">Физ. лицо</button>
-                         <button onClick={() => selectSubRole('КЛ')} className="w-full p-4 border border-white/10 rounded-[16px] hover:bg-white/5">Компаниня</button>
+                         <button onClick={() => selectSubRole('KL')} className="w-full p-4 border border-white/10 rounded-[16px] hover:bg-white/5">Компания</button>
                     </div>
                 )}
             </div>

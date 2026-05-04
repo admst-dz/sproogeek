@@ -12,6 +12,8 @@ const palette = [
 
 export const SketchbookInterface = ({ onFinish }) => {
     const [tab, setTab] = useState('cover');
+    const [quantity, setQuantity] = useState(1);
+    const [isSample, setIsSample] = useState(false);
 
     const {
         format, setFormat,
@@ -29,9 +31,15 @@ export const SketchbookInterface = ({ onFinish }) => {
         const newItem = {
             productName: `Блокнот (Скетчбук) ${format}`,
             design: `Пружина: ${spiralColor}, Блок: ${paperPattern}`,
-            priceTK: 25, priceBYN: 1000,
+            priceBYN: 1000,
+            type: 'sketchbook',
             config: { format, coverColor, paperPattern, spiralColor },
-            status: 'draft', rendersGenerated: 0
+            format, coverColor, paperPattern, spiralColor,
+            bindingType: 'spiral',
+            status: 'draft',
+            rendersGenerated: 0,
+            quantity,
+            isSample,
         };
         addToCart(newItem);
         onFinish();
@@ -81,7 +89,26 @@ export const SketchbookInterface = ({ onFinish }) => {
                 )}
             </div>
 
-            <div className="absolute bottom-0 left-0 w-full p-4 md:p-6 z-20 border-t border-white/10 bg-[#A4B0C9]/95 dark:bg-[#060911]/95 backdrop-blur-xl">
+            <div className="absolute bottom-0 left-0 w-full px-4 md:px-6 pt-3 pb-4 md:pb-6 z-20 border-t border-white/10 bg-[#A4B0C9]/95 dark:bg-[#060911]/95 backdrop-blur-xl flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-4">
+                    <div className="flex flex-col gap-1">
+                        <span className="text-[10px] opacity-50 font-bold uppercase tracking-widest">Тираж (шт.)</span>
+                        <div className="flex items-center gap-1">
+                            <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-8 h-8 flex items-center justify-center bg-white/10 rounded-[8px] text-white font-bold text-lg hover:bg-white/20 active:scale-95 transition">−</button>
+                            <span className="w-10 text-center font-black text-white text-lg select-none">{quantity}</span>
+                            <button onClick={() => setQuantity(q => q + 1)} className="w-8 h-8 flex items-center justify-center bg-white/10 rounded-[8px] text-white font-bold text-lg hover:bg-white/20 active:scale-95 transition">+</button>
+                        </div>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setIsSample(s => !s)}>
+                        <div className={`w-5 h-5 rounded-[5px] border flex items-center justify-center transition-all shrink-0 ${isSample ? 'bg-white border-white' : 'bg-white/5 border-white/20'}`}>
+                            {isSample && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#0B0F19" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-xs font-bold text-white leading-tight">Тиражный образец</span>
+                            <span className="text-[9px] text-white/40 leading-tight">1 шт. перед партией</span>
+                        </div>
+                    </label>
+                </div>
                 <button onClick={handleAddToCart} className="w-full py-4 bg-white text-[#1a1a1a] rounded-[11px] text-xl font-black tracking-[0.2em] uppercase hover:bg-gray-100 transition-all shadow-lg active:scale-[0.98]">
                     В Корзину
                 </button>

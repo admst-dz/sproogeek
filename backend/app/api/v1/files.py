@@ -1,25 +1,26 @@
-import os
 import uuid
-import aiofiles
-from fastapi import APIRouter, UploadFile, File, HTTPException
+
+from fastapi import APIRouter, File, HTTPException, UploadFile
+
+from app.services.storage import s3_storage
+
 
 router = APIRouter()
 
-UPLOAD_DIR = "uploads/logos"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/upload-logo")
 async def upload_logo(file: UploadFile = File(...)):
-    allowed_types = ["image/svg+xml", "image/png", "application/postscript"] # svg, png, eps
+    allowed_types = ["image/svg+xml", "image/png", "application/postscript"]
     if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Формат файла не поддерживается")
+        raise HTTPException(status_code=400, detail="Unsupported file format")
 
-    file_ext = file.filename.split('.')[-1]
+    file_ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "bin"
     new_filename = f"{uuid.uuid4().hex}.{file_ext}"
-    file_path = os.path.join(UPLOAD_DIR, new_filename)
+    content = await file.read()
 
-    async with aiofiles.open(file_path, 'wb') as out_file:
-        content = await file.read()
-        await out_file.write(content)
-
-    return {"url": f"/uploads/logos/{new_filename}"}
+    return await s3_storage.upload_bytes(
+        content=content,
+        folder="logos",
+        filename=new_filename,
+        content_type=file.content_type,
+    )

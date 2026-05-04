@@ -1,4 +1,4 @@
-import { PresentationControls, Stage, Environment } from '@react-three/drei'
+import { PresentationControls, Stage, Environment, OrbitControls } from '@react-three/drei'
 import { Notebook } from './Notebook'
 import { Calendar } from './Calendar'
 import { Thermos } from './thermos/Thermos'
@@ -14,6 +14,22 @@ function CanvasRegistrar() {
         registerWebGLCanvas(gl.domElement)
         return () => registerWebGLCanvas(null)
     }, [gl.domElement])
+    return null
+}
+
+function CameraReset({ activeProduct }) {
+    const { camera } = useThree()
+    const prevProduct = useRef(activeProduct)
+
+    useEffect(() => {
+        if (prevProduct.current === 'thermos' && activeProduct !== 'thermos') {
+            camera.position.set(0, 0, 4.5)
+            camera.lookAt(0, 0, 0)
+            camera.updateProjectionMatrix()
+        }
+        prevProduct.current = activeProduct
+    }, [activeProduct, camera])
+
     return null
 }
 
@@ -91,6 +107,7 @@ export const Experience = () => {
     return (
         <>
             <CanvasRegistrar />
+            <CameraReset activeProduct={activeProduct} />
             <CameraUpdater targetZoom={finalZoom} />
             <WheelZoom />
 
@@ -100,20 +117,33 @@ export const Experience = () => {
             <directionalLight position={[10, 10, 5]} intensity={1.5} />
             <directionalLight position={[-10, 5, 2]} intensity={0.5} />
 
-            <PresentationControls
-                speed={isMobile ? 10.0 : 1.8}
-                global
-                azimuth={[-Math.PI, Math.PI]}
-                polar={activeProduct === 'thermos' ? [-Math.PI / 3, Math.PI / 3] : [-0.1, Math.PI / 4]}
-            >
-                {/* contactShadow={false} -> Убирает тень снизу */}
-                <Stage environment={null} intensity={0} contactShadow={false}>
-                    {activeProduct === 'notebook' && <Notebook />}
-                    {activeProduct === 'calendar' && <Calendar />}
-                    {activeProduct === 'sketchbook' && <Sketchbook />}
-                    {activeProduct === 'thermos' && <Thermos />}
-                </Stage>
-            </PresentationControls>
+            {activeProduct === 'thermos' ? (
+                <>
+                    <OrbitControls
+                        enablePan={false}
+                        enableZoom={false}
+                        minPolarAngle={Math.PI / 2 - Math.PI / 3}
+                        maxPolarAngle={Math.PI / 2 + Math.PI / 3}
+                        rotateSpeed={isMobile ? 3.0 : 1.0}
+                    />
+                    <Stage environment={null} intensity={0} contactShadow={false}>
+                        <Thermos />
+                    </Stage>
+                </>
+            ) : (
+                <PresentationControls
+                    speed={isMobile ? 10.0 : 1.8}
+                    global
+                    azimuth={[-Math.PI, Math.PI]}
+                    polar={[-0.1, Math.PI / 4]}
+                >
+                    <Stage environment={null} intensity={0} contactShadow={false}>
+                        {activeProduct === 'notebook' && <Notebook />}
+                        {activeProduct === 'calendar' && <Calendar />}
+                        {activeProduct === 'sketchbook' && <Sketchbook />}
+                    </Stage>
+                </PresentationControls>
+            )}
         </>
     )
 }

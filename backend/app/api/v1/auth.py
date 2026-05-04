@@ -1,4 +1,5 @@
 import uuid
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,9 +26,33 @@ limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
 
+def _build_telegram_email(telegram_id: str) -> str:
+    return f"tg_{telegram_id}@telegram.local"
+
+
+def _build_display_name(payload: dict) -> str:
+    full_name = " ".join(filter(None, [payload.get("first_name"), payload.get("last_name")])).strip()
+    if full_name:
+        return full_name
+    if payload.get("username"):
+        return f"@{payload['username']}"
+    return "Telegram User"
+
+
+async def _validate_dealer_id(db: AsyncSession, dealer_id: Optional[str]) -> Optional[str]:
+    if not dealer_id:
+        return None
+
+    dealer = await crud_user.get_user(db, dealer_id)
+    if not dealer or dealer.role != "dealer":
+        raise HTTPException(status_code=400, detail="Dealer not found")
+    return dealer_id
+
+
 @router.post("/register", response_model=TokenResponse)
 @limiter.limit("5/minute")  # Защита от спам-регистраций
 async def register(request: Request, data: UserRegister, db: AsyncSession = Depends(get_db)):
+    dealer_id = await _validate_dealer_id(db, data.dealer_id)
     existing = await crud_user.get_user_by_email(db, data.email)
     if existing:
         if existing.password_hash:
@@ -37,10 +62,15 @@ async def register(request: Request, data: UserRegister, db: AsyncSession = Depe
         if data.display_name:
             existing.display_name = data.display_name
 
+        if data.role == "dealer":
+            existing.role = "dealer"
+
         # БЕЗОПАСНОСТЬ: Разрешаем задать sub_role только если он пустой
         if data.sub_role and existing.sub_role is None:
             if data.sub_role in ["PL", "PKL", "KL", "KPR", "PR"]:
                 existing.sub_role = data.sub_role
+        if dealer_id and existing.dealer_id is None:
+            existing.dealer_id = dealer_id
 
         db.add(existing)
         await db.commit()
@@ -53,8 +83,9 @@ async def register(request: Request, data: UserRegister, db: AsyncSession = Depe
         email=data.email,
         password_hash=hash_password(data.password),
         display_name=data.display_name or "",
-        role="client",  # БЕЗОПАСНОСТЬ: ЖЕСТКО СТАВИМ КЛИЕНТА
+        role=data.role,
         sub_role=data.sub_role if data.sub_role in ["PL", "PKL", "KL", "KPR", "PR"] else None,
+        dealer_id=dealer_id,
         token_balance=0.0,
     )
     db.add(user)
@@ -101,7 +132,7 @@ async def google_auth(request: Request, body: GoogleAuthRequest, db: AsyncSessio
         await db.commit()
         await db.refresh(user)
 
-    needs_role_setup = user.sub_role is None
+    needs_role_setup = user.sub_role is None and user.role != "dealer"
     token = create_access_token(user.id, user.email, user.role)
     return {"access_token": token, "user": user, "needs_role_setup": needs_role_setup}
 
@@ -117,13 +148,22 @@ async def update_role(
         db: AsyncSession = Depends(get_db),
         current_user=Depends(get_current_user),
 ):
+    role = body.get("role")
     sub_role = body.get("sub_role")
 
-    if current_user.sub_role is None and sub_role:
+    changed = False
+
+    if role == "dealer" and current_user.role != "dealer":
+        current_user.role = "dealer"
+        changed = True
+
+    if sub_role and current_user.sub_role is None:
         if sub_role not in ["PL", "PKL", "KL", "KPR", "PR"]:
             raise HTTPException(status_code=400, detail="Недопустимая под-роль")
-
         current_user.sub_role = sub_role
+        changed = True
+
+    if changed:
         db.add(current_user)
         await db.commit()
         await db.refresh(current_user)

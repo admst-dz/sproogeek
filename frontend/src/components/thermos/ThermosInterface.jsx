@@ -2,16 +2,13 @@ import { useRef } from 'react';
 import { useConfigurator, captureRender } from '../../store';
 
 const palette = [
-    { name: 'Серебро',  bg: '#C0C0C0' },
-    { name: 'Чёрный',   bg: '#1a1a1a' },
-    { name: 'Белый',    bg: '#ffffff' },
-    { name: 'Синий',    bg: '#1565C0' },
-    { name: 'Красный',  bg: '#D32F2F' },
-    { name: 'Зелёный',  bg: '#2E7D32' },
-    { name: 'Жёлтый',  bg: '#FDD835' },
-    { name: 'Розовый',  bg: '#EC407A' },
-    { name: 'Золото',   bg: '#D4AF37' },
-    { name: 'Медь',     bg: '#B87333' },
+    { name: 'Оранжевый',  bg: '#e65405' },
+    { name: 'Ярко-синий',   bg: '#003087' },
+    { name: 'Темно-зеленый',    bg: '#115740' },
+    { name: 'Фиолетовый',    bg: '#5E366E' },
+    { name: 'Красный',  bg: '#BA0C2F' },
+    { name: 'Серый',  bg: '#716D6A' },
+    { name: 'Темно-синий',  bg: '#1B365D' },
 ];
 
 export const ThermosInterface = ({ onFinish }) => {
@@ -33,8 +30,8 @@ export const ThermosInterface = ({ onFinish }) => {
         const newItem = {
             productName: 'Термос',
             design: `Корпус: ${thermosBodyColor}, Крышка: ${thermosCapColor}`,
-            priceTK: 50,
             priceBYN: 2000,
+            type: 'thermos',
             activeProduct: 'thermos',
             thermosBodyColor,
             thermosCapColor,
@@ -51,9 +48,6 @@ export const ThermosInterface = ({ onFinish }) => {
 
             <div className="flex items-end gap-4 px-8 py-6 shrink-0 z-10 bg-white/5 backdrop-blur-sm">
                 <span className="text-2xl md:text-3xl font-bold leading-none opacity-100">Термос</span>
-                <div className="ml-auto md:hidden">
-                    <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
-                </div>
             </div>
 
             <div className="px-4 md:px-6 pt-3 pb-3 shrink-0">
