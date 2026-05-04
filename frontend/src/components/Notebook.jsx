@@ -8,17 +8,9 @@ import spiralModelUrl from '../assets/spiral.glb?url'
 
 function LogoDecal({ texture, x, y, z, rotation = 0, scale = 0.6 }) {
     const map = useTexture(texture);
-    useEffect(() => {
-        if (map) {
-            map.wrapS = THREE.ClampToEdgeWrapping;
-            map.wrapT = THREE.ClampToEdgeWrapping;
-            map.anisotropy = 16;
-            map.needsUpdate = true;
-        }
-    }, [map]);
     return (
         <Decal position={[x, y, z]} rotation={[0, 0, rotation]} scale={[scale, scale, 1]}>
-            <meshStandardMaterial map={map} transparent alphaTest={0.08} depthWrite={false} roughness={0.6} side={THREE.FrontSide}/>
+            <meshStandardMaterial map={map} transparent alphaTest={0.01} depthWrite={false} polygonOffset polygonOffsetFactor={-20} polygonOffsetUnits={-20} roughness={0.6}/>
         </Decal>
     );
 }
@@ -163,14 +155,13 @@ function HardCoverModel({ coverColor, dims, elasticColor, hasElastic, logos, isN
 
 
 // --- ГЛАВНЫЙ КОМПОНЕНТ ---
-export function Notebook({ config: configProp, ...props }) {
-    const store = useConfigurator();
+export function Notebook(props) {
     const {
         format, bindingType,
         coverColor, hasElastic, elasticColor, spiralColor,
         logos,
         isNotebookOpen
-    } = configProp || store;
+    } = useConfigurator()
 
     const dims = format === 'A5' ? { w: 1.5, h: 2.1 } : { w: 1.05, h: 1.48 };
 

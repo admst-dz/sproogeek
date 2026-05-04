@@ -1,8 +1,5 @@
 import os
-import logging
 import httpx
-
-logger = logging.getLogger(__name__)
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
@@ -11,8 +8,10 @@ GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
 
 async def exchange_google_code(code: str) -> dict:
-    logger.warning("GOOGLE_CLIENT_ID present: %s", bool(GOOGLE_CLIENT_ID))
-    async with httpx.AsyncClient() as client:
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise ValueError("Google OAuth is not configured")
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
         token_resp = await client.post(GOOGLE_TOKEN_URL, data={
             "code": code,
             "client_id": GOOGLE_CLIENT_ID,
@@ -21,8 +20,7 @@ async def exchange_google_code(code: str) -> dict:
             "grant_type": "authorization_code",
         })
         if token_resp.status_code != 200:
-            logger.error("Google token exchange failed: %s", token_resp.text)
-            raise ValueError(f"Token exchange failed: {token_resp.text}")
+            raise ValueError("Token exchange failed")
 
         access_token = token_resp.json().get("access_token")
         if not access_token:
