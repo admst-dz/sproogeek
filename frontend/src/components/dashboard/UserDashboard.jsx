@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useConfigurator } from "../store";
+import { useConfigurator } from "../../store";
 
 export const UserDashboard = ({ onOpenConfigurator }) => {
     const { currentUser, logout } = useConfigurator();

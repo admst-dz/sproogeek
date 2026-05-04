@@ -1,41 +1,57 @@
 import { useState, useRef } from 'react';
-import { useConfigurator, captureRender } from "../store"
+import { useConfigurator, captureRender } from "../../store"
 
 const palette = [
-    { name: 'Kraft', bg: '#D2B48C' }, // Крафт
-    { name: 'Black', bg: '#1a1a1a' },
-    { name: 'Navy', bg: '#1565C0' },
+    { name: 'Yellow', bg: '#FDD835' },
     { name: 'Red', bg: '#D32F2F' },
+    { name: 'Green', bg: '#43A047' },
+    { name: 'Black', bg: '#1a1a1a' },
+    { name: 'Blue', bg: '#1565C0' },
     { name: 'White', bg: '#ffffff' },
+    { name: 'Pink', bg: '#EC407A' },
     { name: 'Silver', bg: '#Silver' },
 ];
 
-export const SketchbookInterface = ({ onFinish }) => {
+export const Interface = ({ onFinish }) => {
     const [tab, setTab] = useState('cover');
     const [quantity, setQuantity] = useState(1);
     const [isSample, setIsSample] = useState(false);
 
     const {
         format, setFormat,
-        setColor, coverColor, spiralColor,
+        bindingType, setBindingType,
+        setColor, coverColor, elasticColor, spiralColor,
+        hasElastic, setHasElastic,
         setNotebookOpen,
         paperPattern, setPaperPattern,
         logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale,
-        zoomLevel, setZoom, addToCart,
+        activeProduct,
+        zoomLevel, setZoom,
+        addToCart,
         setRenderSnapshot
     } = useConfigurator();
 
+    if (activeProduct === 'calendar') {
+        return (
+            <div className="pointer-events-auto w-full h-full md:h-[95%] custom-gradient backdrop-blur-xl rounded-t-[30px] md:rounded-[9px] flex items-center justify-center border-t md:border border-white/30 relative">
+                <ZoomControlsOverlay zoomLevel={zoomLevel} setZoom={setZoom} />
+                <div className="font-zen text-2xl font-bold uppercase tracking-widest text-white drop-shadow-md">
+                    В Разработке
+                </div>
+            </div>
+        );
+    }
+
     const handleAddToCart = () => {
-        const snapshot = captureRender()
-        if (snapshot) setRenderSnapshot(snapshot)
+        const snapshot = captureRender();
+        if (snapshot) setRenderSnapshot(snapshot);
         const newItem = {
-            productName: `Блокнот (Скетчбук) ${format}`,
-            design: `Пружина: ${spiralColor}, Блок: ${paperPattern}`,
-            priceBYN: 1000,
-            type: 'sketchbook',
-            config: { format, coverColor, paperPattern, spiralColor },
-            format, coverColor, paperPattern, spiralColor,
-            bindingType: 'spiral',
+            productName: `Ежедневник ${format}`,
+            design: `Переплет: ${bindingType === 'hard' ? 'Твердый' : 'Пружина'}, Блок: ${paperPattern}`,
+            priceBYN: 1500,
+            type: 'notebook',
+            config: { format, coverColor, hasElastic, elasticColor, paperPattern, bindingType, spiralColor },
+            format, coverColor, hasElastic, elasticColor, paperPattern, bindingType, spiralColor,
             status: 'draft',
             rendersGenerated: 0,
             quantity,
@@ -48,10 +64,6 @@ export const SketchbookInterface = ({ onFinish }) => {
     return (
         <div className="pointer-events-auto w-full h-full md:h-[95%] custom-gradient backdrop-blur-xl rounded-t-[30px] md:rounded-[9px] shadow-2xl flex flex-col overflow-hidden font-zen border-t md:border border-white/20 relative">
 
-            <div className="fixed top-20 right-4 z-50 md:absolute md:top-[-60px] md:right-0">
-                <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
-            </div>
-
             <div className="flex items-end gap-8 px-8 py-6 shrink-0 z-10 bg-white/5 backdrop-blur-sm">
                 <button onClick={() => { setTab('cover'); setNotebookOpen(false); }} className={`text-2xl md:text-3xl transition-all leading-none ${tab === 'cover' ? 'opacity-100 scale-105 border-b-2 border-white pb-1' : 'opacity-50 hover:opacity-80'}`}>Обложка</button>
                 <button onClick={() => { setTab('block'); setNotebookOpen(true); }} className={`text-2xl md:text-3xl transition-all leading-none ${tab === 'block' ? 'opacity-100 scale-105 border-b-2 border-white pb-1' : 'opacity-50 hover:opacity-80'}`}>Блок</button>
@@ -60,16 +72,26 @@ export const SketchbookInterface = ({ onFinish }) => {
             <div className="flex-1 px-4 md:px-6 pt-4 overflow-y-auto custom-scrollbar flex flex-col gap-3 relative z-0">
                 {tab === 'cover' && (
                     <div className="animate-fade-in flex flex-col gap-3 pb-40">
-
+                        <GlassDropdown label="Переплет" currentValue={bindingType === 'hard' ? 'Твердый' : 'Пружина'}>
+                            <div className="flex flex-col gap-1">
+                                <button onClick={() => setBindingType('hard')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'hard' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>Твердый переплет</span> {bindingType === 'hard' && <span>✓</span>}</button>
+                                <button onClick={() => setBindingType('spiral')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'spiral' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>На пружине (Soft)</span> {bindingType === 'spiral' && <span>✓</span>}</button>
+                            </div>
+                        </GlassDropdown>
+                        {bindingType === 'spiral' && (<div className="glass-panel rounded-[11px] overflow-hidden animate-fade-in"><ColorGlassList currentColor={spiralColor} onSelect={(c) => setColor('spiral', c)} label="Цвет пружины"/></div>)}
                         <GlassDropdown label="Формат" currentValue={format}>
                             <div className="flex flex-col gap-1">
                                 {['A5', 'A6'].map(f => (<button key={f} onClick={() => setFormat(f)} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${format === f ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>{f}</span> {format === f && <span>✓</span>}</button>))}
                             </div>
                         </GlassDropdown>
-
-                        <div className="glass-panel rounded-[11px] overflow-hidden"><ColorGlassList currentColor={coverColor} onSelect={(c) => setColor('cover', c)} label="Материал обложки"/></div>
-                        <div className="glass-panel rounded-[11px] overflow-hidden"><ColorGlassList currentColor={spiralColor} onSelect={(c) => setColor('spiral', c)} label="Цвет пружины"/></div>
-
+                        <div className="glass-panel rounded-[11px] overflow-hidden transition-all">
+                            <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setHasElastic(!hasElastic)}>
+                                <span className="text-xl font-bold tracking-wide">Резинка</span>
+                                <div className={`w-12 h-7 rounded-full p-1 transition-colors border border-white/30 ${hasElastic ? 'bg-green-500/80' : 'bg-gray-500/50'}`}><div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${hasElastic ? 'translate-x-5' : ''}`} /></div>
+                            </div>
+                            {hasElastic && (<div className="border-t border-white/10"><ColorGlassList currentColor={elasticColor} onSelect={(c) => setColor('elastic', c)} label="Цвет резинки" /></div>)}
+                        </div>
+                        <div className="glass-panel rounded-[11px] overflow-hidden"><ColorGlassList currentColor={coverColor} onSelect={(c) => setColor('cover', c)} label="Цвет обложки"/></div>
                         <LogoPanel logos={logos} selectedLogoId={selectedLogoId} addLogo={addLogo} selectLogo={selectLogo} removeLogo={removeLogo} resetLogoTransform={resetLogoTransform} setLogoPosition={setLogoPosition} setLogoRotation={setLogoRotation} setLogoScale={setLogoScale} />
                     </div>
                 )}
@@ -89,6 +111,7 @@ export const SketchbookInterface = ({ onFinish }) => {
                 )}
             </div>
 
+            {/* КНОПКА ОФОРМЛЕНИЯ */}
             <div className="absolute bottom-0 left-0 w-full px-4 md:px-6 pt-3 pb-4 md:pb-6 z-20 border-t border-white/10 bg-[#A4B0C9]/95 dark:bg-[#060911]/95 backdrop-blur-xl flex flex-col gap-3">
                 <div className="flex items-center justify-between gap-4">
                     <div className="flex flex-col gap-1">
@@ -109,14 +132,18 @@ export const SketchbookInterface = ({ onFinish }) => {
                         </div>
                     </label>
                 </div>
-                <button onClick={handleAddToCart} className="w-full py-4 bg-white text-[#1a1a1a] rounded-[11px] text-xl font-black tracking-[0.2em] uppercase hover:bg-gray-100 transition-all shadow-lg active:scale-[0.98]">
-                    В Корзину
+                <button
+                    onClick={handleAddToCart}
+                    className="w-full py-4 bg-white text-[#1a1a1a] rounded-[11px] text-xl font-black tracking-[0.2em] uppercase hover:bg-gray-100 transition-all shadow-lg active:scale-[0.98]"
+                >
+                    Оформить заказ
                 </button>
             </div>
         </div>
     )
 }
 
+// --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
 const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale }) => {
     const selected = logos.find(l => l.id === selectedLogoId) || null;
     const rotStart = useRef(0);
@@ -131,7 +158,7 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
 
     return (
         <div className="glass-panel rounded-[11px] p-5">
-            <h3 className="text-xl font-bold tracking-wide mb-4">Нанесение логотипа</h3>
+            <h3 className="text-xl font-bold tracking-wide mb-4">Тиснение</h3>
             <label className="block w-full py-3 bg-white/10 rounded-[6px] text-center cursor-pointer border border-white/20 text-sm font-bold mb-4 hover:bg-white/20 transition-colors">
                 + ДОБАВИТЬ ЛОГОТИП
                 <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) { addLogo(e.target.files[0]); e.target.value = ''; } }} className="hidden"/>
@@ -214,18 +241,25 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
         </div>
     );
 };
-const ZoomControls = ({ zoomLevel, setZoom }) => (
+export const ZoomControls = ({ zoomLevel, setZoom }) => (
     <div className="flex flex-col gap-1 bg-white/80 backdrop-blur-md rounded-[9px] p-1 border border-white/40 shadow-xl">
         <button onClick={() => setZoom(Math.min(zoomLevel + 0.1, 2.5))} className="w-10 h-10 flex items-center justify-center text-[#1a1a1a] hover:bg-white rounded-[6px] transition active:scale-95"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
         <div className="h-px w-full bg-black/10" />
         <button onClick={() => setZoom(Math.max(zoomLevel - 0.1, 0.5))} className="w-10 h-10 flex items-center justify-center text-[#1a1a1a] hover:bg-white rounded-[6px] transition active:scale-95"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
     </div>
 )
+const ZoomControlsOverlay = ({ zoomLevel, setZoom }) => (<div className="absolute top-4 right-4 z-50"><ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} /></div>)
 const GlassDropdown = ({ label, currentValue, children, isColor = false, colorValue }) => {
     const [isOpen, setIsOpen] = useState(false);
     return (
         <div className="glass-panel rounded-[11px] transition-all overflow-hidden shadow-sm">
-            <button onClick={() => setIsOpen(!isOpen)} className="w-full p-5 flex items-center justify-between hover:bg-white/10 transition"><span className="text-xl font-bold tracking-wide">{label}</span><div className="flex items-center gap-3">{isColor ? (<div className="w-6 h-6 rounded-full border border-white/30 shadow-sm" style={{backgroundColor: colorValue}} />) : (<span className="font-bold opacity-80 text-sm bg-white/10 px-2 py-1 rounded-[6px]">{currentValue}</span>)}<span className={`transform transition-transform duration-300 text-xl opacity-70 ${isOpen ? 'rotate-180' : ''}`}>⌄</span></div></button>
+            <button onClick={() => setIsOpen(!isOpen)} className="w-full p-5 flex items-center justify-between hover:bg-white/10 transition">
+                <span className="text-xl font-bold tracking-wide">{label}</span>
+                <div className="flex items-center gap-3">
+                    {isColor ? (<div className="w-6 h-6 rounded-full border border-white/30 shadow-sm" style={{backgroundColor: colorValue}} />) : (<span className="font-bold opacity-80 text-sm bg-white/10 px-2 py-1 rounded-[6px]">{currentValue}</span>)}
+                    <span className={`transform transition-transform duration-300 text-xl opacity-70 ${isOpen ? 'rotate-180' : ''}`}>⌄</span>
+                </div>
+            </button>
             <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isOpen ? 'max-h-60 opacity-100' : 'max-h-0 opacity-0'}`}><div className="p-2 border-t border-white/10 bg-black/5">{children}</div></div>
         </div>
     )
@@ -233,7 +267,13 @@ const GlassDropdown = ({ label, currentValue, children, isColor = false, colorVa
 const ColorGlassList = ({ label, currentColor, onSelect }) => (
     <GlassDropdown label={label} isColor={true} colorValue={currentColor}>
         <div className="flex flex-col gap-1">
-            {palette.map((c) => (<button key={c.name} onClick={() => onSelect(c.bg)} className={`p-3 rounded-[6px] flex items-center gap-3 transition-colors ${currentColor === c.bg ? 'bg-white/30 shadow-sm border border-white/20' : 'hover:bg-white/10'}`}><div className="w-8 h-8 rounded-full border border-white/20 shadow-sm" style={{backgroundColor: c.bg}} /><span className="font-bold text-sm">{c.name}</span>{currentColor === c.bg && <span className="ml-auto text-xl">✓</span>}</button>))}
+            {palette.map((c) => (
+                <button key={c.name} onClick={() => onSelect(c.bg)} className={`p-3 rounded-[6px] flex items-center gap-3 transition-colors ${currentColor === c.bg ? 'bg-white/30 shadow-sm border border-white/20' : 'hover:bg-white/10'}`}>
+                    <div className="w-8 h-8 rounded-full border border-white/20 shadow-sm" style={{backgroundColor: c.bg}} />
+                    <span className="font-bold text-sm">{c.name}</span>
+                    {currentColor === c.bg && <span className="ml-auto text-xl">✓</span>}
+                </button>
+            ))}
         </div>
     </GlassDropdown>
 )
@@ -249,4 +289,3 @@ const BlockIcon = ({ type }) => {
         </svg>
     )
 }
-

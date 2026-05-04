@@ -1,10 +1,10 @@
 import { useEffect, Suspense, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF, Stage } from '@react-three/drei';
-import { useConfigurator } from '../store';
-import { t } from '../i18n';
-import { getUserDisplayName } from '../utils/user';
-import termosModelUrl from '../assets/termos3.glb?url';
+import { useConfigurator } from '../../store';
+import { t } from '../../i18n';
+import { getUserDisplayName } from '../../utils/user';
+import termosModelUrl from '../../assets/termos3.glb?url';
 
 function ThermosPreviewScene() {
     const groupRef = useRef();
