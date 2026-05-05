@@ -104,7 +104,7 @@ const OrderStatus = ({ status }) => {
     );
 };
 
-export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToastShown, initialTab, onTabChange }) => {
+export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToastShown }) => {
     const {
         currentUser, logout, cartItem, clearCart,
         activeProduct, coverColor, elasticColor, hasElastic,
@@ -401,6 +401,8 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                             {clientType === 'phys' ? (<>
                                                 <CartInput name="name" label="ФИО *" placeholder="Иванов Иван" value={formData.name} onChange={handleInputChange} />
                                                 <CartInput name="phone" label="Телефон *" placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} />
+                                                <CartInput name="email" label="Email" placeholder="mail@..." type="email" value={formData.email} onChange={handleInputChange} />
+                                                <CartInput name="address" label="Адрес доставки" placeholder="Город, улица..." value={formData.address} onChange={handleInputChange} />
                                                 <div className="md:col-span-2">
                                                     <CartInput name="address" label="Адрес доставки" placeholder="Город, улица..." value={formData.address} onChange={handleInputChange} />
                                                 </div>
@@ -625,60 +627,5 @@ const CartInput = ({ label, name, placeholder, type = 'text', value, onChange, i
                 className="w-full p-3 bg-white/5 border border-white/10 rounded-[12px] text-white font-bold placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-white/20 text-sm transition-colors"
             />
         )}
-    </div>
-);
-
-const ClientOrder3DPreview = ({ configuration, productName }) => {
-    const pc = configuration?.productConfig;
-    const name = (productName || pc?.productName || '').toLowerCase();
-    const productType = pc?.type || pc?.activeProduct ||
-        (name.includes('термос') ? 'thermos' : name.includes('скетчбук') ? 'sketchbook' : 'notebook');
-
-    const config3D = {
-        format: pc?.format || pc?.config?.format || 'A5',
-        bindingType: pc?.bindingType || pc?.config?.bindingType || 'hard',
-        coverColor: pc?.coverColor || pc?.config?.coverColor || '#D2B48C',
-        hasElastic: pc?.hasElastic ?? pc?.config?.hasElastic ?? false,
-        elasticColor: pc?.elasticColor || pc?.config?.elasticColor || '#1a1a1a',
-        spiralColor: pc?.spiralColor || pc?.config?.spiralColor || '#1a1a1a',
-        paperPattern: pc?.paperPattern || pc?.config?.paperPattern || 'blank',
-        logos: [],
-        isNotebookOpen: false,
-        thermosBodyColor: pc?.thermosBodyColor || '#C0C0C0',
-        thermosCapColor: pc?.thermosCapColor || '#C0C0C0',
-        thermosCapVisible: true,
-        thermosLogos: pc?.thermosLogos || [],
-    };
-
-    return (
-        <div className="bg-white/[0.03] border border-white/10 rounded-[16px] overflow-hidden">
-            <div style={{ height: 200, pointerEvents: 'none' }}>
-                <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true }}>
-                    <Environment preset="city" />
-                    <ambientLight intensity={0.6} />
-                    <directionalLight position={[10, 10, 5]} intensity={1.5} />
-                    <directionalLight position={[-10, 5, 2]} intensity={0.5} />
-                    <PresentationControls speed={1.5} global polar={[-0.1, Math.PI / 4]}>
-                        <Stage environment={null} intensity={0} contactShadow={false}>
-                            {productType === 'sketchbook' ? <Sketchbook config={config3D} /> : productType === 'thermos' ? <Thermos config={config3D} /> : <Notebook config={config3D} />}
-                        </Stage>
-                    </PresentationControls>
-                </Canvas>
-            </div>
-        </div>
-    );
-};
-
-const ClientDetailRow = ({ label, value, accent }) => (
-    <div className="flex flex-col gap-0.5 bg-white/[0.03] border border-white/5 rounded-[10px] px-3 py-2.5">
-        <span className="text-[9px] font-bold uppercase tracking-widest text-gray-600">{label}</span>
-        <span className={`text-xs font-bold truncate ${accent ? 'text-white' : 'text-gray-300'}`}>{value}</span>
-    </div>
-);
-
-const ClientColorDot = ({ color }) => (
-    <div className="flex items-center gap-1.5">
-        <div className="w-3 h-3 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: color }} />
-        <span className="text-xs font-bold text-gray-300">{color}</span>
     </div>
 );

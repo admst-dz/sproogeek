@@ -385,41 +385,49 @@ export const DealerDashboard = ({ onBack }) => {
     const [expandedOrders, setExpandedOrders] = useState(new Set());
     const [statusUpdating, setStatusUpdating] = useState(null);
     const [commentDraft, setCommentDraft] = useState({});
-    const [priceDraft, setPriceDraft] = useState({});
-    const [priceUpdating, setPriceUpdating] = useState(null);
+
+    useEffect(() => {
+        if (isAdmin && activeTab === 'products') setActiveTab('orders');
+    }, [isAdmin, activeTab]);
 
     useEffect(() => {
         if (activeTab === 'orders') {
             setLoading(true);
-            fetchAllOrders()
-                .then(data => {
-                    data.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
-                    setOrders(data);
-                })
-                .catch(err => console.error('Failed to load orders:', err))
-                .finally(() => setLoading(false));
+            const request = isAdmin ? fetchAdminOrders() : fetchAllOrders(currentUser?.id);
+            request.then(data => {
+                data.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
+                setOrders(data);
+                setLoading(false);
+            }).catch(() => setLoading(false));
         }
-        if (activeTab === 'products' && currentUser) {
+        if (activeTab === 'orderTypes' && isAdmin) {
             setLoading(true);
-            fetchDealerProducts(currentUser.id)
-                .then(data => setProducts(data))
-                .catch(err => console.error('Failed to load products:', err))
-                .finally(() => setLoading(false));
+            fetchOrderTypes().then(data => {
+                setOrderTypes(data);
+                setLoading(false);
+                if (!selectedOrderType && data.length > 0) setSelectedOrderType(data[0].id);
+            }).catch(() => setLoading(false));
         }
-    }, [activeTab, currentUser]);
+        if (activeTab === 'products' && currentUser && !isAdmin) {
+            setLoading(true);
+            fetchDealerProducts(currentUser.id).then(data => {
+                setProducts(data);
+                setLoading(false);
+            }).catch(() => setLoading(false));
+        }
+    }, [activeTab, currentUser, isAdmin, selectedOrderType]);
 
-    const handleUpdatePrice = async (orderId) => {
-        const price = parseFloat(priceDraft[orderId]);
-        if (!price || price <= 0) return;
-        setPriceUpdating(orderId);
-        try {
-            await updateOrderPrice(orderId, price);
-            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, price } : o));
-            setPriceDraft(prev => { const next = { ...prev }; delete next[orderId]; return next; });
-        } finally {
-            setPriceUpdating(null);
+    useEffect(() => {
+        if (activeTab === 'orderTypes' && selectedOrderType) {
+            setOrderTypeError('');
+            fetchOrderType(selectedOrderType).then(data => {
+                setOrderTypeDraft(JSON.stringify(data, null, 2));
+            }).catch(() => {
+                setOrderTypeDraft('');
+                setOrderTypeError('Не удалось загрузить JSON');
+            });
         }
-    };
+    }, [activeTab, selectedOrderType]);
 
     const handleUpdateStatus = async (orderId, newStatus) => {
         const comment = commentDraft[orderId] || '';
@@ -456,6 +464,21 @@ export const DealerDashboard = ({ onBack }) => {
         setEditingProduct(null);
         if (currentUser) {
             fetchDealerProducts(currentUser.id).then(setProducts);
+        }
+    };
+
+    const handleSaveOrderType = async () => {
+        if (!selectedOrderType) return;
+        setOrderTypeError('');
+        setOrderTypeSaving(true);
+        try {
+            const parsed = JSON.parse(orderTypeDraft);
+            const saved = await saveOrderType(selectedOrderType, parsed);
+            setOrderTypeDraft(JSON.stringify(saved, null, 2));
+        } catch (err) {
+            setOrderTypeError(err instanceof SyntaxError ? 'JSON содержит синтаксическую ошибку' : 'Не удалось сохранить JSON');
+        } finally {
+            setOrderTypeSaving(false);
         }
     };
 
@@ -529,6 +552,23 @@ export const DealerDashboard = ({ onBack }) => {
 
             {/* MAIN */}
             <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 pt-16 md:pt-8">
+
+                {isAdmin && (
+                    <div className="mb-6 flex flex-wrap gap-2">
+                        <button
+                            onClick={() => setActiveTab('orders')}
+                            className={`px-4 py-2 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'orders' ? 'bg-white text-black border-white' : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'}`}
+                        >
+                            Заказы
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('orderTypes')}
+                            className={`px-4 py-2 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'orderTypes' ? 'bg-white text-black border-white' : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'}`}
+                        >
+                            JSON типы заказов
+                        </button>
+                    </div>
+                )}
 
                 {/* ── PRODUCTS TAB ── */}
                 {activeTab === 'products' && (
@@ -626,6 +666,59 @@ export const DealerDashboard = ({ onBack }) => {
                 )}
 
                 {/* ── ORDERS TAB ── */}
+                {activeTab === 'orderTypes' && isAdmin && (
+                    <div>
+                        <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
+                            <div>
+                                <h2 className="text-xl font-bold uppercase tracking-widest text-white">Типы заказов</h2>
+                                <p className="text-xs text-gray-500 mt-1">Редактирование JSON-файлов, которые описывают доступные типы заказов</p>
+                            </div>
+                            <button
+                                onClick={handleSaveOrderType}
+                                disabled={!selectedOrderType || orderTypeSaving}
+                                className="px-5 py-2.5 bg-white text-black text-xs font-bold uppercase tracking-widest rounded-full hover:bg-gray-100 active:scale-95 transition-all disabled:opacity-40"
+                            >
+                                {orderTypeSaving ? 'Сохранение...' : 'Сохранить JSON'}
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4">
+                            <div className="bg-white/[0.03] border border-white/10 rounded-[18px] overflow-hidden">
+                                {loading ? (
+                                    <div className="p-5 text-xs text-gray-500 font-bold uppercase tracking-widest">Загрузка...</div>
+                                ) : orderTypes.length === 0 ? (
+                                    <div className="p-5 text-xs text-gray-500 font-bold uppercase tracking-widest">Файлы не найдены</div>
+                                ) : (
+                                    orderTypes.map(item => (
+                                        <button
+                                            key={item.id}
+                                            onClick={() => setSelectedOrderType(item.id)}
+                                            className={`w-full px-4 py-3 text-left border-b border-white/5 last:border-b-0 transition-colors ${selectedOrderType === item.id ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
+                                        >
+                                            <span className="block text-xs font-bold uppercase tracking-widest">{item.id}</span>
+                                            <span className="block text-[10px] text-gray-500 mt-1">{item.filename}</span>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+
+                            <div className="bg-white/[0.03] border border-white/10 rounded-[18px] overflow-hidden">
+                                <textarea
+                                    value={orderTypeDraft}
+                                    onChange={(e) => setOrderTypeDraft(e.target.value)}
+                                    spellCheck={false}
+                                    className="w-full min-h-[520px] bg-black/30 text-gray-100 font-mono text-xs leading-relaxed p-5 outline-none resize-y"
+                                />
+                                {orderTypeError && (
+                                    <div className="px-5 py-3 border-t border-red-500/20 bg-red-500/10 text-red-300 text-xs font-bold uppercase tracking-widest">
+                                        {orderTypeError}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {activeTab === 'orders' && (
                     <div>
                         <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
@@ -683,118 +776,48 @@ export const DealerDashboard = ({ onBack }) => {
 
                                             {/* Expanded detail */}
                                             {isExpanded && (
-                                                <div className="border-t border-white/5 bg-white/[0.02]" onClick={e => e.stopPropagation()}>
-                                                    <div className="px-4 md:px-6 py-6 flex flex-col lg:flex-row gap-6">
+                                                <div className="px-4 md:px-6 pb-6 border-t border-white/5 bg-white/[0.02]">
+                                                    {/* Progress bar */}
+                                                    <OrderProgressBar status={order.status} stageHistory={order.stageHistory} />
 
-                                                        {/* LEFT: 3D preview */}
-                                                        <div className="w-full lg:w-72 shrink-0 flex flex-col gap-3">
-                                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">3D Макет</p>
-                                                            <Order3DPreview configuration={order.configuration} productName={order.product} />
+                                                    {/* Status controls */}
+                                                    <div className="mt-5 space-y-3">
+                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Обновить этап</p>
+
+                                                        {/* Stage buttons */}
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {ORDER_STAGES.map((stage, idx) => {
+                                                                const isCurrent = stage.key === order.status;
+                                                                const isPast = idx < currentStageIdx;
+                                                                return (
+                                                                    <button
+                                                                        key={stage.key}
+                                                                        disabled={isCurrent || isUpdating}
+                                                                        onClick={(e) => { e.stopPropagation(); handleUpdateStatus(order.id, stage.key); }}
+                                                                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all
+                                                                            ${isCurrent
+                                                                                ? `${stage.color} cursor-default opacity-100 ring-1 ring-white/20`
+                                                                                : isPast
+                                                                                    ? 'bg-white/5 text-gray-600 border-white/5 hover:bg-white/10 hover:text-gray-400'
+                                                                                    : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10 hover:text-white'
+                                                                            } ${isUpdating ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                                                    >
+                                                                        {stage.icon} {stage.text}
+                                                                        {isCurrent && ' ✓'}
+                                                                    </button>
+                                                                );
+                                                            })}
                                                         </div>
 
-                                                        {/* RIGHT: details */}
-                                                        <div className="flex-1 flex flex-col gap-5">
-
-                                                            {/* Contact info */}
-                                                            <div>
-                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">Контактные данные</p>
-                                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                                                    <OrderDetailRow label="Тип" value={order.configuration?.clientType === 'jur' ? 'Юр. лицо' : 'Физ. лицо'} />
-                                                                    <OrderDetailRow label={order.configuration?.clientType === 'jur' ? 'Компания' : 'ФИО'} value={order.configuration?.contact?.name || '—'} />
-                                                                    <OrderDetailRow label="Телефон" value={order.configuration?.contact?.phone || '—'} />
-                                                                    {order.configuration?.contact?.email && <OrderDetailRow label="Email" value={order.configuration.contact.email} />}
-                                                                    {order.configuration?.contact?.inn && <OrderDetailRow label="УНП / ИНН" value={order.configuration.contact.inn} />}
-                                                                    {order.configuration?.contact?.contactPerson && <OrderDetailRow label="Контакт. лицо" value={order.configuration.contact.contactPerson} />}
-                                                                    {order.configuration?.contact?.address && <OrderDetailRow label="Адрес" value={order.configuration.contact.address} />}
-                                                                    {order.configuration?.contact?.comment && <div className="col-span-2 md:col-span-3"><OrderDetailRow label="Комментарий" value={order.configuration.contact.comment} /></div>}
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Order params */}
-                                                            <div>
-                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">Параметры заказа</p>
-                                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                                                    {order.quantity && <OrderDetailRow label="Тираж" value={`${order.quantity} шт.`} accent />}
-                                                                    {order.configuration?.isSample && <OrderDetailRow label="Образец" value="Тиражный образец" />}
-                                                                    {order.configuration?.productConfig?.format && <OrderDetailRow label="Формат" value={order.configuration.productConfig.format} />}
-                                                                    {order.configuration?.productConfig?.bindingType && <OrderDetailRow label="Переплёт" value={order.configuration.productConfig.bindingType === 'hard' ? 'Твёрдый' : 'На пружине'} />}
-                                                                    {order.configuration?.productConfig?.paperPattern && <OrderDetailRow label="Разлиновка" value={{ blank: 'Пустой', lined: 'Линейка', grid: 'Клетка', dotted: 'Точка' }[order.configuration.productConfig.paperPattern] || order.configuration.productConfig.paperPattern} />}
-                                                                    {order.configuration?.productConfig?.coverColor && <OrderDetailRow label="Обложка" value={<ColorSwatch color={order.configuration.productConfig.coverColor} />} />}
-                                                                    {order.configuration?.productConfig?.hasElastic && order.configuration?.productConfig?.elasticColor && <OrderDetailRow label="Резинка" value={<ColorSwatch color={order.configuration.productConfig.elasticColor} />} />}
-                                                                    {order.configuration?.productConfig?.bindingType === 'spiral' && order.configuration?.productConfig?.spiralColor && <OrderDetailRow label="Пружина" value={<ColorSwatch color={order.configuration.productConfig.spiralColor} />} />}
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Progress bar */}
-                                                            <div>
-                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Этапы выполнения</p>
-                                                                <OrderProgressBar status={order.status} stageHistory={order.stageHistory} />
-                                                            </div>
-
-                                                            {/* Dealer price */}
-                                                            <div className="space-y-3">
-                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Цена для клиента (BYN)</p>
-                                                                <div className="flex items-center gap-2">
-                                                                    {order.price > 0 && (
-                                                                        <span className="text-sm font-bold text-white bg-white/5 border border-white/10 rounded-[12px] px-4 py-2.5 shrink-0">
-                                                                            Текущая: {order.price} BYN
-                                                                        </span>
-                                                                    )}
-                                                                    <input
-                                                                        type="number"
-                                                                        min="0"
-                                                                        step="0.01"
-                                                                        value={priceDraft[order.id] ?? ''}
-                                                                        onChange={e => setPriceDraft(prev => ({ ...prev, [order.id]: e.target.value }))}
-                                                                        placeholder="Новая цена"
-                                                                        className="w-36 bg-black/20 border border-white/10 rounded-[12px] px-4 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30"
-                                                                    />
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); handleUpdatePrice(order.id); }}
-                                                                        disabled={!priceDraft[order.id] || priceUpdating === order.id}
-                                                                        className="px-4 py-2.5 bg-emerald-500/20 border border-emerald-500/30 hover:bg-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider rounded-[12px] transition-all disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
-                                                                    >
-                                                                        {priceUpdating === order.id ? '...' : 'Установить'}
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Status controls */}
-                                                            <div className="space-y-3">
-                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Обновить этап</p>
-                                                                <div className="flex flex-wrap gap-2">
-                                                                    {ORDER_STAGES.map((stage, idx) => {
-                                                                        const isCurrent = stage.key === order.status;
-                                                                        const isPast = idx < currentStageIdx;
-                                                                        return (
-                                                                            <button
-                                                                                key={stage.key}
-                                                                                disabled={isCurrent || isUpdating}
-                                                                                onClick={(e) => { e.stopPropagation(); handleUpdateStatus(order.id, stage.key); }}
-                                                                                className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all
-                                                                                    ${isCurrent
-                                                                                        ? `${stage.color} cursor-default opacity-100 ring-1 ring-white/20`
-                                                                                        : isPast
-                                                                                            ? 'bg-white/5 text-gray-600 border-white/5 hover:bg-white/10 hover:text-gray-400'
-                                                                                            : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10 hover:text-white'
-                                                                                    } ${isUpdating ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                                                            >
-                                                                                {stage.icon} {stage.text}
-                                                                                {isCurrent && ' ✓'}
-                                                                            </button>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                                <div className="flex gap-2 items-start">
-                                                                    <textarea
-                                                                        rows={2}
-                                                                        placeholder="Комментарий к этапу (необязательно)..."
-                                                                        value={commentDraft[order.id] || ''}
-                                                                        onChange={e => setCommentDraft(prev => ({ ...prev, [order.id]: e.target.value }))}
-                                                                        className="flex-1 bg-black/20 border border-white/10 rounded-[12px] px-4 py-3 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 resize-none"
-                                                                    />
-                                                                </div>
-                                                            </div>
+                                                        {/* Comment input */}
+                                                        <div className="flex gap-2 items-start" onClick={e => e.stopPropagation()}>
+                                                            <textarea
+                                                                rows={2}
+                                                                placeholder="Комментарий к этапу (необязательно)..."
+                                                                value={commentDraft[order.id] || ''}
+                                                                onChange={e => setCommentDraft(prev => ({ ...prev, [order.id]: e.target.value }))}
+                                                                className="flex-1 bg-black/20 border border-white/10 rounded-[12px] px-4 py-3 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 resize-none"
+                                                            />
                                                         </div>
                                                     </div>
                                                 </div>
@@ -840,60 +863,3 @@ export const DealerDashboard = ({ onBack }) => {
         </div>
     );
 };
-
-// ─── Order detail helpers ──────────────────────────────────────────────────────
-
-const Order3DPreview = ({ configuration, productName }) => {
-    const pc = configuration?.productConfig;
-    const name = (productName || pc?.productName || '').toLowerCase();
-    const productType = pc?.type || pc?.activeProduct ||
-        (name.includes('термос') ? 'thermos' : name.includes('скетчбук') ? 'sketchbook' : 'notebook');
-
-    const config3D = {
-        format: pc?.format || pc?.config?.format || 'A5',
-        bindingType: pc?.bindingType || pc?.config?.bindingType || 'hard',
-        coverColor: pc?.coverColor || pc?.config?.coverColor || '#D2B48C',
-        hasElastic: pc?.hasElastic ?? pc?.config?.hasElastic ?? false,
-        elasticColor: pc?.elasticColor || pc?.config?.elasticColor || '#1a1a1a',
-        spiralColor: pc?.spiralColor || pc?.config?.spiralColor || '#1a1a1a',
-        paperPattern: pc?.paperPattern || pc?.config?.paperPattern || 'blank',
-        logos: [],
-        isNotebookOpen: false,
-        thermosBodyColor: pc?.thermosBodyColor || '#C0C0C0',
-        thermosCapColor: pc?.thermosCapColor || '#C0C0C0',
-        thermosCapVisible: true,
-        thermosLogos: pc?.thermosLogos || [],
-    };
-
-    return (
-        <div className="bg-white/[0.03] border border-white/10 rounded-[16px] overflow-hidden">
-            <div style={{ height: 220, pointerEvents: 'none' }}>
-                <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true }}>
-                    <Environment preset="city" />
-                    <ambientLight intensity={0.6} />
-                    <directionalLight position={[10, 10, 5]} intensity={1.5} />
-                    <directionalLight position={[-10, 5, 2]} intensity={0.5} />
-                    <PresentationControls speed={1.5} global polar={[-0.1, Math.PI / 4]}>
-                        <Stage environment={null} intensity={0} contactShadow={false}>
-                            {productType === 'sketchbook' ? <Sketchbook config={config3D} /> : productType === 'thermos' ? <Thermos config={config3D} /> : <Notebook config={config3D} />}
-                        </Stage>
-                    </PresentationControls>
-                </Canvas>
-            </div>
-        </div>
-    );
-};
-
-const OrderDetailRow = ({ label, value, accent }) => (
-    <div className="flex flex-col gap-0.5 bg-white/[0.03] border border-white/5 rounded-[10px] px-3 py-2.5">
-        <span className="text-[9px] font-bold uppercase tracking-widest text-gray-600">{label}</span>
-        <span className={`text-xs font-bold truncate ${accent ? 'text-white' : 'text-gray-300'}`}>{value}</span>
-    </div>
-);
-
-const ColorSwatch = ({ color }) => (
-    <div className="flex items-center gap-1.5">
-        <div className="w-3 h-3 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: color }} />
-        <span className="text-xs font-bold text-gray-300">{color}</span>
-    </div>
-);

@@ -62,9 +62,8 @@ function ThermosMesh({ geo, matRef, color, metalness = 0.0, roughness = 0.92, lo
     );
 }
 
-export function Thermos({ config: configProp, ...props }) {
-    const store = useConfigurator();
-    const { thermosBodyColor, thermosCapColor, thermosCapVisible, thermosLogos } = configProp || store;
+export function Thermos(props) {
+    const { thermosBodyColor, thermosCapColor, thermosCapVisible, thermosLogos } = useConfigurator();
     const { nodes } = useGLTF(termosModelUrl);
 
     const { bodyGeo, capGeo, bodyRadius, bodyCenterY, bodyTopY } = useMemo(() => {
@@ -181,8 +180,8 @@ export function Thermos({ config: configProp, ...props }) {
                     geo={capGeo}
                     matRef={capMatRef}
                     color={thermosCapColor}
-                    metalness={0.0}
-                    roughness={0.88}
+                    metalness={0.5}
+                    roughness={0.35}
                     visible={thermosCapVisible}
                 />
             )}

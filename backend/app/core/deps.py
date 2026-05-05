@@ -7,6 +7,8 @@ from app.crud import user as crud_user
 from app.core.security import decode_token
 
 bearer = HTTPBearer()
+STAFF_ROLES = {"admin", "dealer", "owner"}
+ADMIN_ROLES = {"admin", "owner"}
 
 
 async def get_current_user(
@@ -25,3 +27,26 @@ async def get_current_user(
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return user
+
+
+def require_roles(*allowed_roles: str):
+    allowed = set(allowed_roles)
+
+    async def _require_role(current_user=Depends(get_current_user)):
+        if current_user.role not in allowed:
+            raise HTTPException(status_code=403, detail="Access denied")
+        return current_user
+
+    return _require_role
+
+
+async def get_staff_user(current_user=Depends(get_current_user)):
+    if current_user.role not in STAFF_ROLES:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return current_user
+
+
+async def get_admin_user(current_user=Depends(get_current_user)):
+    if current_user.role not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return current_user

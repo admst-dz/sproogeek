@@ -36,12 +36,18 @@ export const orderApi = {
     },
     getUserOrders: (userId) => apiClient.get(`/orders/user/${userId}`),
     updateStatus: (orderId, status, comment = null) => apiClient.patch(`/orders/${orderId}/status`, { status, comment }),
-    updatePrice: (orderId, dealerPrice, dealerComment = null) => apiClient.patch(`/orders/${orderId}/price`, { dealer_price: dealerPrice, dealer_comment: dealerComment }),
+};
+
+export const adminApi = {
+    getOrders: (page = 1, size = 100) => apiClient.get(`/admin/orders?${new URLSearchParams({ page, size })}`),
+    listOrderTypes: () => apiClient.get('/admin/order-types'),
+    getOrderType: (typeId) => apiClient.get(`/admin/order-types/${encodeURIComponent(typeId)}`),
+    updateOrderType: (typeId, data) => apiClient.put(`/admin/order-types/${encodeURIComponent(typeId)}`, { data }),
 };
 
 export const productApi = {
     getAll: () => apiClient.get('/products/'),
-    getByDealer: (dealerId) => apiClient.get(`/products/?dealer_id=${dealerId}`),
+    getByDealer: (dealerId) => apiClient.get(`/products/?dealer_id=${encodeURIComponent(dealerId)}`),
     create: (data) => apiClient.post('/products/', data),
     update: (id, data) => apiClient.put(`/products/${id}`, data),
     delete: (id) => apiClient.delete(`/products/${id}`),
@@ -109,8 +115,6 @@ const normalizeOrder = (o) => ({
     userEmail: o.user_email || '',
     role: o.configuration?.clientType || '',
     createdAt: o.created_at ? { seconds: new Date(o.created_at).getTime() / 1000 } : null,
-    quantity: o.quantity || null,
-    configuration: o.configuration || null,
 });
 
 export const createOrderInDB = async (orderData) => {
@@ -129,13 +133,14 @@ export const fetchAllOrders = async (dealerId = null) => {
     return list.map(normalizeOrder);
 };
 
-export const updateOrderStatus = async (orderId, status, comment = null) => {
-    return await orderApi.updateStatus(orderId, status, comment);
+export const fetchAdminOrders = async () => {
+    const { data } = await adminApi.getOrders(1, 100);
+    const list = data?.items || data || [];
+    return list.map(normalizeOrder);
 };
 
-export const updateOrderPrice = async (orderId, dealerPrice, dealerComment = null) => {
-    const { data } = await orderApi.updatePrice(orderId, dealerPrice, dealerComment);
-    return data;
+export const updateOrderStatus = async (orderId, status, comment = null) => {
+    return await orderApi.updateStatus(orderId, status, comment);
 };
 
 // ─── Product helpers ──────────────────────────────────────────────────────────
@@ -162,6 +167,21 @@ export const updateProduct = async (id, productData) => {
 
 export const deleteProduct = async (id) => {
     await productApi.delete(id);
+};
+
+export const fetchOrderTypes = async () => {
+    const { data } = await adminApi.listOrderTypes();
+    return data?.items || [];
+};
+
+export const fetchOrderType = async (typeId) => {
+    const { data } = await adminApi.getOrderType(typeId);
+    return data?.data || {};
+};
+
+export const saveOrderType = async (typeId, data) => {
+    const response = await adminApi.updateOrderType(typeId, data);
+    return response.data?.data || {};
 };
 
 export default apiClient;
