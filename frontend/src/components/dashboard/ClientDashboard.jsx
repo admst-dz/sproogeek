@@ -112,7 +112,12 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
         thermosBodyColor, thermosCapColor,
         renderSnapshot,
     } = useConfigurator();
-    const [activeTab, setActiveTab] = useState(cartItem ? 'cart' : 'orders');
+    const [activeTab, setActiveTab] = useState(initialTab ?? (cartItem ? 'cart' : 'orders'));
+
+    const changeTab = (tab) => {
+        setActiveTab(tab);
+        onTabChange?.(tab);
+    };
 
     const [orders, setOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(false);
@@ -122,13 +127,28 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
     const [productsLoading, setProductsLoading] = useState(false);
 
     const [clientType, setClientType] = useState('phys');
-    const [formData, setFormData] = useState({ name: '', phone: '', email: '', address: '', inn: '', contactPerson: '', comment: '' });
+    const [quantity, setQuantity] = useState(cartItem?.quantity || 1);
+    const [isSample, setIsSample] = useState(cartItem?.isSample || false);
+    const [formData, setFormData] = useState({ name: '', phone: '', address: '', inn: '', contactPerson: '', comment: '' });
     const [formError, setFormError] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
+        if (currentUser?.display_name) {
+            setFormData(prev => ({ ...prev, name: currentUser.display_name }));
+        }
+    }, [currentUser]);
+
+    useEffect(() => {
+        if (cartItem) {
+            if (cartItem.quantity) setQuantity(cartItem.quantity);
+            if (cartItem.isSample !== undefined) setIsSample(cartItem.isSample);
+        }
+    }, [cartItem]);
+
+    useEffect(() => {
         if (showSuccessToast) {
-            setActiveTab('orders');
+            changeTab('orders');
             setOrderSuccess(true);
             onSuccessToastShown?.();
         }
@@ -178,16 +198,17 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
         try {
             const id = await createOrderInDB({
                 user_id: currentUser?.id || null,
-                user_email: currentUser?.email || formData.email || '',
+                user_email: currentUser?.email || '',
                 product_name: cartItem.productName,
                 configuration: {
                     productConfig: cartItem,
                     clientType,
                     contact: { ...formData },
+                    isSample,
                     renderSnapshot: renderSnapshot || null,
                 },
-                quantity: 1,
-                total_price: cartItem.priceBYN || null,
+                quantity,
+                total_price: null,
                 currency: 'BYN',
                 is_guest: false,
             });
@@ -196,7 +217,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                 id,
                 product: cartItem.productName,
                 design: cartItem.design || '',
-                price: cartItem.priceBYN || 0,
+                price: 0,
                 status: 'new',
                 stageHistory: [{
                     status: 'new',
@@ -204,11 +225,18 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                     updated_at: new Date().toISOString(),
                 }],
                 date: new Date().toLocaleDateString('ru-RU'),
+                quantity,
+                configuration: {
+                    productConfig: cartItem,
+                    clientType,
+                    contact: { ...formData },
+                    isSample,
+                },
             };
             setOrders(prev => [newOrder, ...prev]);
             setOrderSuccess(true);
             clearCart();
-            setActiveTab('orders');
+            changeTab('orders');
         } catch (error) {
             console.error(error);
             setFormError('Ошибка сети. Попробуйте позже.');
@@ -244,11 +272,11 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
 
                 {/* TABS */}
                 <div className="max-w-6xl mx-auto flex gap-8 mt-1">
-                    <TabBtn active={activeTab === 'catalog'} onClick={() => setActiveTab('catalog')}>Каталог</TabBtn>
-                    <TabBtn active={activeTab === 'cart'} onClick={() => setActiveTab('cart')}>
+                    <TabBtn active={activeTab === 'catalog'} onClick={() => changeTab('catalog')}>Каталог</TabBtn>
+                    <TabBtn active={activeTab === 'cart'} onClick={() => changeTab('cart')}>
                         Корзина {cartItem && <span className="ml-1 w-1.5 h-1.5 bg-emerald-400 rounded-full inline-block shadow-[0_0_6px_rgba(52,211,153,0.8)]"></span>}
                     </TabBtn>
-                    <TabBtn active={activeTab === 'orders'} onClick={() => setActiveTab('orders')}>Заказы</TabBtn>
+                    <TabBtn active={activeTab === 'orders'} onClick={() => changeTab('orders')}>Заказы</TabBtn>
                 </div>
             </header>
 
@@ -375,6 +403,9 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                 <CartInput name="phone" label="Телефон *" placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} />
                                                 <CartInput name="email" label="Email" placeholder="mail@..." type="email" value={formData.email} onChange={handleInputChange} />
                                                 <CartInput name="address" label="Адрес доставки" placeholder="Город, улица..." value={formData.address} onChange={handleInputChange} />
+                                                <div className="md:col-span-2">
+                                                    <CartInput name="address" label="Адрес доставки" placeholder="Город, улица..." value={formData.address} onChange={handleInputChange} />
+                                                </div>
                                             </>) : (<>
                                                 <CartInput name="name" label="Название компании *" placeholder='ООО "Пример"' value={formData.name} onChange={handleInputChange} />
                                                 <CartInput name="inn" label="УНП / ИНН" placeholder="123456789" value={formData.inn} onChange={handleInputChange} />
@@ -384,6 +415,30 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                             <div className="md:col-span-2">
                                                 <CartInput name="comment" label="Комментарий" placeholder="Доп. пожелания..." value={formData.comment} onChange={handleInputChange} isTextarea />
                                             </div>
+                                        </div>
+
+                                        {/* Тираж и тиражный образец */}
+                                        <div className="flex flex-col sm:flex-row gap-4 sm:items-end pt-2 border-t border-white/8">
+                                            <div className="flex flex-col gap-1.5">
+                                                <span className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">Тираж (шт.)</span>
+                                                <div className="flex items-center gap-2 bg-white/5 rounded-[12px] p-1.5 border border-white/10 w-max">
+                                                    <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-9 h-9 flex items-center justify-center bg-white/10 rounded-[9px] text-white font-bold text-lg hover:bg-white/20 active:scale-95 transition">−</button>
+                                                    <span className="w-12 text-center font-black text-white text-xl select-none">{quantity}</span>
+                                                    <button onClick={() => setQuantity(q => q + 1)} className="w-9 h-9 flex items-center justify-center bg-white/10 rounded-[9px] text-white font-bold text-lg hover:bg-white/20 active:scale-95 transition">+</button>
+                                                </div>
+                                            </div>
+
+                                            {clientType === 'jur' && (
+                                                <label className="flex items-center gap-3 cursor-pointer select-none bg-blue-500/8 border border-blue-500/20 hover:border-blue-500/40 px-4 py-3 rounded-[12px] transition-all" onClick={() => setIsSample(s => !s)}>
+                                                    <div className={`w-5 h-5 rounded-[6px] border flex items-center justify-center transition-all shrink-0 ${isSample ? 'bg-white border-white' : 'bg-white/5 border-white/20'}`}>
+                                                        {isSample && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#0B0F19" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-bold text-blue-300 uppercase tracking-wide">Тиражный образец</span>
+                                                        <span className="text-[10px] text-blue-500">Изготовление 1 шт. перед партией</span>
+                                                    </div>
+                                                </label>
+                                            )}
                                         </div>
 
                                         {formError && (
@@ -434,6 +489,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                             key={order.id}
                                             className={`transition-colors ${i !== orders.length - 1 ? 'border-b border-white/5' : ''}`}
                                         >
+                                            {/* Summary row */}
                                             <div
                                                 className="px-4 md:px-6 py-4 md:py-5 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 hover:bg-white/[0.03] cursor-pointer"
                                                 onClick={toggleExpand}
@@ -444,10 +500,14 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="font-bold text-sm text-white truncate">{order.product}</p>
-                                                    <p className="text-xs text-gray-500 truncate">{order.design}</p>
+                                                    <p className="text-xs text-gray-500 truncate">
+                                                        {order.quantity ? `${order.quantity} шт.` : ''}
+                                                        {order.quantity && order.configuration?.productConfig?.format ? ' · ' : ''}
+                                                        {order.configuration?.productConfig?.format || ''}
+                                                    </p>
                                                 </div>
                                                 <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 shrink-0">
-                                                    <span className="font-bold text-white text-sm">{order.price} BYN</span>
+                                                    <span className="font-bold text-white text-sm">{order.price ? `${order.price} BYN` : ''}</span>
                                                     <OrderStatus status={order.status} />
                                                     <svg
                                                         width="14" height="14" viewBox="0 0 14 14" fill="none"
@@ -457,9 +517,61 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                     </svg>
                                                 </div>
                                             </div>
+
+                                            {/* Expanded detail */}
                                             {isExpanded && (
-                                                <div className="px-4 md:px-6 pb-5 border-t border-white/5 bg-white/[0.02]">
-                                                    <OrderProgressBar status={order.status} stageHistory={order.stageHistory} />
+                                                <div className="border-t border-white/5 bg-white/[0.02] px-4 md:px-6 pb-6 pt-5">
+                                                    <div className="flex flex-col lg:flex-row gap-6">
+
+                                                        {/* 3D preview */}
+                                                        <div className="w-full lg:w-64 shrink-0">
+                                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">3D Макет</p>
+                                                            <ClientOrder3DPreview configuration={order.configuration} productName={order.product} />
+                                                        </div>
+
+                                                        {/* Details */}
+                                                        <div className="flex-1 flex flex-col gap-5">
+                                                            {/* Order params */}
+                                                            <div>
+                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">Параметры заказа</p>
+                                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                                    {order.quantity && (
+                                                                        <ClientDetailRow label="Тираж" value={`${order.quantity} шт.`} accent />
+                                                                    )}
+                                                                    {order.configuration?.isSample && (
+                                                                        <ClientDetailRow label="Образец" value="Тиражный образец" />
+                                                                    )}
+                                                                    {order.configuration?.productConfig?.format && (
+                                                                        <ClientDetailRow label="Формат" value={order.configuration.productConfig.format} />
+                                                                    )}
+                                                                    {order.configuration?.productConfig?.bindingType && (
+                                                                        <ClientDetailRow label="Переплёт" value={order.configuration.productConfig.bindingType === 'hard' ? 'Твёрдый' : 'На пружине'} />
+                                                                    )}
+                                                                    {order.configuration?.productConfig?.paperPattern && (
+                                                                        <ClientDetailRow label="Разлиновка" value={{ blank: 'Пустой', lined: 'Линейка', grid: 'Клетка', dotted: 'Точка' }[order.configuration.productConfig.paperPattern] || ''} />
+                                                                    )}
+                                                                    {order.configuration?.productConfig?.coverColor && (
+                                                                        <ClientDetailRow label="Обложка" value={<ClientColorDot color={order.configuration.productConfig.coverColor} />} />
+                                                                    )}
+                                                                    {order.configuration?.productConfig?.hasElastic && order.configuration?.productConfig?.elasticColor && (
+                                                                        <ClientDetailRow label="Резинка" value={<ClientColorDot color={order.configuration.productConfig.elasticColor} />} />
+                                                                    )}
+                                                                    {order.configuration?.productConfig?.bindingType === 'spiral' && order.configuration?.productConfig?.spiralColor && (
+                                                                        <ClientDetailRow label="Пружина" value={<ClientColorDot color={order.configuration.productConfig.spiralColor} />} />
+                                                                    )}
+                                                                    {order.price > 0 && (
+                                                                        <ClientDetailRow label="Стоимость" value={`${order.price} BYN`} />
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Progress */}
+                                                            <div>
+                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Статус выполнения</p>
+                                                                <OrderProgressBar status={order.status} stageHistory={order.stageHistory} />
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
@@ -470,13 +582,6 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                     </div>
                 )}
             </main>
-
-            {/* FOOTER */}
-            <footer className="text-center pb-6 z-10">
-                <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-gray-700">
-                    By Spoogeek • Liquid Glass Edition
-                </span>
-            </footer>
 
             {/* SUCCESS TOAST */}
             {orderSuccess && (

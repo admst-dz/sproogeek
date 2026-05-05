@@ -376,15 +376,9 @@ const BINDING_LABELS = { hard: 'Твёрдый', spiral: 'На пружине' }
 
 export const DealerDashboard = ({ onBack }) => {
     const { currentUser, logout } = useConfigurator();
-    const isAdmin = ['admin', 'owner'].includes(currentUser?.role);
-    const [activeTab, setActiveTab] = useState(isAdmin ? 'orders' : 'products');
+    const [activeTab, setActiveTab] = useState('products');
     const [orders, setOrders] = useState([]);
     const [products, setProducts] = useState([]);
-    const [orderTypes, setOrderTypes] = useState([]);
-    const [selectedOrderType, setSelectedOrderType] = useState(null);
-    const [orderTypeDraft, setOrderTypeDraft] = useState('');
-    const [orderTypeError, setOrderTypeError] = useState('');
-    const [orderTypeSaving, setOrderTypeSaving] = useState(false);
     const [loading, setLoading] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
