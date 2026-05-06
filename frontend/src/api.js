@@ -40,7 +40,8 @@ export const orderApi = {
 };
 
 export const adminApi = {
-    getOrders: (page = 1, size = 500) => apiClient.get(`/admin/orders?${new URLSearchParams({ page, size })}`),
+    getOrders: (page = 1, size = 100) => apiClient.get(`/admin/orders?${new URLSearchParams({ page, size })}`),
+    updateOrder: (orderId, data) => apiClient.patch(`/admin/orders/${encodeURIComponent(orderId)}`, data),
     getUsers: () => apiClient.get('/admin/users'),
     listOrderTypes: () => apiClient.get('/admin/order-types'),
     getOrderType: (typeId) => apiClient.get(`/admin/order-types/${encodeURIComponent(typeId)}`),

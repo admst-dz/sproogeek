@@ -2,14 +2,7 @@ import { useRef } from 'react';
 import { useConfigurator, captureRender } from '../../store';
 
 const palette = [
-    { name: 'Чёрный',        bg: '#1a1a1a' },
-    { name: 'Белый',          bg: '#f0f0f0' },
-    { name: 'Тёмно-синий',   bg: '#1B365D' },
-    { name: 'Красный',        bg: '#BA0C2F' },
-    { name: 'Оранжевый',     bg: '#e65405' },
-    { name: 'Тёмно-зелёный', bg: '#115740' },
-    { name: 'Фиолетовый',    bg: '#5E366E' },
-    { name: 'Серый',          bg: '#716D6A' },
+    { name: 'Серый',        bg: '#75787B' },
 ];
 
 export const PowerbankInterface = ({ onFinish }) => {

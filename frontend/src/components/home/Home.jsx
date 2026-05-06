@@ -1,6 +1,7 @@
-import { useEffect, Suspense, useRef } from 'react';
+import { useEffect, Suspense, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF, Stage } from '@react-three/drei';
+import * as THREE from 'three';
 import { useConfigurator } from '../../store';
 import { t } from '../../i18n';
 import { getUserDisplayName } from '../../utils/user';
@@ -45,7 +46,53 @@ function ThermosPreview() {
 function PowerbankPreviewScene() {
     const groupRef = useRef();
     const { nodes } = useGLTF(powerbankModelUrl);
-    const meshes = Object.entries(nodes).filter(([, n]) => n.geometry || n.isMesh);
+    const meshes = useMemo(() => (
+        Object.entries(nodes)
+            .filter(([, n]) => n.geometry || n.isMesh)
+            .map(([name, node]) => {
+                const geo = node.geometry;
+                geo.computeBoundingBox();
+                return { name, geo, bbox: geo.boundingBox };
+            })
+    ), [nodes]);
+
+    const bbox = useMemo(() => {
+        const box = new THREE.Box3();
+        meshes.forEach(mesh => box.union(mesh.bbox));
+        return box;
+    }, [meshes]);
+
+    const width = bbox.max.x - bbox.min.x;
+    const height = bbox.max.y - bbox.min.y;
+    const frontZ = bbox.max.z;
+    const centerX = (bbox.min.x + bbox.max.x) / 2;
+    const ringOuterRadius = Math.min(width * 0.34, height * 0.235);
+    const ringThickness = Math.max(width * 0.018, 0.018);
+    const capsuleWidth = width * 0.06;
+    const capsuleHeight = height * 0.18;
+
+    const ringGeometry = useMemo(() => (
+        new THREE.RingGeometry(ringOuterRadius - ringThickness, ringOuterRadius, 96)
+    ), [ringOuterRadius, ringThickness]);
+
+    const capsuleGeometry = useMemo(() => {
+        const x = -capsuleWidth / 2;
+        const y = -capsuleHeight / 2;
+        const r = capsuleWidth / 2;
+        const shape = new THREE.Shape();
+
+        shape.moveTo(x + r, y);
+        shape.lineTo(x + capsuleWidth - r, y);
+        shape.quadraticCurveTo(x + capsuleWidth, y, x + capsuleWidth, y + r);
+        shape.lineTo(x + capsuleWidth, y + capsuleHeight - r);
+        shape.quadraticCurveTo(x + capsuleWidth, y + capsuleHeight, x + capsuleWidth - r, y + capsuleHeight);
+        shape.lineTo(x + r, y + capsuleHeight);
+        shape.quadraticCurveTo(x, y + capsuleHeight, x, y + capsuleHeight - r);
+        shape.lineTo(x, y + r);
+        shape.quadraticCurveTo(x, y, x + r, y);
+
+        return new THREE.ShapeGeometry(shape);
+    }, [capsuleWidth, capsuleHeight]);
 
     useFrame((_, delta) => {
         if (groupRef.current) groupRef.current.rotation.y += delta * 0.5;
@@ -53,11 +100,27 @@ function PowerbankPreviewScene() {
 
     return (
         <group ref={groupRef}>
-            {meshes.map(([name, node]) => (
-                <mesh key={name} geometry={node.geometry} castShadow receiveShadow>
-                    <meshStandardMaterial color={'#2a2a2a'} metalness={0.7} roughness={0.3} />
+            {meshes.map(({ name, geo }) => (
+                <mesh key={name} geometry={geo} castShadow receiveShadow>
+                    <meshStandardMaterial color="#6b6f73" metalness={0.02} roughness={0.92} />
                 </mesh>
             ))}
+            <group position={[centerX, 0, frontZ + 0.006]}>
+                <mesh
+                    geometry={ringGeometry}
+                    position={[0, bbox.min.y + height * 0.72, 0]}
+                    renderOrder={5}
+                >
+                    <meshStandardMaterial color="#2f3235" roughness={0.88} metalness={0.02} depthWrite={false} />
+                </mesh>
+                <mesh
+                    geometry={capsuleGeometry}
+                    position={[0, bbox.min.y + height * 0.35, 0]}
+                    renderOrder={6}
+                >
+                    <meshStandardMaterial color="#2f3235" roughness={0.88} metalness={0.02} depthWrite={false} />
+                </mesh>
+            </group>
         </group>
     );
 }
@@ -160,9 +223,8 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
                             </svg>
                         </div>
                         <div className="text-center relative z-10 mt-2">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 transition-colors">{t(language, 'notebook')}</h3>
-                            <p className="text-xs text-gray-500 font-medium mb-6 transition-colors">{t(language, 'notebookDesc')}</p>
-                            <button className="px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'notebook')}</h3>
+                            <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
                                 {t(language, 'openBtn')}
                             </button>
                         </div>
@@ -175,9 +237,8 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
                             <ThermosPreview />
                         </div>
                         <div className="text-center relative z-10 mt-2">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 transition-colors">{t(language, 'thermos')}</h3>
-                            <p className="text-xs text-gray-500 font-medium mb-6 transition-colors">{t(language, 'thermosDesc')}</p>
-                            <button className="px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-slate-50 group-hover:text-slate-700 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'thermos')}</h3>
+                            <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-slate-50 group-hover:text-slate-700 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
                                 {t(language, 'openBtn')}
                             </button>
                         </div>
@@ -190,9 +251,8 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
                             <PowerbankPreview />
                         </div>
                         <div className="text-center relative z-10 mt-2">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 transition-colors">{t(language, 'powerbank')}</h3>
-                            <p className="text-xs text-gray-500 font-medium mb-6 transition-colors">{t(language, 'powerbankDesc')}</p>
-                            <button className="px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-emerald-50 group-hover:text-emerald-700 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'powerbank')}</h3>
+                            <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-emerald-50 group-hover:text-emerald-700 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
                                 {t(language, 'openBtn')}
                             </button>
                         </div>

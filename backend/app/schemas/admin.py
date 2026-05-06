@@ -36,3 +36,12 @@ class OrderTypeResponse(BaseModel):
 class OrderTypeUpdate(BaseModel):
     data: Dict[str, Any] = Field(default_factory=dict)
 
+
+class OrderAdminUpdate(BaseModel):
+    user_email: Optional[str] = Field(None, max_length=255)
+    product_name: Optional[str] = Field(None, max_length=120)
+    configuration: Optional[Dict[str, Any]] = None
+    quantity: Optional[int] = Field(None, ge=1, le=10000)
+    total_price: Optional[float] = Field(None, ge=0, le=1_000_000_000)
+    currency: Optional[str] = Field(None, min_length=3, max_length=3, pattern="^[A-Z]{3}$")
+    status: Optional[str] = Field(None, pattern="^(new|processing|production|in_delivery|done)$")

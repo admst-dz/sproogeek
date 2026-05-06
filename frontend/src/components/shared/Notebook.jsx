@@ -81,7 +81,11 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos, isNotebookOpen }) {
     const mat = materials ? Object.values(materials)[0] : null;
     const normalMap = mat?.normalMap ?? null;
 
+    const coverSize = coverEntry ? bboxSize(coverEntry.bbox) : { x: 0, y: 0, z: 0 };
     const frontZ = sceneBbox.max.z;
+    const innerBlockWidth = coverSize.x * 0.86;
+    const innerBlockHeight = coverSize.y * 0.9;
+    const innerBlockZ = frontZ - Math.max(coverSize.z * 0.2, 0.035);
 
     useFrame((_, delta) => {
         if (coverMatRef.current) easing.dampC(coverMatRef.current.color, coverColor, 0.25, delta);
@@ -121,6 +125,20 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos, isNotebookOpen }) {
                         </mesh>
                     </group>
                 </group>
+            )}
+
+            {coverEntry && (
+                <mesh
+                    position={[
+                        (coverEntry.bbox.min.x + coverEntry.bbox.max.x) / 2,
+                        (coverEntry.bbox.min.y + coverEntry.bbox.max.y) / 2,
+                        innerBlockZ,
+                    ]}
+                    renderOrder={1}
+                >
+                    <planeGeometry args={[innerBlockWidth, innerBlockHeight]} />
+                    <meshStandardMaterial color="#f4f0e8" roughness={0.92} metalness={0} />
+                </mesh>
             )}
 
             {/* Золотистые уголки из самой GLB-модели */}

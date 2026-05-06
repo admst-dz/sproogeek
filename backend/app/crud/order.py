@@ -4,7 +4,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.models.order import Order
 from app.schemas.order import OrderCreate
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 
 async def create_order(db: AsyncSession, order: OrderCreate):
@@ -52,4 +52,35 @@ async def update_status(db: AsyncSession, order_id: str, status: str, comment: O
         flag_modified(order, "stage_history")
         await db.commit()
         await db.refresh(order)
+    return order
+
+
+async def update_admin_fields(db: AsyncSession, order_id: str, data: dict[str, Any]):
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+    if not order:
+        return None
+
+    status = data.get("status")
+    if status is not None and status != order.status:
+        order.status = status
+        history = list(order.stage_history or [])
+        history.append({
+            "status": status,
+            "comment": "Изменено администратором",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        order.stage_history = history
+        flag_modified(order, "stage_history")
+
+    for field, value in data.items():
+        if field == "status":
+            continue
+        setattr(order, field, value)
+        if field == "configuration":
+            flag_modified(order, "configuration")
+
+    order.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(order)
     return order
