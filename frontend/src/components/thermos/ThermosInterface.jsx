@@ -51,9 +51,6 @@ export const ThermosInterface = ({ onFinish }) => {
 
             <div className="flex items-end gap-4 px-8 py-6 shrink-0 z-10 bg-white/5 backdrop-blur-sm">
                 <span className="text-2xl md:text-3xl font-bold leading-none opacity-100">Термос</span>
-                <div className="ml-auto md:hidden">
-                    <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
-                </div>
             </div>
 
             <div className="px-4 md:px-6 pt-3 pb-3 shrink-0">

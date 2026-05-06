@@ -10,7 +10,7 @@ const THERMOS_NECK_RATIO = 0.1;
 const CAP_SIDE_DISTANCE = 2.35;
 const CAP_ARC_FORWARD_DISTANCE = 2.05;
 const CAP_FINAL_FORWARD_DISTANCE = 0.85;
-const LOGO_SURFACE_OFFSET = 0.018;
+const LOGO_SURFACE_OFFSET = 0.006;
 const LOGO_POLYGON_OFFSET = -18;
 
 // ─── Bezier arc for cap animation ─────────────────────────────────────────────
@@ -97,7 +97,7 @@ function createCurvedLogoGeometry({ radius, centerTheta, centerY, width, height,
 // ─── Logo planes ───────────────────────────────────────────────────────────────
 function LogoPlane({ texture, position, rotation = 0, scale = 0.6, bodyRadius = 0.4, bodyCenterY = 0, bodyTopY = 999 }) {
     const map = useTexture(texture);
-    const theta = (position[0] / 0.35) * (Math.PI * 0.45);
+    const theta = (position[0] / 0.35) * Math.PI;
     const cylinderTop = bodyCenterY + (bodyTopY - bodyCenterY) * 0.4;
     const posY = Math.min(cylinderTop, position[1] + bodyCenterY);
     const geometry = useMemo(() => createCurvedLogoGeometry({
@@ -120,7 +120,7 @@ function CapLogoPlane({ texture, target = 'capTop', position, rotation = 0, scal
     const map = useTexture(texture);
     const capHeight = capMaxY - capMinY;
     const capCenterY = (capMaxY + capMinY) / 2;
-    const sideTheta = (position[0] / 0.35) * (Math.PI * 0.8);
+    const sideTheta = (position[0] / 0.35) * Math.PI;
     const sideY = capCenterY + position[1] * capHeight * 0.35;
     const sideGeometry = useMemo(() => createCurvedLogoGeometry({
         radius: capRadius,
