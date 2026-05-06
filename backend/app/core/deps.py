@@ -1,10 +1,12 @@
-from fastapi import Depends, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.database import get_db
-from app.crud import user as crud_user
+
 from app.core.security import decode_token
+from app.crud import user as crud_user
+from app.database import get_db
+
 
 bearer = HTTPBearer()
 STAFF_ROLES = {"admin", "dealer", "owner"}
@@ -50,3 +52,7 @@ async def get_admin_user(current_user=Depends(get_current_user)):
     if current_user.role not in ADMIN_ROLES:
         raise HTTPException(status_code=403, detail="Access denied")
     return current_user
+
+
+def request_id(request: Request) -> str:
+    return getattr(request.state, "request_id", "")

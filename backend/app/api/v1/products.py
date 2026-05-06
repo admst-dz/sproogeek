@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.deps import STAFF_ROLES, get_current_user, request_id
 from app.core.event_logger import event_logger
 from app.crud import product as crud_product
 from app.database import get_db
@@ -12,10 +12,6 @@ from app.schemas.product import ProductCreate, ProductResponse, ProductUpdate
 
 
 router = APIRouter()
-
-
-def _request_id(request: Request) -> str:
-    return getattr(request.state, "request_id", "")
 
 
 def _can_manage_product(product, current_user) -> bool:
@@ -41,7 +37,7 @@ async def create_product(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role not in {"admin", "dealer", "owner"}:
+    if current_user.role not in STAFF_ROLES:
         raise HTTPException(status_code=403, detail="Access denied")
 
     if current_user.role == "dealer":
@@ -58,7 +54,7 @@ async def create_product(
         method=request.method,
         path=request.url.path,
         status_code=200,
-        request_id=_request_id(request),
+        request_id=request_id(request),
         entity_type="product",
         entity_id=str(created.id),
         details={"dealer_id": created.dealer_id, "name": created.name},
@@ -74,7 +70,7 @@ async def update_product(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role not in {"admin", "dealer", "owner"}:
+    if current_user.role not in STAFF_ROLES:
         raise HTTPException(status_code=403, detail="Access denied")
 
     existing = await crud_product.get_product(db, product_id)
@@ -94,7 +90,7 @@ async def update_product(
         method=request.method,
         path=request.url.path,
         status_code=200,
-        request_id=_request_id(request),
+        request_id=request_id(request),
         entity_type="product",
         entity_id=str(product_id),
         details={"dealer_id": updated.dealer_id, "name": updated.name},
@@ -109,7 +105,7 @@ async def delete_product(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role not in {"admin", "dealer", "owner"}:
+    if current_user.role not in STAFF_ROLES:
         raise HTTPException(status_code=403, detail="Access denied")
 
     existing = await crud_product.get_product(db, product_id)
@@ -129,7 +125,7 @@ async def delete_product(
         method=request.method,
         path=request.url.path,
         status_code=204,
-        request_id=_request_id(request),
+        request_id=request_id(request),
         entity_type="product",
         entity_id=str(product_id),
         details={"dealer_id": deleted.dealer_id, "name": deleted.name},

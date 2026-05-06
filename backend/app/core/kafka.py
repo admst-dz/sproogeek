@@ -1,55 +1,72 @@
-import os
 import json
-from aiokafka import AIOKafkaProducer
+from typing import Optional
+
 import sentry_sdk
+from aiokafka import AIOKafkaProducer
+
+from app.core.config import get_settings
 from app.core.event_logger import event_logger
 
-KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
 
 class KafkaService:
-    def __init__(self):
-        self.producer = None
+    def __init__(self) -> None:
+        self.producer: Optional[AIOKafkaProducer] = None
+        self._bootstrap = get_settings().kafka_bootstrap_servers
 
-    async def start(self):
+    @property
+    def enabled(self) -> bool:
+        return bool(self._bootstrap)
+
+    async def start(self) -> None:
+        if not self.enabled:
+            event_logger.log(
+                "KAFKA_PRODUCER_DISABLED",
+                "Kafka bootstrap servers are not configured",
+                direction="backend->kafka",
+            )
+            return
         try:
             self.producer = AIOKafkaProducer(
-                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
-                value_serializer=lambda v: json.dumps(v).encode('utf-8')
+                bootstrap_servers=self._bootstrap,
+                value_serializer=lambda v: json.dumps(v).encode("utf-8"),
             )
             await self.producer.start()
             event_logger.log(
                 "KAFKA_PRODUCER_STARTED",
                 "Backend connected to Kafka producer",
                 direction="backend->kafka",
-                peer=KAFKA_BOOTSTRAP_SERVERS,
+                peer=self._bootstrap,
             )
-        except Exception as e:
+        except Exception as exc:
+            self.producer = None
             event_logger.log(
                 "KAFKA_PRODUCER_START_FAILED",
                 "Backend failed to connect to Kafka producer",
                 direction="backend->kafka",
-                peer=KAFKA_BOOTSTRAP_SERVERS,
-                details={"error": str(e)},
+                peer=self._bootstrap,
+                details={"error_type": type(exc).__name__, "error": str(exc)},
             )
-            sentry_sdk.capture_exception(e)
+            sentry_sdk.capture_exception(exc)
 
-    async def stop(self):
-        if self.producer:
-            await self.producer.stop()
-            event_logger.log(
-                "KAFKA_PRODUCER_STOPPED",
-                "Backend disconnected from Kafka producer",
-                direction="backend->kafka",
-                peer=KAFKA_BOOTSTRAP_SERVERS,
-            )
+    async def stop(self) -> None:
+        if not self.producer:
+            return
+        await self.producer.stop()
+        event_logger.log(
+            "KAFKA_PRODUCER_STOPPED",
+            "Backend disconnected from Kafka producer",
+            direction="backend->kafka",
+            peer=self._bootstrap,
+        )
+        self.producer = None
 
-    async def send_message(self, topic: str, message: dict):
+    async def send_message(self, topic: str, message: dict) -> None:
         if not self.producer:
             event_logger.log(
                 "KAFKA_MESSAGE_SKIPPED",
                 "Kafka producer is not connected",
                 direction="backend->kafka",
-                peer=KAFKA_BOOTSTRAP_SERVERS,
+                peer=self._bootstrap,
                 entity_type="kafka_topic",
                 entity_id=topic,
                 details={"message": message},
@@ -60,10 +77,11 @@ class KafkaService:
             "KAFKA_MESSAGE_SENT",
             "Backend sent event to Kafka",
             direction="backend->kafka",
-            peer=KAFKA_BOOTSTRAP_SERVERS,
+            peer=self._bootstrap,
             entity_type="kafka_topic",
             entity_id=topic,
             details={"message": message},
         )
+
 
 kafka_producer = KafkaService()

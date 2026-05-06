@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi_pagination import Page, paginate
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.config import get_settings
+from app.core.deps import get_current_user, request_id
 from app.core.event_logger import event_logger
 from app.core.kafka import kafka_producer
 from app.crud import order as crud_order
@@ -19,12 +20,10 @@ from app.services.order_service import OrderService
 
 
 router = APIRouter()
+settings = get_settings()
 
-os.makedirs("uploads/renders", exist_ok=True)
-
-
-def _request_id(request: Request) -> str:
-    return getattr(request.state, "request_id", "")
+RENDER_DIR = "uploads/renders"
+os.makedirs(RENDER_DIR, exist_ok=True)
 
 
 def _extract_dealer_id(order: Order) -> Optional[str]:
@@ -50,53 +49,53 @@ def _can_manage_order(order: Order, current_user) -> bool:
     return False
 
 
-async def generate_backend_render(config: dict, request_id: str = "") -> Optional[str]:
+async def generate_backend_render(config: dict, req_id: str = "") -> Optional[str]:
     event_logger.log(
         "RENDER_REQUEST_STARTED",
         "Backend requested render from renderer container",
         direction="backend->renderer",
-        peer="renderer:3000",
-        request_id=request_id,
+        peer=settings.renderer_url,
+        request_id=req_id,
         details={"config_keys": sorted((config or {}).keys())},
     )
     try:
-        async with httpx.AsyncClient() as client:
-            res = await client.post("http://renderer:3000/render", json={"config": config}, timeout=20.0)
+        async with httpx.AsyncClient(timeout=settings.renderer_timeout_seconds) as client:
+            res = await client.post(f"{settings.renderer_url}/render", json={"config": config})
             res.raise_for_status()
 
-            filename = f"render_{uuid.uuid4().hex}.png"
-            filepath = f"uploads/renders/{filename}"
-            with open(filepath, "wb") as file:
-                file.write(res.content)
+        filename = f"render_{uuid.uuid4().hex}.png"
+        filepath = os.path.join(RENDER_DIR, filename)
+        with open(filepath, "wb") as file:
+            file.write(res.content)
 
-            render_url = f"/uploads/renders/{filename}"
-            event_logger.log(
-                "RENDER_REQUEST_COMPLETED",
-                "Renderer container returned image",
-                direction="renderer->backend",
-                peer="renderer:3000",
-                status_code=res.status_code,
-                request_id=request_id,
-                entity_type="render",
-                entity_id=filename,
-                details={"bytes": len(res.content), "render_url": render_url},
-            )
-            return render_url
+        render_url = f"/uploads/renders/{filename}"
+        event_logger.log(
+            "RENDER_REQUEST_COMPLETED",
+            "Renderer container returned image",
+            direction="renderer->backend",
+            peer=settings.renderer_url,
+            status_code=res.status_code,
+            request_id=req_id,
+            entity_type="render",
+            entity_id=filename,
+            details={"bytes": len(res.content), "render_url": render_url},
+        )
+        return render_url
     except Exception as exc:
         sentry_sdk.capture_exception(exc)
         event_logger.log(
             "RENDER_REQUEST_FAILED",
             "Renderer container failed to generate image",
             direction="backend->renderer",
-            peer="renderer:3000",
+            peer=settings.renderer_url,
             status_code=500,
-            request_id=request_id,
+            request_id=req_id,
             details={"error_type": type(exc).__name__},
         )
         return None
 
 
-async def _send_order_event(topic: str, message: dict, request_id: str = "") -> None:
+async def _send_order_event(topic: str, message: dict, req_id: str = "") -> None:
     try:
         await kafka_producer.send_message(topic=topic, message=message)
     except Exception as exc:
@@ -107,7 +106,7 @@ async def _send_order_event(topic: str, message: dict, request_id: str = "") -> 
             direction="backend->kafka",
             entity_type="kafka_topic",
             entity_id=topic,
-            request_id=request_id,
+            request_id=req_id,
             details={"error_type": type(exc).__name__, "message": message},
         )
 
@@ -119,9 +118,9 @@ async def create_order(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    request_id = _request_id(request)
+    req_id = request_id(request)
     config_for_3d = order.configuration.get("productConfig", {})
-    render_url = await generate_backend_render(config_for_3d, request_id)
+    render_url = await generate_backend_render(config_for_3d, req_id)
 
     if render_url:
         order.configuration["server_render_url"] = render_url
@@ -137,7 +136,7 @@ async def create_order(
         method=request.method,
         path=request.url.path,
         status_code=200,
-        request_id=request_id,
+        request_id=req_id,
         entity_type="order",
         entity_id=str(new_order.id),
         details={
@@ -159,7 +158,7 @@ async def create_order(
             "render_url": render_url,
             "status": new_order.status,
         },
-        request_id=request_id,
+        req_id=req_id,
     )
 
     return new_order
@@ -222,7 +221,7 @@ async def update_order_status(
         method=request.method,
         path=request.url.path,
         status_code=200,
-        request_id=_request_id(request),
+        request_id=request_id(request),
         entity_type="order",
         entity_id=str(order.id),
         details={"new_status": status_data.status, "comment": status_data.comment},
@@ -236,7 +235,7 @@ async def update_order_status(
             "new_status": status_data.status,
             "comment": status_data.comment,
         },
-        request_id=_request_id(request),
+        req_id=request_id(request),
     )
 
     return order

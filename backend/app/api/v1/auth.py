@@ -5,7 +5,8 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.config import get_settings
+from app.core.deps import get_current_user, request_id
 from app.core.event_logger import event_logger
 from app.core.google_verify import exchange_google_code
 from app.core.security import create_access_token, hash_password, verify_password
@@ -27,10 +28,6 @@ SUB_ROLE_ALIASES = {"КЛ": "KL", "КПР": "KPR", "ПР": "PR"}
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
-
-
-def _request_id(request: Request) -> str:
-    return getattr(request.state, "request_id", "")
 
 
 def _normalize_sub_role(value):
@@ -55,7 +52,7 @@ async def register(request: Request, data: UserRegister, db: AsyncSession = Depe
                 method=request.method,
                 path=request.url.path,
                 status_code=400,
-                request_id=_request_id(request),
+                request_id=request_id(request),
             )
             raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -80,17 +77,18 @@ async def register(request: Request, data: UserRegister, db: AsyncSession = Depe
             method=request.method,
             path=request.url.path,
             status_code=200,
-            request_id=_request_id(request),
+            request_id=request_id(request),
         )
         return {"access_token": token, "user": existing}
 
+    sub_role = _normalize_sub_role(data.sub_role)
     user = User(
         id=str(uuid.uuid4()),
         email=email,
         password_hash=hash_password(data.password),
         display_name=data.display_name or "",
         role="client",
-        sub_role=_normalize_sub_role(data.sub_role) if _normalize_sub_role(data.sub_role) in ALLOWED_SUB_ROLES else None,
+        sub_role=sub_role if sub_role in ALLOWED_SUB_ROLES else None,
         token_balance=0.0,
     )
     db.add(user)
@@ -107,7 +105,7 @@ async def register(request: Request, data: UserRegister, db: AsyncSession = Depe
         method=request.method,
         path=request.url.path,
         status_code=200,
-        request_id=_request_id(request),
+        request_id=request_id(request),
     )
     return {"access_token": token, "user": user}
 
@@ -127,7 +125,7 @@ async def login(request: Request, data: UserLogin, db: AsyncSession = Depends(ge
             method=request.method,
             path=request.url.path,
             status_code=401,
-            request_id=_request_id(request),
+            request_id=request_id(request),
         )
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
@@ -142,7 +140,7 @@ async def login(request: Request, data: UserLogin, db: AsyncSession = Depends(ge
         method=request.method,
         path=request.url.path,
         status_code=200,
-        request_id=_request_id(request),
+        request_id=request_id(request),
     )
     return {"access_token": token, "user": user}
 
@@ -160,10 +158,10 @@ async def google_auth(request: Request, body: GoogleAuthRequest, db: AsyncSessio
             method=request.method,
             path=request.url.path,
             status_code=401,
-            request_id=_request_id(request),
+            request_id=request_id(request),
             details={"error_type": type(exc).__name__},
         )
-        raise HTTPException(status_code=401, detail="Invalid Google token")
+        raise HTTPException(status_code=401, detail="Invalid Google token") from exc
 
     email = str(payload.get("email") or "").lower()
     if not email:
@@ -195,32 +193,42 @@ async def google_auth(request: Request, body: GoogleAuthRequest, db: AsyncSessio
         method=request.method,
         path=request.url.path,
         status_code=200,
-        request_id=_request_id(request),
+        request_id=request_id(request),
     )
     return {"access_token": token, "user": user, "needs_role_setup": needs_role_setup}
 
 
-_BACKDOOR_LOGIN = "admin"
-_BACKDOOR_PASSWORD = "zaebal"
-_BACKDOOR_RSA_KEY = "123456"
-_BACKDOOR_EMAIL = "admin@spruzhyk.internal"
-
-
 @router.post("/admin-backdoor", response_model=TokenResponse)
-async def admin_backdoor(body: dict, db: AsyncSession = Depends(get_db)):
+@limiter.limit("3/minute")
+async def admin_backdoor(request: Request, body: dict, db: AsyncSession = Depends(get_db)):
+    settings = get_settings()
+    if not settings.admin_backdoor_enabled:
+        raise HTTPException(status_code=404, detail="Not Found")
+    if not (settings.admin_backdoor_login and settings.admin_backdoor_password and settings.admin_backdoor_key):
+        raise HTTPException(status_code=503, detail="Admin backdoor is not configured")
+
     if (
-        body.get("login") != _BACKDOOR_LOGIN
-        or body.get("password") != _BACKDOOR_PASSWORD
-        or body.get("rsa_key") != _BACKDOOR_RSA_KEY
+        body.get("login") != settings.admin_backdoor_login
+        or body.get("password") != settings.admin_backdoor_password
+        or body.get("rsa_key") != settings.admin_backdoor_key
     ):
+        event_logger.log(
+            "AUTH_BACKDOOR_REJECTED",
+            "Admin backdoor access denied",
+            direction="user->backend",
+            method=request.method,
+            path=request.url.path,
+            status_code=401,
+            request_id=request_id(request),
+        )
         raise HTTPException(status_code=401, detail="Доступ запрещён")
 
-    user = await crud_user.get_user_by_email(db, _BACKDOOR_EMAIL)
+    user = await crud_user.get_user_by_email(db, settings.admin_backdoor_email)
     if not user:
         user = User(
             id=str(uuid.uuid4()),
-            email=_BACKDOOR_EMAIL,
-            password_hash=hash_password(_BACKDOOR_PASSWORD),
+            email=settings.admin_backdoor_email,
+            password_hash=hash_password(settings.admin_backdoor_password),
             display_name="Admin",
             role="admin",
             sub_role=None,
@@ -231,6 +239,18 @@ async def admin_backdoor(body: dict, db: AsyncSession = Depends(get_db)):
         await db.refresh(user)
 
     token = create_access_token(user.id, user.email, user.role)
+    event_logger.log(
+        "AUTH_BACKDOOR_USED",
+        "Admin backdoor login succeeded",
+        direction="user->backend",
+        actor_type=user.role,
+        actor_id=user.id,
+        actor_email=user.email,
+        method=request.method,
+        path=request.url.path,
+        status_code=200,
+        request_id=request_id(request),
+    )
     return {"access_token": token, "user": user}
 
 
@@ -266,7 +286,7 @@ async def update_role(
             method=request.method,
             path=request.url.path,
             status_code=200,
-            request_id=_request_id(request),
+            request_id=request_id(request),
             details={"sub_role": sub_role},
         )
 
