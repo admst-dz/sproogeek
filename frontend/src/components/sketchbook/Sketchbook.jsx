@@ -17,7 +17,7 @@ function LogoDecal({ texture, x, y, z, rotation = 0, scale = 0.6 }) {
 
 // --- ГЕНЕРАТОР УЗОРОВ ---
 function createPatternTexture(type) {
-    if (type === 'blank') return null;
+    if (!type || type === 'blank') return null;
     const size = 128;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -27,6 +27,7 @@ function createPatternTexture(type) {
     ctx.strokeStyle = '#000000'; ctx.fillStyle = '#000000';
     ctx.lineWidth = 4; ctx.lineCap = 'square';
     if (type === 'lined') { ctx.beginPath(); ctx.moveTo(0, size); ctx.lineTo(size, size); ctx.stroke(); }
+    else if (type === 'tlined') { ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, size); ctx.lineTo(size, size); ctx.stroke(); }
     else if (type === 'grid') { ctx.beginPath(); ctx.moveTo(0, size); ctx.lineTo(size, size); ctx.lineTo(size, 0); ctx.stroke(); }
     else if (type === 'dotted') { ctx.beginPath(); ctx.arc(size/2, size/2, 5, 0, 2 * Math.PI); ctx.fill(); }
     const texture = new THREE.CanvasTexture(canvas);

@@ -74,7 +74,7 @@ export const Order = ({ onBack, onSuccess }) => {
         }
     };
 
-    const patternNames = { blank: 'Пустой', lined: 'Линейка', grid: 'Клетка', dotted: 'Точка' };
+    const patternNames = { blank: 'Пустой', lined: 'Линейка', tlined: 'Т. линейка', grid: 'Клетка', dotted: 'Точка' };
     const bindingNames = { hard: 'Твердый', spiral: 'На пружине' };
 
     return (

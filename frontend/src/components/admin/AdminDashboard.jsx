@@ -4,7 +4,7 @@ import { VibeLoader } from '../shared/VibeLoader';
 
 const STATUS_LABEL = { new: 'Новый', processing: 'В работе', production: 'Производство', in_delivery: 'Доставка', done: 'Готов' };
 const BINDING_LABEL = { hard: 'Твёрдый', spiral: 'На пружине', soft: 'Мягкий' };
-const PATTERN_LABEL = { blank: 'Пустой', lined: 'Линейка', grid: 'Клетка', dotted: 'Точка' };
+const PATTERN_LABEL = { blank: 'Пустой', lined: 'Линейка', tlined: 'Т. линейка', grid: 'Клетка', dotted: 'Точка' };
 const PRODUCT_LABEL = { notebook: 'Ежедневник', sketchbook: 'Скетчбук', thermos: 'Термос', powerbank: 'Повербанк' };
 const STATUS_CLS = {
     new: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
