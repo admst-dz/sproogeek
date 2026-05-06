@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useConfigurator } from "../../store";
-import { fetchAllOrders, updateOrderStatus, updateOrderPrice, fetchDealerProducts, saveProduct, updateProduct, deleteProduct } from '../../api';
+import { fetchAllOrders, updateOrderStatus, fetchDealerProducts, saveProduct, updateProduct, deleteProduct } from '../../api';
 import { getUserSecondaryLabel } from '../../utils/user';
 import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';

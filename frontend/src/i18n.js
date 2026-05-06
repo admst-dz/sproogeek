@@ -15,6 +15,8 @@ export const translations = {
         sketchbookDesc: "A5 • 100 г/м²",
         thermos: "Термос",
         thermosDesc: "500 мл • Нержавеющая сталь",
+        powerbank: "Повербанк",
+        powerbankDesc: "10 000 мАч • Фирменный дизайн",
         openBtn: "Открыть конструктор →",
     },
     en: {
@@ -33,6 +35,8 @@ export const translations = {
         sketchbookDesc: "A5 • 100 g/m²",
         thermos: "Thermos",
         thermosDesc: "500 ml • Stainless Steel",
+        powerbank: "Power Bank",
+        powerbankDesc: "10 000 mAh • Custom Design",
         openBtn: "Open configurator →",
     },
     by: {
@@ -51,6 +55,8 @@ export const translations = {
         sketchbookDesc: "A5 • 100 г/м²",
         thermos: "Тэрмас",
         thermosDesc: "500 мл • Нержавеючая сталь",
+        powerbank: "Павэрбанк",
+        powerbankDesc: "10 000 мАг • Фірменны дызайн",
         openBtn: "Адкрыць канструктар →",
     }
 };

@@ -11,6 +11,7 @@ import { useConfigurator } from './store'
 import { restoreSession } from './api'
 import { SketchbookInterface } from './components/sketchbook/SketchbookInterface'
 import { ThermosInterface } from './components/thermos/ThermosInterface'
+import { PowerbankInterface } from './components/powerbank/PowerbankInterface'
 import { CookieBanner } from './components/shared/CookieBanner'
 import { AdminAuth } from './components/auth/AdminAuth'
 import { AdminDashboard } from './components/admin/AdminDashboard'
@@ -301,6 +302,16 @@ function App() {
                             <div className="relative h-[55%] w-full z-10 md:absolute md:top-0 md:right-0 md:h-full md:w-[30%] pointer-events-none md:p-4 md:flex md:flex-col md:justify-center">
                                 {activeProduct === 'thermos' ? (
                                     <ThermosInterface
+                                        onFinish={() => {
+                                            if (currentUser) {
+                                                setScreen('client_dashboard');
+                                            } else {
+                                                setShowAuth(true);
+                                            }
+                                        }}
+                                    />
+                                ) : activeProduct === 'powerbank' ? (
+                                    <PowerbankInterface
                                         onFinish={() => {
                                             if (currentUser) {
                                                 setScreen('client_dashboard');

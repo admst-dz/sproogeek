@@ -45,6 +45,14 @@ export const useConfigurator = create((set) => ({
     thermosLogos: [],
     selectedThermosLogoId: null,
 
+    // --- Параметры ежедневника (уголки) ---
+    hasCorners: true,
+
+    // --- Параметры повербанка ---
+    powerbankBodyColor: '#1a1a1a',
+    powerbankLogos: [],
+    selectedPowerbankLogoId: null,
+
     // --- AUTH И РОЛИ ---
     currentUser: null,
     userRole: null,
@@ -90,7 +98,10 @@ export const useConfigurator = create((set) => ({
     setRenderSnapshot: (url) => set({ renderSnapshot: url }),
 
     setProduct: (type) => set({ activeProduct: type }),
-    setBindingType: (type) => set({ bindingType: type }),
+    setBindingType: (type) => set((state) => ({
+        bindingType: type,
+        hasElastic: type === 'hard' ? false : state.hasElastic,
+    })),
     setFormat: (fmt) => set({ format: fmt }),
     setColor: (part, color) => set((state) => ({ ...state, [`${part}Color`]: color })),
     setHasElastic: (has) => set({ hasElastic: has }),
@@ -167,4 +178,45 @@ export const useConfigurator = create((set) => ({
         };
     }),
     toggleThermosCap: () => set((state) => ({ thermosCapVisible: !state.thermosCapVisible })),
+
+    // --- ACTIONS: УГОЛКИ ---
+    toggleCorners: () => set((state) => ({ hasCorners: !state.hasCorners })),
+
+    // --- ACTIONS: ПОВЕРБАНК ---
+    addPowerbankLogo: (file) => {
+        if (file instanceof File) {
+            const reader = new FileReader();
+            const id = Date.now();
+            reader.onload = (e) => set((state) => ({
+                powerbankLogos: [...state.powerbankLogos, { id, texture: e.target.result, filename: file.name, position: [0, 0], rotation: 0, scale: 0.6, side: 'outer' }],
+                selectedPowerbankLogoId: id
+            }));
+            reader.readAsDataURL(file);
+        }
+    },
+    selectPowerbankLogo: (id) => set({ selectedPowerbankLogoId: id }),
+    setPowerbankLogoPosition: (x, y) => set((state) => ({
+        powerbankLogos: state.powerbankLogos.map(l => l.id === state.selectedPowerbankLogoId ? { ...l, position: [x, y] } : l)
+    })),
+    setPowerbankLogoRotation: (rotation) => set((state) => ({
+        powerbankLogos: state.powerbankLogos.map(l => l.id === state.selectedPowerbankLogoId ? { ...l, rotation } : l)
+    })),
+    setPowerbankLogoScale: (scale) => set((state) => ({
+        powerbankLogos: state.powerbankLogos.map(l => l.id === state.selectedPowerbankLogoId ? { ...l, scale } : l)
+    })),
+    setPowerbankLogoSide: (side) => set((state) => ({
+        powerbankLogos: state.powerbankLogos.map(l => l.id === state.selectedPowerbankLogoId ? { ...l, side, position: [0, 0] } : l)
+    })),
+    resetPowerbankLogoTransform: () => set((state) => ({
+        powerbankLogos: state.powerbankLogos.map(l => l.id === state.selectedPowerbankLogoId ? { ...l, position: [0, 0], rotation: 0, scale: 0.6 } : l)
+    })),
+    removePowerbankLogo: (id) => set((state) => {
+        const remaining = state.powerbankLogos.filter(l => l.id !== id);
+        return {
+            powerbankLogos: remaining,
+            selectedPowerbankLogoId: state.selectedPowerbankLogoId === id
+                ? (remaining.length > 0 ? remaining[remaining.length - 1].id : null)
+                : state.selectedPowerbankLogoId
+        };
+    }),
 }))

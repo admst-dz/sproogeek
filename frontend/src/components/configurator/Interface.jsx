@@ -22,6 +22,7 @@ export const Interface = ({ onFinish }) => {
         bindingType, setBindingType,
         setColor, coverColor, elasticColor, spiralColor,
         hasElastic, setHasElastic,
+        hasCorners, toggleCorners,
         setNotebookOpen,
         paperPattern, setPaperPattern,
         logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale,
@@ -45,13 +46,15 @@ export const Interface = ({ onFinish }) => {
     const handleAddToCart = () => {
         const snapshot = captureRender();
         if (snapshot) setRenderSnapshot(snapshot);
+        const bindingLabel = bindingType === 'hard' ? 'Твердый' : bindingType === 'spiral' ? 'На пружине' : 'Мягкий';
+        const orderHasElastic = bindingType !== 'hard' && hasElastic;
         const newItem = {
             productName: `Ежедневник ${format}`,
-            design: `Переплет: ${bindingType === 'hard' ? 'Твердый' : 'Пружина'}, Блок: ${paperPattern}`,
+            design: `Переплет: ${bindingLabel}, Блок: ${paperPattern}`,
             priceBYN: 1500,
             type: 'notebook',
-            config: { format, coverColor, hasElastic, elasticColor, paperPattern, bindingType, spiralColor },
-            format, coverColor, hasElastic, elasticColor, paperPattern, bindingType, spiralColor,
+            config: { format, coverColor, hasElastic: orderHasElastic, elasticColor, paperPattern, bindingType, spiralColor, hasCorners },
+            format, coverColor, hasElastic: orderHasElastic, elasticColor, paperPattern, bindingType, spiralColor, hasCorners,
             status: 'draft',
             rendersGenerated: 0,
             quantity,
@@ -72,25 +75,36 @@ export const Interface = ({ onFinish }) => {
             <div className="flex-1 px-4 md:px-6 pt-4 overflow-y-auto custom-scrollbar flex flex-col gap-3 relative z-0">
                 {tab === 'cover' && (
                     <div className="animate-fade-in flex flex-col gap-3 pb-40">
-                        <GlassDropdown label="Переплет" currentValue={bindingType === 'hard' ? 'Твердый' : 'Пружина'}>
+                        <GlassDropdown label="Переплет" currentValue={bindingType === 'hard' ? 'Твердый' : bindingType === 'spiral' ? 'На пружине' : 'Мягкий'}>
                             <div className="flex flex-col gap-1">
-                                <button onClick={() => setBindingType('hard')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'hard' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>Твердый переплет</span> {bindingType === 'hard' && <span>✓</span>}</button>
-                                <button onClick={() => setBindingType('spiral')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'spiral' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>На пружине (Soft)</span> {bindingType === 'spiral' && <span>✓</span>}</button>
+                                <button onClick={() => setBindingType('hard')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'hard' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>Твёрдый переплёт</span> {bindingType === 'hard' && <span>✓</span>}</button>
+                                <button onClick={() => setBindingType('spiral')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'spiral' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>На пружине</span> {bindingType === 'spiral' && <span>✓</span>}</button>
+                                <button onClick={() => setBindingType('soft')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'soft' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>Мягкий переплёт</span> {bindingType === 'soft' && <span>✓</span>}</button>
                             </div>
                         </GlassDropdown>
                         {bindingType === 'spiral' && (<div className="glass-panel rounded-[11px] overflow-hidden animate-fade-in"><ColorGlassList currentColor={spiralColor} onSelect={(c) => setColor('spiral', c)} label="Цвет пружины"/></div>)}
+                        {(bindingType === 'hard' || bindingType === 'soft') && (
+                            <div className="glass-panel rounded-[11px] overflow-hidden transition-all animate-fade-in">
+                                <div className="p-5 flex items-center justify-between cursor-pointer" onClick={toggleCorners}>
+                                    <span className="text-xl font-bold tracking-wide">Уголки</span>
+                                    <div className={`w-12 h-7 rounded-full p-1 transition-colors border border-white/30 ${hasCorners ? 'bg-green-500/80' : 'bg-gray-500/50'}`}><div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${hasCorners ? 'translate-x-5' : ''}`} /></div>
+                                </div>
+                            </div>
+                        )}
                         <GlassDropdown label="Формат" currentValue={format}>
                             <div className="flex flex-col gap-1">
                                 {['A5', 'A6'].map(f => (<button key={f} onClick={() => setFormat(f)} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${format === f ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>{f}</span> {format === f && <span>✓</span>}</button>))}
                             </div>
                         </GlassDropdown>
-                        <div className="glass-panel rounded-[11px] overflow-hidden transition-all">
-                            <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setHasElastic(!hasElastic)}>
-                                <span className="text-xl font-bold tracking-wide">Резинка</span>
-                                <div className={`w-12 h-7 rounded-full p-1 transition-colors border border-white/30 ${hasElastic ? 'bg-green-500/80' : 'bg-gray-500/50'}`}><div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${hasElastic ? 'translate-x-5' : ''}`} /></div>
+                        {bindingType !== 'hard' && (
+                            <div className="glass-panel rounded-[11px] overflow-hidden transition-all">
+                                <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setHasElastic(!hasElastic)}>
+                                    <span className="text-xl font-bold tracking-wide">Резинка</span>
+                                    <div className={`w-12 h-7 rounded-full p-1 transition-colors border border-white/30 ${hasElastic ? 'bg-green-500/80' : 'bg-gray-500/50'}`}><div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${hasElastic ? 'translate-x-5' : ''}`} /></div>
+                                </div>
+                                {hasElastic && (<div className="border-t border-white/10"><ColorGlassList currentColor={elasticColor} onSelect={(c) => setColor('elastic', c)} label="Цвет резинки" /></div>)}
                             </div>
-                            {hasElastic && (<div className="border-t border-white/10"><ColorGlassList currentColor={elasticColor} onSelect={(c) => setColor('elastic', c)} label="Цвет резинки" /></div>)}
-                        </div>
+                        )}
                         <div className="glass-panel rounded-[11px] overflow-hidden"><ColorGlassList currentColor={coverColor} onSelect={(c) => setColor('cover', c)} label="Цвет обложки"/></div>
                         <LogoPanel logos={logos} selectedLogoId={selectedLogoId} addLogo={addLogo} selectLogo={selectLogo} removeLogo={removeLogo} resetLogoTransform={resetLogoTransform} setLogoPosition={setLogoPosition} setLogoRotation={setLogoRotation} setLogoScale={setLogoScale} />
                     </div>
