@@ -7,6 +7,7 @@ import { Notebook } from '../shared/Notebook';
 import { Sketchbook } from '../sketchbook/Sketchbook';
 import { Thermos } from '../thermos/Thermos';
 import { getUserDisplayName, getUserSecondaryLabel } from '../../utils/user';
+import { SceneLoadingOverlay } from '../shared/VibeLoader';
 
 const TabBtn = ({ active, children, onClick }) => (
     <button
@@ -348,6 +349,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                     </Stage>
                                                 </PresentationControls>
                                             </Canvas>
+                                            <SceneLoadingOverlay compact label="3D" />
                                             <div className="absolute top-3 left-3 text-white/30 text-[10px] font-bold tracking-wider pointer-events-none uppercase">Перетащи для вращения</div>
                                         </div>
 
@@ -363,7 +365,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                 <>
                                                     <CartRow label="Формат" value={format} />
                                                     <CartRow label="Переплет" value={bindingType === 'hard' ? 'Твердый' : 'На пружине'} />
-                                                    <CartRow label="Разлиновка" value={{ blank: 'Пустой', lined: 'Линейка', grid: 'Клетка', dotted: 'Точка' }[paperPattern]} />
+                                                    <CartRow label="Разлиновка" value={{ blank: 'Пустой', lined: 'Линейка', tlined: 'Т. линейка', grid: 'Клетка', dotted: 'Точка' }[paperPattern]} />
                                                     <CartRow label="Обложка" value={<ColorDot color={coverColor} />} />
                                                     {hasElastic && <CartRow label="Резинка" value={<ColorDot color={elasticColor} />} />}
                                                     {bindingType === 'spiral' && <CartRow label="Пружина" value={<ColorDot color={spiralColor} />} />}
@@ -548,7 +550,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                                         <ClientDetailRow label="Переплёт" value={order.configuration.productConfig.bindingType === 'hard' ? 'Твёрдый' : 'На пружине'} />
                                                                     )}
                                                                     {order.configuration?.productConfig?.paperPattern && (
-                                                                        <ClientDetailRow label="Разлиновка" value={{ blank: 'Пустой', lined: 'Линейка', grid: 'Клетка', dotted: 'Точка' }[order.configuration.productConfig.paperPattern] || ''} />
+                                                                        <ClientDetailRow label="Разлиновка" value={{ blank: 'Пустой', lined: 'Линейка', tlined: 'Т. линейка', grid: 'Клетка', dotted: 'Точка' }[order.configuration.productConfig.paperPattern] || ''} />
                                                                     )}
                                                                     {order.configuration?.productConfig?.coverColor && (
                                                                         <ClientDetailRow label="Обложка" value={<ClientColorDot color={order.configuration.productConfig.coverColor} />} />

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { getCookie, setCookie, deleteCookie, hasCookieConsent } from './utils/cookies'
 import { clearMemoryToken } from './api'
+import { normalizeImageFile } from './utils/images'
 
 const CART_COOKIE = 'spruzhuk_cart';
 const AUTH_COOKIE = 'spruzhuk_auth';
@@ -39,11 +40,19 @@ export const useConfigurator = create((set) => ({
     zoomLevel: 1,
 
     // --- Параметры термоса ---
-    thermosBodyColor: '#C0C0C0',
-    thermosCapColor: '#C0C0C0',
-    thermosCapVisible: true,
+    thermosBodyColor: '#E65405',
+    thermosCapColor: '#E65405',
+    thermosCapVisible: false,
     thermosLogos: [],
     selectedThermosLogoId: null,
+
+    // --- Параметры ежедневника (уголки) ---
+    hasCorners: true,
+
+    // --- Параметры повербанка ---
+    powerbankBodyColor: '#75787B',
+    powerbankLogos: [],
+    selectedPowerbankLogoId: null,
 
     // --- AUTH И РОЛИ ---
     currentUser: null,
@@ -90,21 +99,27 @@ export const useConfigurator = create((set) => ({
     setRenderSnapshot: (url) => set({ renderSnapshot: url }),
 
     setProduct: (type) => set({ activeProduct: type }),
-    setBindingType: (type) => set({ bindingType: type }),
+    setBindingType: (type) => set((state) => ({
+        bindingType: type,
+        hasElastic: type === 'hard' ? false : state.hasElastic,
+    })),
     setFormat: (fmt) => set({ format: fmt }),
     setColor: (part, color) => set((state) => ({ ...state, [`${part}Color`]: color })),
     setHasElastic: (has) => set({ hasElastic: has }),
     setNotebookOpen: (isOpen) => set({ isNotebookOpen: isOpen }),
     setPaperPattern: (pattern) => set({ paperPattern: pattern, isNotebookOpen: true }),
-    addLogo: (file) => {
+    addLogo: async (file, side = 'front') => {
         if (file instanceof File) {
-            const reader = new FileReader();
             const id = Date.now();
-            reader.onload = (e) => set((state) => ({
-                logos: [...state.logos, { id, texture: e.target.result, filename: file.name, position: [0, 0], rotation: 0, scale: 0.6 }],
-                selectedLogoId: id
-            }));
-            reader.readAsDataURL(file);
+            try {
+                const texture = await normalizeImageFile(file);
+                set((state) => ({
+                    logos: [...state.logos, { id, side, texture, filename: file.name, position: [0, 0], rotation: 0, scale: 0.6 }],
+                    selectedLogoId: id
+                }));
+            } catch (error) {
+                console.error('Failed to prepare logo image', error);
+            }
         }
     },
     selectLogo: (id) => set({ selectedLogoId: id }),
@@ -116,6 +131,9 @@ export const useConfigurator = create((set) => ({
     })),
     setLogoScale: (scale) => set((state) => ({
         logos: state.logos.map(l => l.id === state.selectedLogoId ? { ...l, scale } : l)
+    })),
+    setLogoSide: (side) => set((state) => ({
+        logos: state.logos.map(l => l.id === state.selectedLogoId ? { ...l, side, position: [0, 0] } : l)
     })),
     resetLogoTransform: () => set((state) => ({
         logos: state.logos.map(l => l.id === state.selectedLogoId ? { ...l, position: [0, 0], rotation: 0, scale: 0.6 } : l)
@@ -132,15 +150,19 @@ export const useConfigurator = create((set) => ({
     setZoom: (val) => set({ zoomLevel: val }),
 
     // --- ACTIONS: ТЕРМОС ---
-    addThermosLogo: (file) => {
+    addThermosLogo: async (file, target = 'body') => {
         if (file instanceof File) {
-            const reader = new FileReader();
             const id = Date.now();
-            reader.onload = (e) => set((state) => ({
-                thermosLogos: [...state.thermosLogos, { id, texture: e.target.result, filename: file.name, position: [0, 0], rotation: 0, scale: 0.6 }],
-                selectedThermosLogoId: id
-            }));
-            reader.readAsDataURL(file);
+            const scale = target === 'body' ? 0.6 : 0.32;
+            try {
+                const texture = await normalizeImageFile(file);
+                set((state) => ({
+                    thermosLogos: [...state.thermosLogos, { id, target, texture, filename: file.name, position: [0, 0], rotation: 0, scale }],
+                    selectedThermosLogoId: id
+                }));
+            } catch (error) {
+                console.error('Failed to prepare thermos logo image', error);
+            }
         }
     },
     selectThermosLogo: (id) => set({ selectedThermosLogoId: id }),
@@ -154,7 +176,7 @@ export const useConfigurator = create((set) => ({
         thermosLogos: state.thermosLogos.map(l => l.id === state.selectedThermosLogoId ? { ...l, scale } : l)
     })),
     resetThermosLogoTransform: () => set((state) => ({
-        thermosLogos: state.thermosLogos.map(l => l.id === state.selectedThermosLogoId ? { ...l, position: [0, 0], rotation: 0, scale: 0.6 } : l)
+        thermosLogos: state.thermosLogos.map(l => l.id === state.selectedThermosLogoId ? { ...l, position: [0, 0], rotation: 0, scale: (l.target ?? 'body') === 'body' ? 0.6 : 0.32 } : l)
     })),
     removeThermosLogo: (id) => set((state) => {
         const remaining = state.thermosLogos.filter(l => l.id !== id);
@@ -166,4 +188,48 @@ export const useConfigurator = create((set) => ({
         };
     }),
     toggleThermosCap: () => set((state) => ({ thermosCapVisible: !state.thermosCapVisible })),
+
+    // --- ACTIONS: УГОЛКИ ---
+    toggleCorners: () => set((state) => ({ hasCorners: !state.hasCorners })),
+
+    // --- ACTIONS: ПОВЕРБАНК ---
+    addPowerbankLogo: async (file) => {
+        if (file instanceof File) {
+            const id = Date.now();
+            try {
+                const texture = await normalizeImageFile(file);
+                set((state) => ({
+                    powerbankLogos: [...state.powerbankLogos, { id, texture, filename: file.name, position: [0, 0], rotation: 0, scale: 0.6, side: 'outer' }],
+                    selectedPowerbankLogoId: id
+                }));
+            } catch (error) {
+                console.error('Failed to prepare powerbank logo image', error);
+            }
+        }
+    },
+    selectPowerbankLogo: (id) => set({ selectedPowerbankLogoId: id }),
+    setPowerbankLogoPosition: (x, y) => set((state) => ({
+        powerbankLogos: state.powerbankLogos.map(l => l.id === state.selectedPowerbankLogoId ? { ...l, position: [x, y] } : l)
+    })),
+    setPowerbankLogoRotation: (rotation) => set((state) => ({
+        powerbankLogos: state.powerbankLogos.map(l => l.id === state.selectedPowerbankLogoId ? { ...l, rotation } : l)
+    })),
+    setPowerbankLogoScale: (scale) => set((state) => ({
+        powerbankLogos: state.powerbankLogos.map(l => l.id === state.selectedPowerbankLogoId ? { ...l, scale } : l)
+    })),
+    setPowerbankLogoSide: (side) => set((state) => ({
+        powerbankLogos: state.powerbankLogos.map(l => l.id === state.selectedPowerbankLogoId ? { ...l, side, position: [0, 0] } : l)
+    })),
+    resetPowerbankLogoTransform: () => set((state) => ({
+        powerbankLogos: state.powerbankLogos.map(l => l.id === state.selectedPowerbankLogoId ? { ...l, position: [0, 0], rotation: 0, scale: 0.6 } : l)
+    })),
+    removePowerbankLogo: (id) => set((state) => {
+        const remaining = state.powerbankLogos.filter(l => l.id !== id);
+        return {
+            powerbankLogos: remaining,
+            selectedPowerbankLogoId: state.selectedPowerbankLogoId === id
+                ? (remaining.length > 0 ? remaining[remaining.length - 1].id : null)
+                : state.selectedPowerbankLogoId
+        };
+    }),
 }))

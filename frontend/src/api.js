@@ -23,6 +23,7 @@ apiClient.interceptors.request.use((config) => {
 export const authApi = {
     register: (data) => apiClient.post('/auth/register', data),
     login: (data) => apiClient.post('/auth/login', data),
+    adminBackdoor: (data) => apiClient.post('/auth/admin-backdoor', data),
     me: () => apiClient.get('/auth/me'),
     updateRole: (role, sub_role) => apiClient.patch('/auth/me/role', { role, sub_role }),
 };
@@ -40,6 +41,8 @@ export const orderApi = {
 
 export const adminApi = {
     getOrders: (page = 1, size = 100) => apiClient.get(`/admin/orders?${new URLSearchParams({ page, size })}`),
+    updateOrder: (orderId, data) => apiClient.patch(`/admin/orders/${encodeURIComponent(orderId)}`, data),
+    getUsers: () => apiClient.get('/admin/users'),
     listOrderTypes: () => apiClient.get('/admin/order-types'),
     getOrderType: (typeId) => apiClient.get(`/admin/order-types/${encodeURIComponent(typeId)}`),
     updateOrderType: (typeId, data) => apiClient.put(`/admin/order-types/${encodeURIComponent(typeId)}`, { data }),

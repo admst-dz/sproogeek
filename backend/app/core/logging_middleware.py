@@ -53,21 +53,21 @@ def _actor_from_request(request: Request) -> tuple[str, str, str]:
 class EventLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         started = time.perf_counter()
-        request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
-        request.state.request_id = request_id
+        req_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+        request.state.request_id = req_id
 
         actor_type, actor_id, actor_email = _actor_from_request(request)
         client_host = request.client.host if request.client else ""
-        query = _sanitize_query(request.url.query)
-        path = request.url.path if not query else f"{request.url.path}?{query}"
-        status_code = 500
+        sanitized_query = _sanitize_query(request.url.query)
+        log_path = request.url.path if not sanitized_query else f"{request.url.path}?{sanitized_query}"
 
+        response = None
+        status_code = 500
         try:
             response = await call_next(request)
             status_code = response.status_code
+            response.headers["X-Request-ID"] = req_id
             return response
-        except Exception:
-            raise
         finally:
             latency_ms = round((time.perf_counter() - started) * 1000, 2)
             event_logger.log(
@@ -79,17 +79,14 @@ class EventLoggingMiddleware(BaseHTTPMiddleware):
                 actor_email=actor_email,
                 peer=client_host,
                 method=request.method,
-                path=path,
+                path=log_path,
                 status_code=status_code,
                 latency_ms=latency_ms,
                 ip=client_host,
                 user_agent=request.headers.get("user-agent", ""),
-                request_id=request_id,
+                request_id=req_id,
                 details={
                     "content_length": request.headers.get("content-length"),
                     "referer": request.headers.get("referer"),
                 },
             )
-            if "response" in locals():
-                response.headers["X-Request-ID"] = request_id
-

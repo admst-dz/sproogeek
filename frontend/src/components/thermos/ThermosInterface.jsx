@@ -1,20 +1,19 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useConfigurator, captureRender } from '../../store';
 
 const palette = [
-    { name: 'Серебро',  bg: '#C0C0C0' },
-    { name: 'Чёрный',   bg: '#1a1a1a' },
-    { name: 'Белый',    bg: '#ffffff' },
-    { name: 'Синий',    bg: '#1565C0' },
-    { name: 'Красный',  bg: '#D32F2F' },
-    { name: 'Зелёный',  bg: '#2E7D32' },
-    { name: 'Жёлтый',  bg: '#FDD835' },
-    { name: 'Розовый',  bg: '#EC407A' },
-    { name: 'Золото',   bg: '#D4AF37' },
-    { name: 'Медь',     bg: '#B87333' },
+    { name: 'Оранжевый',  bg: '#e65405' },
+    { name: 'Ярко-синий',   bg: '#003087' },
+    { name: 'Темно-зеленый',    bg: '#115740' },
+    { name: 'Фиолетовый',    bg: '#5E366E' },
+    { name: 'Красный',  bg: '#BA0C2F' },
+    { name: 'Серый',  bg: '#716D6A' },
+    { name: 'Темно-синий',  bg: '#1B365D' },
 ];
 
 export const ThermosInterface = ({ onFinish }) => {
+    const [logoArea, setLogoArea] = useState('body');
+    const [capLogoTarget, setCapLogoTarget] = useState('capTop');
     const {
         thermosBodyColor, thermosCapColor, thermosCapVisible,
         setColor, toggleThermosCap,
@@ -25,6 +24,7 @@ export const ThermosInterface = ({ onFinish }) => {
         zoomLevel, setZoom,
         addToCart, setRenderSnapshot,
     } = useConfigurator();
+    const activeLogoTarget = logoArea === 'body' ? 'body' : capLogoTarget;
 
     const handleAddToCart = () => {
         const snapshot = captureRender();
@@ -51,9 +51,6 @@ export const ThermosInterface = ({ onFinish }) => {
 
             <div className="flex items-end gap-4 px-8 py-6 shrink-0 z-10 bg-white/5 backdrop-blur-sm">
                 <span className="text-2xl md:text-3xl font-bold leading-none opacity-100">Термос</span>
-                <div className="ml-auto md:hidden">
-                    <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
-                </div>
             </div>
 
             <div className="px-4 md:px-6 pt-3 pb-3 shrink-0">
@@ -88,6 +85,11 @@ export const ThermosInterface = ({ onFinish }) => {
                 <ThermosLogoPanel
                     logos={thermosLogos}
                     selectedLogoId={selectedThermosLogoId}
+                    logoArea={logoArea}
+                    setLogoArea={setLogoArea}
+                    capLogoTarget={capLogoTarget}
+                    setCapLogoTarget={setCapLogoTarget}
+                    activeLogoTarget={activeLogoTarget}
                     addLogo={addThermosLogo}
                     selectLogo={selectThermosLogo}
                     removeLogo={removeThermosLogo}
@@ -112,29 +114,62 @@ export const ThermosInterface = ({ onFinish }) => {
 
 // --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
 
-const ThermosLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale }) => {
-    const selected = logos.find(l => l.id === selectedLogoId) || null;
+const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLogoTarget, setCapLogoTarget, activeLogoTarget, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale }) => {
+    const visibleLogos = logos.filter(l => (l.target ?? 'body') === activeLogoTarget);
+    const selected = visibleLogos.find(l => l.id === selectedLogoId) || null;
     const rotStart = useRef(0);
     const rotStartX = useRef(null);
+    const xRange = 0.35;
+    const yRange = activeLogoTarget === 'body' ? 2.5 : activeLogoTarget === 'capSide' ? 1 : 0.35;
 
     const updatePos = (e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
         const ny = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-        setLogoPosition((nx * 2 - 1) * 0.35, -(ny * 2 - 1) * 2.5);
+        setLogoPosition((nx * 2 - 1) * xRange, -(ny * 2 - 1) * yRange);
     };
 
 
     return (
         <div className="glass-panel rounded-[11px] p-5">
             <h3 className="text-xl font-bold tracking-wide mb-4">Логотип</h3>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+                <button
+                    onClick={() => setLogoArea('body')}
+                    className={`py-2 rounded-[7px] text-xs font-bold uppercase tracking-widest border transition-colors ${logoArea === 'body' ? 'bg-white/25 border-white/40' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+                >
+                    Корпус
+                </button>
+                <button
+                    onClick={() => setLogoArea('cap')}
+                    className={`py-2 rounded-[7px] text-xs font-bold uppercase tracking-widest border transition-colors ${logoArea === 'cap' ? 'bg-white/25 border-white/40' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+                >
+                    Крышка
+                </button>
+            </div>
+            {logoArea === 'cap' && (
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                    <button
+                        onClick={() => setCapLogoTarget('capTop')}
+                        className={`py-2 rounded-[7px] text-[11px] font-bold uppercase tracking-wider border transition-colors ${capLogoTarget === 'capTop' ? 'bg-white/20 border-white/35' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+                    >
+                        Верх
+                    </button>
+                    <button
+                        onClick={() => setCapLogoTarget('capSide')}
+                        className={`py-2 rounded-[7px] text-[11px] font-bold uppercase tracking-wider border transition-colors ${capLogoTarget === 'capSide' ? 'bg-white/20 border-white/35' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+                    >
+                        Боковина
+                    </button>
+                </div>
+            )}
             <label className="block w-full py-3 bg-white/10 rounded-[6px] text-center cursor-pointer border border-white/20 text-sm font-bold mb-4 hover:bg-white/20 transition-colors">
                 + ДОБАВИТЬ ЛОГОТИП
-                <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) { addLogo(e.target.files[0]); e.target.value = ''; } }} className="hidden" />
+                <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) { addLogo(e.target.files[0], activeLogoTarget); e.target.value = ''; } }} className="hidden" />
             </label>
-            {logos.length > 0 && (
+            {visibleLogos.length > 0 && (
                 <div className="flex flex-col gap-2 mb-4">
-                    {logos.map(logo => (
+                    {visibleLogos.map(logo => (
                         <div key={logo.id} className={`flex items-center rounded-[6px] border ${logo.id === selectedLogoId ? 'bg-white/30 border-white/40' : 'bg-white/10 border-white/10'}`}>
                             <button onClick={() => selectLogo(logo.id)} className="flex-1 py-2 px-3 text-left text-sm font-bold truncate hover:opacity-80 transition-opacity">{logo.filename}</button>
                             <button onClick={() => removeLogo(logo.id)} className="px-3 py-2 text-white/40 hover:text-white/90 text-lg leading-none transition-colors shrink-0" title="Удалить">×</button>
@@ -166,7 +201,7 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLo
                                 className="absolute w-4 h-4 bg-white rounded-full shadow-lg border-2 border-white/80 pointer-events-none"
                                 style={{
                                     left: `${(selected.position[0] / 0.35 + 1) / 2 * 100}%`,
-                                    top: `${(1 - (selected.position[1] / 2.5 + 1) / 2) * 100}%`,
+                                    top: `${(1 - (selected.position[1] / yRange + 1) / 2) * 100}%`,
                                     transform: 'translate(-50%, -50%)'
                                 }}
                             />
@@ -202,7 +237,7 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLo
                             <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">Размер</span>
                             <span className="text-xs font-bold opacity-80">{Math.round((selected.scale ?? 0.6) * 100)}%</span>
                         </div>
-                        <input type="range" min="0.2" max="1.5" step="0.05"
+                        <input type="range" min="0.12" max={activeLogoTarget === 'body' ? '1.5' : '0.9'} step="0.03"
                             value={selected.scale ?? 0.6}
                             onChange={(e) => setLogoScale(parseFloat(e.target.value))}
                             className="w-full h-1 bg-white/30 rounded-full appearance-none accent-white" />
@@ -224,5 +259,4 @@ export const ZoomControls = ({ zoomLevel, setZoom }) => (
         </button>
     </div>
 );
-
 

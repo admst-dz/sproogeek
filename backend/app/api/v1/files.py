@@ -4,14 +4,15 @@ import uuid
 import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
-from app.core.deps import get_staff_user
+from app.core.config import get_settings
+from app.core.deps import get_staff_user, request_id
 from app.core.event_logger import event_logger
 
 
 router = APIRouter()
+settings = get_settings()
 
 UPLOAD_DIR = "uploads/logos"
-MAX_LOGO_BYTES = 2_000_000
 ALLOWED_IMAGE_TYPES = {
     "image/png": ("png", lambda content: content.startswith(b"\x89PNG\r\n\x1a\n")),
     "image/jpeg": ("jpg", lambda content: content.startswith(b"\xff\xd8\xff")),
@@ -33,7 +34,7 @@ async def upload_logo(
 
     extension, validate_signature = file_meta
     content = await file.read()
-    if len(content) > MAX_LOGO_BYTES:
+    if len(content) > settings.max_logo_bytes:
         raise HTTPException(status_code=413, detail="File is too large")
     if not validate_signature(content):
         raise HTTPException(status_code=400, detail="File content does not match declared type")
@@ -55,7 +56,7 @@ async def upload_logo(
         method=request.method,
         path=request.url.path,
         status_code=200,
-        request_id=getattr(request.state, "request_id", ""),
+        request_id=request_id(request),
         entity_type="upload",
         entity_id=new_filename,
         details={"content_type": file.content_type, "size": len(content), "url": url},

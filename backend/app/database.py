@@ -1,33 +1,28 @@
-import os
-from dotenv import load_dotenv
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base
 
-load_dotenv()
+from app.core.config import get_settings
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+
+settings = get_settings()
 
 engine = create_async_engine(
-    DATABASE_URL,
+    settings.database_url,
     echo=False,
-    # БЕЗОПАСНОСТЬ: Настройка пула соединений
-    pool_size=10,        # Держим 10 постоянных подключений
-    max_overflow=20,     # Разрешаем создать еще 20 при пиковой нагрузке
-    pool_recycle=1800,   # Перезапускаем соединения каждые 30 минут
-    pool_pre_ping=True   # Проверяем "живость" соединения перед использованием
+    pool_size=10,
+    max_overflow=20,
+    pool_recycle=1800,
+    pool_pre_ping=True,
 )
 
-AsyncSessionLocal = sessionmaker(
+AsyncSessionLocal = async_sessionmaker(
     bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False
+    expire_on_commit=False,
 )
 
 Base = declarative_base()
 
+
 async def get_db():
     async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+        yield session

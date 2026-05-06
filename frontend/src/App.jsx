@@ -11,8 +11,11 @@ import { useConfigurator } from './store'
 import { restoreSession } from './api'
 import { SketchbookInterface } from './components/sketchbook/SketchbookInterface'
 import { ThermosInterface } from './components/thermos/ThermosInterface'
+import { PowerbankInterface } from './components/powerbank/PowerbankInterface'
 import { CookieBanner } from './components/shared/CookieBanner'
+import { FullPageVibeLoader, SceneLoadingOverlay } from './components/shared/VibeLoader'
 import { AdminAuth } from './components/auth/AdminAuth'
+import { AdminDashboard } from './components/admin/AdminDashboard'
 
 const SCREEN_TO_PATH = {
     home: '/',
@@ -22,6 +25,7 @@ const SCREEN_TO_PATH = {
     client_dashboard: '/dashboard',
     sketchbook_configurator: '/sketchbook',
     admin_auth: '/borodazaebal',
+    admin_dashboard: '/admin',
 };
 
 const PATH_TO_SCREEN = Object.fromEntries(
@@ -72,7 +76,12 @@ function App() {
     if (isRenderMode) {
         return (
             <div className="w-[1024px] h-[1024px] bg-[#E5E5E5] flex items-center justify-center">
-                <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ preserveDrawingBuffer: true, antialias: true }}>
+                <Canvas
+                    shadows
+                    dpr={[1, 2]}
+                    camera={{ position: [0, 0, 4.5], fov: 45 }}
+                    gl={{ preserveDrawingBuffer: true, antialias: true, alpha: false, powerPreference: 'high-performance' }}
+                >
                     <Experience />
                 </Canvas>
             </div>
@@ -80,7 +89,7 @@ function App() {
     }
 
 
-    const [screen, setScreen] = useState('home');
+    const [screen, setScreen] = useState(() => getInitialState().screen);
     const [showAuth, setShowAuth] = useState(false);
     const [pendingSuccessToast, setPendingSuccessToast] = useState(false);
 
@@ -107,13 +116,22 @@ function App() {
         else document.documentElement.classList.remove('dark');
     }, [theme]);
 
+    useEffect(() => {
+        const path = SCREEN_TO_PATH[screen];
+        if (path && window.location.pathname !== path) {
+            window.history.pushState({}, '', path);
+        }
+    }, [screen]);
+
     // --- ЛОГИКА: ПРОВЕРКА РОЛИ И РОУТИНГ ---
     useEffect(() => {
-        if (['admin', 'owner', 'dealer'].includes(userRole)) {
+        if (['admin', 'owner'].includes(userRole)) {
+            setScreen('admin_dashboard');
+        } else if (userRole === 'dealer') {
             setScreen('dealer');
         } else if (userRole === 'client') {
-            setScreen('client_dashboard'); // <--- ВАЖНО: Роут для клиента
-        } else if (!userRole && (screen === 'dealer' || screen === 'client_dashboard')) {
+            setScreen('client_dashboard');
+        } else if (!userRole && ['dealer', 'client_dashboard', 'admin_dashboard'].includes(screen)) {
             setScreen('home');
         }
     }, [userRole, screen]);
@@ -133,11 +151,7 @@ function App() {
     }, [setCurrentUser, setUserRole, setClientSubRole, setAuthLoading]);
 
     if (authLoading) {
-        return (
-            <div className="fixed inset-0 bg-[#0B0F19] flex items-center justify-center">
-                <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-            </div>
-        );
+        return <FullPageVibeLoader label="Проверяем вход" />;
     }
 
     const handleContinueOrder = () => {
@@ -280,16 +294,29 @@ function App() {
                                     gl={{
                                         antialias: true,
                                         preserveDrawingBuffer: true,
+                                        alpha: false,
+                                        powerPreference: 'high-performance',
                                         logarithmicDepthBuffer: true // Важно для устранения z-fighting в Safari
                                     }}
                                 >
                                     <Experience />
                                 </Canvas>
+                                <SceneLoadingOverlay label="Собираем 3D" />
                             </div>
 
                             <div className="relative h-[55%] w-full z-10 md:absolute md:top-0 md:right-0 md:h-full md:w-[30%] pointer-events-none md:p-4 md:flex md:flex-col md:justify-center">
                                 {activeProduct === 'thermos' ? (
                                     <ThermosInterface
+                                        onFinish={() => {
+                                            if (currentUser) {
+                                                setScreen('client_dashboard');
+                                            } else {
+                                                setShowAuth(true);
+                                            }
+                                        }}
+                                    />
+                                ) : activeProduct === 'powerbank' ? (
+                                    <PowerbankInterface
                                         onFinish={() => {
                                             if (currentUser) {
                                                 setScreen('client_dashboard');
@@ -334,6 +361,7 @@ function App() {
                                 <directionalLight position={[-10, 5, 2]} intensity={0.5} />
                                 <Experience /> {/* В Experience.jsx нужно добавить логику для Sketchbook */}
                             </Canvas>
+                            <SceneLoadingOverlay label="Собираем 3D" />
                         </div>
                         <div className="relative h-[55%] w-full z-10 md:absolute md:top-0 md:right-0 md:h-full md:w-[30%] pointer-events-none md:p-4 md:flex md:flex-col md:justify-center">
                             {/* НОВЫЙ ИНТЕРФЕЙС БЛОКНОТА */}
@@ -347,6 +375,20 @@ function App() {
                         </div>
                     </>
                 </div>
+            )}
+
+            {screen === 'admin_auth' && (
+                <AdminAuth onSuccess={(user) => {
+                    setCurrentUser(user);
+                    setUserRole(user.role);
+                }} />
+            )}
+
+            {screen === 'admin_dashboard' && (
+                <AdminDashboard onLogout={() => {
+                    logout();
+                    setScreen('home');
+                }} />
             )}
         </>
     )
