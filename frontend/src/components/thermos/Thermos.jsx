@@ -66,8 +66,8 @@ export function Thermos(props) {
     const { thermosBodyColor, thermosCapColor, thermosCapVisible, thermosLogos } = useConfigurator();
     const { nodes } = useGLTF(termosModelUrl);
 
-    const { bodyGeo, capGeo, bodyRadius, bodyCenterY, bodyTopY } = useMemo(() => {
-        if (!nodes) return { bodyGeo: null, capGeo: null, bodyRadius: 0.4, bodyCenterY: 0, bodyTopY: 999 };
+    const { bodyGeo, capGeo, bodyRadius, bodyCenterY, bodyTopY, capFloatX, capFloatY } = useMemo(() => {
+        if (!nodes) return { bodyGeo: null, capGeo: null, bodyRadius: 0.4, bodyCenterY: 0, bodyTopY: 999, capFloatX: 0.7, capFloatY: 0 };
 
         const meshEntries = Object.entries(nodes)
             .filter(([, n]) => n.geometry)
@@ -83,12 +83,12 @@ export function Thermos(props) {
             vol: ((e.bbox.max.x - e.bbox.min.x) * (e.bbox.max.y - e.bbox.min.y) * (e.bbox.max.z - e.bbox.min.z)).toFixed(3),
         })));
 
-        if (meshEntries.length === 0) return { bodyGeo: null, capGeo: null, bodyRadius: 0.4, bodyCenterY: 0, bodyTopY: 999 };
+        if (meshEntries.length === 0) return { bodyGeo: null, capGeo: null, bodyRadius: 0.4, bodyCenterY: 0, bodyTopY: 999, capLiftY: 1.5 };
 
         if (meshEntries.length === 1) {
             const b = meshEntries[0].bbox;
             const r = Math.max(Math.abs(b.max.x), Math.abs(b.min.x), Math.abs(b.max.z), Math.abs(b.min.z));
-            return { bodyGeo: meshEntries[0].geo, capGeo: null, bodyRadius: r || 0.4, bodyCenterY: (b.max.y + b.min.y) / 2, bodyTopY: b.max.y };
+            return { bodyGeo: meshEntries[0].geo, capGeo: null, bodyRadius: r || 0.4, bodyCenterY: (b.max.y + b.min.y) / 2, bodyTopY: b.max.y, capLiftY: 1.5 };
         }
 
         // Name-based detection
@@ -143,6 +143,9 @@ export function Thermos(props) {
         const radius = Math.max(Math.abs(bb.max.x), Math.abs(bb.min.x), Math.abs(bb.max.z), Math.abs(bb.min.z)) || 0.4;
         const centerY = (bb.max.y + bb.min.y) / 2;
 
+        const capFloatX = radius * 1.8;
+        const capFloatY = centerY - bb.max.y;
+
         console.log('[Thermos] body:', meshEntries[bodyIdx]?.name, '| cap:', meshEntries[capIdx]?.name, '| bodyCenterY:', centerY.toFixed(3));
 
         return {
@@ -151,15 +154,26 @@ export function Thermos(props) {
             bodyRadius: radius,
             bodyCenterY: centerY,
             bodyTopY: bb.max.y,
+            capFloatX,
+            capFloatY,
         };
     }, [nodes]);
 
     const bodyMatRef = useRef();
     const capMatRef = useRef();
+    const capGroupRef = useRef();
 
     useFrame((_, delta) => {
         if (bodyMatRef.current) easing.dampC(bodyMatRef.current.color, thermosBodyColor, 0.25, delta);
         if (capMatRef.current) easing.dampC(capMatRef.current.color, thermosCapColor, 0.25, delta);
+        if (capGroupRef.current) {
+            const targetX = thermosCapVisible ? capFloatX : 0;
+            const targetY = thermosCapVisible ? capFloatY : 0;
+            const targetRotY = thermosCapVisible ? Math.PI * 3 : 0;
+            easing.damp(capGroupRef.current.position, 'x', targetX, 0.45, delta);
+            easing.damp(capGroupRef.current.position, 'y', targetY, 0.45, delta);
+            easing.damp(capGroupRef.current.rotation, 'y', targetRotY, 0.45, delta);
+        }
     });
 
     return (
@@ -176,14 +190,15 @@ export function Thermos(props) {
                 />
             )}
             {capGeo && (
-                <ThermosMesh
-                    geo={capGeo}
-                    matRef={capMatRef}
-                    color={thermosCapColor}
-                    metalness={0.5}
-                    roughness={0.35}
-                    visible={thermosCapVisible}
-                />
+                <group ref={capGroupRef}>
+                    <ThermosMesh
+                        geo={capGeo}
+                        matRef={capMatRef}
+                        color={thermosCapColor}
+                        metalness={0.5}
+                        roughness={0.35}
+                    />
+                </group>
             )}
         </group>
     );

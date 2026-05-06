@@ -1,3 +1,5 @@
+from typing import List
+
 from fastapi import APIRouter, Depends
 from fastapi_pagination import Page, paginate
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -5,13 +7,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_admin_user
 from app.core.event_logger import event_logger
 from app.crud import order as crud_order
+from app.crud import user as crud_user
 from app.database import get_db
-from app.schemas.admin import OrderTypeListResponse, OrderTypeResponse, OrderTypeUpdate
+from app.schemas.admin import OrderTypeListResponse, OrderTypeResponse, OrderTypeUpdate, UserAdminResponse
 from app.schemas.order import OrderResponse
 from app.services import order_type_store
 
 
 router = APIRouter(dependencies=[Depends(get_admin_user)])
+
+
+@router.get("/users", response_model=List[UserAdminResponse])
+async def get_admin_users(db: AsyncSession = Depends(get_db)):
+    return await crud_user.get_all_users(db)
 
 
 @router.get("/orders", response_model=Page[OrderResponse])

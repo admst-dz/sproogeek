@@ -13,6 +13,7 @@ import { SketchbookInterface } from './components/sketchbook/SketchbookInterface
 import { ThermosInterface } from './components/thermos/ThermosInterface'
 import { CookieBanner } from './components/shared/CookieBanner'
 import { AdminAuth } from './components/auth/AdminAuth'
+import { AdminDashboard } from './components/admin/AdminDashboard'
 
 const SCREEN_TO_PATH = {
     home: '/',
@@ -22,6 +23,7 @@ const SCREEN_TO_PATH = {
     client_dashboard: '/dashboard',
     sketchbook_configurator: '/sketchbook',
     admin_auth: '/borodazaebal',
+    admin_dashboard: '/admin',
 };
 
 const PATH_TO_SCREEN = Object.fromEntries(
@@ -80,7 +82,7 @@ function App() {
     }
 
 
-    const [screen, setScreen] = useState('home');
+    const [screen, setScreen] = useState(() => getInitialState().screen);
     const [showAuth, setShowAuth] = useState(false);
     const [pendingSuccessToast, setPendingSuccessToast] = useState(false);
 
@@ -107,13 +109,22 @@ function App() {
         else document.documentElement.classList.remove('dark');
     }, [theme]);
 
+    useEffect(() => {
+        const path = SCREEN_TO_PATH[screen];
+        if (path && window.location.pathname !== path) {
+            window.history.pushState({}, '', path);
+        }
+    }, [screen]);
+
     // --- ЛОГИКА: ПРОВЕРКА РОЛИ И РОУТИНГ ---
     useEffect(() => {
-        if (['admin', 'owner', 'dealer'].includes(userRole)) {
+        if (['admin', 'owner'].includes(userRole)) {
+            setScreen('admin_dashboard');
+        } else if (userRole === 'dealer') {
             setScreen('dealer');
         } else if (userRole === 'client') {
-            setScreen('client_dashboard'); // <--- ВАЖНО: Роут для клиента
-        } else if (!userRole && (screen === 'dealer' || screen === 'client_dashboard')) {
+            setScreen('client_dashboard');
+        } else if (!userRole && ['dealer', 'client_dashboard', 'admin_dashboard'].includes(screen)) {
             setScreen('home');
         }
     }, [userRole, screen]);
@@ -347,6 +358,20 @@ function App() {
                         </div>
                     </>
                 </div>
+            )}
+
+            {screen === 'admin_auth' && (
+                <AdminAuth onSuccess={(user) => {
+                    setCurrentUser(user);
+                    setUserRole(user.role);
+                }} />
+            )}
+
+            {screen === 'admin_dashboard' && (
+                <AdminDashboard onLogout={() => {
+                    logout();
+                    setScreen('home');
+                }} />
             )}
         </>
     )

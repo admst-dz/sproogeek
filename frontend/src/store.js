@@ -41,7 +41,7 @@ export const useConfigurator = create((set) => ({
     // --- Параметры термоса ---
     thermosBodyColor: '#C0C0C0',
     thermosCapColor: '#C0C0C0',
-    thermosCapVisible: true,
+    thermosCapVisible: false,
     thermosLogos: [],
     selectedThermosLogoId: null,
 

