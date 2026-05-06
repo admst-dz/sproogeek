@@ -6,6 +6,7 @@ import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { Notebook } from '../shared/Notebook';
 import { Sketchbook } from '../sketchbook/Sketchbook';
 import { Thermos } from '../thermos/Thermos';
+import { SceneLoadingOverlay } from '../shared/VibeLoader';
 
 export const Order = ({ onBack, onSuccess }) => {
     const {
@@ -108,6 +109,7 @@ export const Order = ({ onBack, onSuccess }) => {
                                         </Stage>
                                     </PresentationControls>
                                 </Canvas>
+                                <SceneLoadingOverlay compact label="3D" />
                                 <div className="absolute bottom-3 right-3 flex items-center gap-2 bg-black/50 backdrop-blur-md rounded-[10px] px-3 py-2 border border-white/15 pointer-events-none">
                                     <div className="w-7 h-7 text-white"><BlockIconPreview type={paperPattern} /></div>
                                     <span className="text-white/70 text-xs font-bold uppercase tracking-wide">{patternNames[paperPattern]}</span>

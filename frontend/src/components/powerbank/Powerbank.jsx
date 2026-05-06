@@ -2,9 +2,10 @@ import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { easing } from 'maath'
 import { useConfigurator } from '../../store'
-import { useTexture, useGLTF } from '@react-three/drei'
+import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import powerbankModelUrl from '../../assets/poverbank.glb?url'
+import { useLogoTexture } from '../../utils/threeTextures'
 
 const DETAIL_SURFACE_OFFSET = 0.004;
 const LOGO_SURFACE_OFFSET = 0.008;
@@ -29,13 +30,15 @@ function OverlayMaterial({ color, opacity = 1, polygonOffsetFactor = DETAIL_POLY
     );
 }
 
-function LogoPlane({ texture, position, frontZ, backZ, centerX, centerY, side = 'outer', rotation = 0, scale = 0.6 }) {
-    const map = useTexture(texture);
+function LogoPlane({ texture, position, frontZ, backZ, centerX, centerY, width, height, side = 'outer', rotation = 0, scale = 0.6 }) {
+    const map = useLogoTexture(texture);
     const isCharging = side === 'charging';
     const z = isCharging ? frontZ + LOGO_SURFACE_OFFSET : backZ - LOGO_SURFACE_OFFSET;
     const rotY = isCharging ? 0 : Math.PI;
-    const worldX = centerX + (isCharging ? position[0] : -position[0]);
-    const worldY = centerY + position[1];
+    const px = THREE.MathUtils.clamp(position?.[0] ?? 0, -1, 1);
+    const py = THREE.MathUtils.clamp(position?.[1] ?? 0, -1, 1);
+    const worldX = centerX + (isCharging ? px : -px) * width * 0.38;
+    const worldY = centerY + py * height * 0.38;
 
     return (
         <mesh
@@ -152,6 +155,8 @@ export function Powerbank(props) {
     const backZ = sceneBbox.min.z;
     const centerX = (sceneBbox.min.x + sceneBbox.max.x) / 2;
     const centerY = (sceneBbox.min.y + sceneBbox.max.y) / 2;
+    const width = sceneBbox.max.x - sceneBbox.min.x;
+    const height = sceneBbox.max.y - sceneBbox.min.y;
 
     useFrame((_, delta) => {
         if (matRef.current) easing.dampC(matRef.current.color, powerbankBodyColor, 0.25, delta);
@@ -185,6 +190,8 @@ export function Powerbank(props) {
                     backZ={backZ}
                     centerX={centerX}
                     centerY={centerY}
+                    width={width}
+                    height={height}
                     side={logo.side ?? 'outer'}
                     rotation={logo.rotation ?? 0}
                     scale={logo.scale ?? 0.6}

@@ -7,6 +7,7 @@ import { Notebook } from '../shared/Notebook';
 import { Sketchbook } from '../sketchbook/Sketchbook';
 import { Thermos } from '../thermos/Thermos';
 import { getUserDisplayName, getUserSecondaryLabel } from '../../utils/user';
+import { SceneLoadingOverlay } from '../shared/VibeLoader';
 
 const TabBtn = ({ active, children, onClick }) => (
     <button
@@ -348,6 +349,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                     </Stage>
                                                 </PresentationControls>
                                             </Canvas>
+                                            <SceneLoadingOverlay compact label="3D" />
                                             <div className="absolute top-3 left-3 text-white/30 text-[10px] font-bold tracking-wider pointer-events-none uppercase">Перетащи для вращения</div>
                                         </div>
 

@@ -1,4 +1,4 @@
-import { PresentationControls, Stage, Environment, OrbitControls } from '@react-three/drei'
+import { PresentationControls, Stage, Environment, OrbitControls, useProgress } from '@react-three/drei'
 import { Notebook } from '../shared/Notebook'
 import { Calendar } from '../shared/Calendar'
 import { Thermos } from '../thermos/Thermos'
@@ -115,6 +115,10 @@ function CameraUpdater({ targetZoom }) {
 
 export const Experience = () => {
     const { activeProduct, zoomLevel } = useConfigurator()
+    const { active: assetsLoading, progress } = useProgress()
+    const readyFrames = useRef(0)
+    const isRenderMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('render_mode') === 'true'
+    const requiredReadyFrames = isRenderMode ? 90 : 12
 
     const [isMobile, setIsMobile] = useState(false);
 
@@ -135,12 +139,18 @@ export const Experience = () => {
     // Итоговый зум = База * То, что накликали кнопками
     const finalZoom = baseZoom * zoomLevel;
 
+    useEffect(() => {
+        window.__3D_READY__ = false;
+        readyFrames.current = 0;
+    }, [activeProduct, zoomLevel]);
+
     useFrame(() => {
-        if (!window.__3D_READY__) {
-            // Даем 10 кадров на то, чтобы easing.damp применил цвета
-            setTimeout(() => {
-                window.__3D_READY__ = true;
-            }, 300);
+        if (!assetsLoading && progress >= 100) {
+            readyFrames.current += 1;
+            if (readyFrames.current >= requiredReadyFrames) window.__3D_READY__ = true;
+        } else {
+            readyFrames.current = 0;
+            window.__3D_READY__ = false;
         }
     });
 

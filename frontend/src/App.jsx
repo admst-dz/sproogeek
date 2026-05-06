@@ -13,6 +13,7 @@ import { SketchbookInterface } from './components/sketchbook/SketchbookInterface
 import { ThermosInterface } from './components/thermos/ThermosInterface'
 import { PowerbankInterface } from './components/powerbank/PowerbankInterface'
 import { CookieBanner } from './components/shared/CookieBanner'
+import { FullPageVibeLoader, SceneLoadingOverlay } from './components/shared/VibeLoader'
 import { AdminAuth } from './components/auth/AdminAuth'
 import { AdminDashboard } from './components/admin/AdminDashboard'
 
@@ -75,7 +76,12 @@ function App() {
     if (isRenderMode) {
         return (
             <div className="w-[1024px] h-[1024px] bg-[#E5E5E5] flex items-center justify-center">
-                <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ preserveDrawingBuffer: true, antialias: true }}>
+                <Canvas
+                    shadows
+                    dpr={[1, 2]}
+                    camera={{ position: [0, 0, 4.5], fov: 45 }}
+                    gl={{ preserveDrawingBuffer: true, antialias: true, alpha: false, powerPreference: 'high-performance' }}
+                >
                     <Experience />
                 </Canvas>
             </div>
@@ -145,11 +151,7 @@ function App() {
     }, [setCurrentUser, setUserRole, setClientSubRole, setAuthLoading]);
 
     if (authLoading) {
-        return (
-            <div className="fixed inset-0 bg-[#0B0F19] flex items-center justify-center">
-                <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-            </div>
-        );
+        return <FullPageVibeLoader label="Проверяем вход" />;
     }
 
     const handleContinueOrder = () => {
@@ -292,11 +294,14 @@ function App() {
                                     gl={{
                                         antialias: true,
                                         preserveDrawingBuffer: true,
+                                        alpha: false,
+                                        powerPreference: 'high-performance',
                                         logarithmicDepthBuffer: true // Важно для устранения z-fighting в Safari
                                     }}
                                 >
                                     <Experience />
                                 </Canvas>
+                                <SceneLoadingOverlay label="Собираем 3D" />
                             </div>
 
                             <div className="relative h-[55%] w-full z-10 md:absolute md:top-0 md:right-0 md:h-full md:w-[30%] pointer-events-none md:p-4 md:flex md:flex-col md:justify-center">
@@ -356,6 +361,7 @@ function App() {
                                 <directionalLight position={[-10, 5, 2]} intensity={0.5} />
                                 <Experience /> {/* В Experience.jsx нужно добавить логику для Sketchbook */}
                             </Canvas>
+                            <SceneLoadingOverlay label="Собираем 3D" />
                         </div>
                         <div className="relative h-[55%] w-full z-10 md:absolute md:top-0 md:right-0 md:h-full md:w-[30%] pointer-events-none md:p-4 md:flex md:flex-col md:justify-center">
                             {/* НОВЫЙ ИНТЕРФЕЙС БЛОКНОТА */}

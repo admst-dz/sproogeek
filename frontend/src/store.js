@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { getCookie, setCookie, deleteCookie, hasCookieConsent } from './utils/cookies'
 import { clearMemoryToken } from './api'
+import { normalizeImageFile } from './utils/images'
 
 const CART_COOKIE = 'spruzhuk_cart';
 const AUTH_COOKIE = 'spruzhuk_auth';
@@ -49,7 +50,7 @@ export const useConfigurator = create((set) => ({
     hasCorners: true,
 
     // --- Параметры повербанка ---
-    powerbankBodyColor: '#1a1a1a',
+    powerbankBodyColor: '#75787B',
     powerbankLogos: [],
     selectedPowerbankLogoId: null,
 
@@ -107,15 +108,18 @@ export const useConfigurator = create((set) => ({
     setHasElastic: (has) => set({ hasElastic: has }),
     setNotebookOpen: (isOpen) => set({ isNotebookOpen: isOpen }),
     setPaperPattern: (pattern) => set({ paperPattern: pattern, isNotebookOpen: true }),
-    addLogo: (file) => {
+    addLogo: async (file, side = 'front') => {
         if (file instanceof File) {
-            const reader = new FileReader();
             const id = Date.now();
-            reader.onload = (e) => set((state) => ({
-                logos: [...state.logos, { id, texture: e.target.result, filename: file.name, position: [0, 0], rotation: 0, scale: 0.6 }],
-                selectedLogoId: id
-            }));
-            reader.readAsDataURL(file);
+            try {
+                const texture = await normalizeImageFile(file);
+                set((state) => ({
+                    logos: [...state.logos, { id, side, texture, filename: file.name, position: [0, 0], rotation: 0, scale: 0.6 }],
+                    selectedLogoId: id
+                }));
+            } catch (error) {
+                console.error('Failed to prepare logo image', error);
+            }
         }
     },
     selectLogo: (id) => set({ selectedLogoId: id }),
@@ -127,6 +131,9 @@ export const useConfigurator = create((set) => ({
     })),
     setLogoScale: (scale) => set((state) => ({
         logos: state.logos.map(l => l.id === state.selectedLogoId ? { ...l, scale } : l)
+    })),
+    setLogoSide: (side) => set((state) => ({
+        logos: state.logos.map(l => l.id === state.selectedLogoId ? { ...l, side, position: [0, 0] } : l)
     })),
     resetLogoTransform: () => set((state) => ({
         logos: state.logos.map(l => l.id === state.selectedLogoId ? { ...l, position: [0, 0], rotation: 0, scale: 0.6 } : l)
@@ -143,16 +150,19 @@ export const useConfigurator = create((set) => ({
     setZoom: (val) => set({ zoomLevel: val }),
 
     // --- ACTIONS: ТЕРМОС ---
-    addThermosLogo: (file, target = 'body') => {
+    addThermosLogo: async (file, target = 'body') => {
         if (file instanceof File) {
-            const reader = new FileReader();
             const id = Date.now();
             const scale = target === 'body' ? 0.6 : 0.32;
-            reader.onload = (e) => set((state) => ({
-                thermosLogos: [...state.thermosLogos, { id, target, texture: e.target.result, filename: file.name, position: [0, 0], rotation: 0, scale }],
-                selectedThermosLogoId: id
-            }));
-            reader.readAsDataURL(file);
+            try {
+                const texture = await normalizeImageFile(file);
+                set((state) => ({
+                    thermosLogos: [...state.thermosLogos, { id, target, texture, filename: file.name, position: [0, 0], rotation: 0, scale }],
+                    selectedThermosLogoId: id
+                }));
+            } catch (error) {
+                console.error('Failed to prepare thermos logo image', error);
+            }
         }
     },
     selectThermosLogo: (id) => set({ selectedThermosLogoId: id }),
@@ -183,15 +193,18 @@ export const useConfigurator = create((set) => ({
     toggleCorners: () => set((state) => ({ hasCorners: !state.hasCorners })),
 
     // --- ACTIONS: ПОВЕРБАНК ---
-    addPowerbankLogo: (file) => {
+    addPowerbankLogo: async (file) => {
         if (file instanceof File) {
-            const reader = new FileReader();
             const id = Date.now();
-            reader.onload = (e) => set((state) => ({
-                powerbankLogos: [...state.powerbankLogos, { id, texture: e.target.result, filename: file.name, position: [0, 0], rotation: 0, scale: 0.6, side: 'outer' }],
-                selectedPowerbankLogoId: id
-            }));
-            reader.readAsDataURL(file);
+            try {
+                const texture = await normalizeImageFile(file);
+                set((state) => ({
+                    powerbankLogos: [...state.powerbankLogos, { id, texture, filename: file.name, position: [0, 0], rotation: 0, scale: 0.6, side: 'outer' }],
+                    selectedPowerbankLogoId: id
+                }));
+            } catch (error) {
+                console.error('Failed to prepare powerbank logo image', error);
+            }
         }
     },
     selectPowerbankLogo: (id) => set({ selectedPowerbankLogoId: id }),

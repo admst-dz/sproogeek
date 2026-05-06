@@ -12,9 +12,11 @@ async function init() {
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
+            '--enable-webgl',
             '--use-gl=swiftshader',
+            '--ignore-gpu-blocklist',
             '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
+            '--hide-scrollbars',
             '--window-size=1024,1024'
         ]
     });
@@ -31,22 +33,42 @@ app.post('/render', async (req, res) => {
     const normalizedPath = renderFrontendPath.startsWith('/') ? renderFrontendPath : `/${renderFrontendPath}`;
     const url = `http://${renderFrontendHost}:${renderFrontendPort}${normalizedPath}?render_mode=true&config=${configBase64}`;
 
+    let page;
     try {
-        const page = await browser.newPage();
+        page = await browser.newPage();
         await page.setViewport({ width: 1024, height: 1024, deviceScaleFactor: 2 });
+        page.setDefaultTimeout(20000);
 
-        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        await page.goto(url, { waitUntil: ['domcontentloaded', 'networkidle2'], timeout: 30000 });
 
+        await page.evaluate(async () => {
+            if (document.fonts?.ready) await document.fonts.ready;
+            const images = Array.from(document.images || []);
+            await Promise.all(images.map((img) => (
+                img.complete ? Promise.resolve() : new Promise((resolve) => {
+                    img.addEventListener('load', resolve, { once: true });
+                    img.addEventListener('error', resolve, { once: true });
+                })
+            )));
+        });
+        await page.waitForSelector('canvas', { timeout: 15000 });
         await page.waitForFunction('window.__3D_READY__ === true', { timeout: 15000 });
+        await page.evaluate(() => new Promise((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        }));
 
-        const imageBuffer = await page.screenshot({ type: 'png', omitBackground: false });
-        await page.close();
+        const canvas = await page.$('canvas');
+        const imageBuffer = canvas
+            ? await canvas.screenshot({ type: 'png', omitBackground: false })
+            : await page.screenshot({ type: 'png', omitBackground: false, fullPage: false });
 
         res.setHeader('Content-Type', 'image/png');
         res.send(imageBuffer);
     } catch (e) {
         console.error(e);
         res.status(500).json({ error: String(e) });
+    } finally {
+        if (page) await page.close().catch(() => {});
     }
 });
 

@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { useConfigurator } from '../../store';
 import { t } from '../../i18n';
 import { getUserDisplayName } from '../../utils/user';
+import { SceneLoadingOverlay } from '../shared/VibeLoader';
 import termosModelUrl from '../../assets/termos3.glb?url';
 import powerbankModelUrl from '../../assets/poverbank.glb?url';
 
@@ -30,16 +31,19 @@ function ThermosPreviewScene() {
 
 function ThermosPreview() {
     return (
-        <Canvas camera={{ position: [0, 0.5, 4], fov: 40 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
-            <ambientLight intensity={0.7} />
-            <directionalLight position={[5, 8, 5]} intensity={1.5} />
-            <directionalLight position={[-4, 3, 2]} intensity={0.6} />
-            <Suspense fallback={null}>
-                <Stage environment="city" intensity={0.3} contactShadow={false} adjustCamera>
-                    <ThermosPreviewScene />
-                </Stage>
-            </Suspense>
-        </Canvas>
+        <div className="relative w-full h-full">
+            <Canvas camera={{ position: [0, 0.5, 4], fov: 40 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
+                <ambientLight intensity={0.7} />
+                <directionalLight position={[5, 8, 5]} intensity={1.5} />
+                <directionalLight position={[-4, 3, 2]} intensity={0.6} />
+                <Suspense fallback={null}>
+                    <Stage environment="city" intensity={0.3} contactShadow={false} adjustCamera>
+                        <ThermosPreviewScene />
+                    </Stage>
+                </Suspense>
+            </Canvas>
+            <SceneLoadingOverlay compact label="3D" />
+        </div>
     );
 }
 
@@ -127,16 +131,19 @@ function PowerbankPreviewScene() {
 
 function PowerbankPreview() {
     return (
-        <Canvas camera={{ position: [0, 0.5, 4], fov: 40 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
-            <ambientLight intensity={0.7} />
-            <directionalLight position={[5, 8, 5]} intensity={1.5} />
-            <directionalLight position={[-4, 3, 2]} intensity={0.6} />
-            <Suspense fallback={null}>
-                <Stage environment="city" intensity={0.3} contactShadow={false} adjustCamera>
-                    <PowerbankPreviewScene />
-                </Stage>
-            </Suspense>
-        </Canvas>
+        <div className="relative w-full h-full">
+            <Canvas camera={{ position: [0, 0.5, 4], fov: 40 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
+                <ambientLight intensity={0.7} />
+                <directionalLight position={[5, 8, 5]} intensity={1.5} />
+                <directionalLight position={[-4, 3, 2]} intensity={0.6} />
+                <Suspense fallback={null}>
+                    <Stage environment="city" intensity={0.3} contactShadow={false} adjustCamera>
+                        <PowerbankPreviewScene />
+                    </Stage>
+                </Suspense>
+            </Canvas>
+            <SceneLoadingOverlay compact label="3D" />
+        </div>
     );
 }
 

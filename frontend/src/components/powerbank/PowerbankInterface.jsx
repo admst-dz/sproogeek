@@ -85,36 +85,20 @@ export const PowerbankInterface = ({ onFinish }) => {
     );
 };
 
-const LOGO_X_RANGE = 0.5;
-const LOGO_Y_RANGE = 0.25;
-
 const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide }) => {
     const selected = logos.find(l => l.id === selectedLogoId) || null;
     const rotStart = useRef(0);
     const rotStartX = useRef(null);
 
-    const clampedPos = (rawX, rawY, scale) => {
-        const half = (scale ?? 0.6) / 2;
-        const maxX = Math.max(0, LOGO_X_RANGE - half);
-        const maxY = Math.max(0, LOGO_Y_RANGE - half);
-        return [
-            Math.max(-maxX, Math.min(maxX, rawX)),
-            Math.max(-maxY, Math.min(maxY, rawY)),
-        ];
-    };
-
     const updatePos = (e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
         const ny = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-        const rawX = (nx * 2 - 1) * LOGO_X_RANGE;
-        const rawY = -(ny * 2 - 1) * LOGO_Y_RANGE;
-        const [cx, cy] = clampedPos(rawX, rawY, selected?.scale);
-        setLogoPosition(cx, cy);
+        setLogoPosition(nx * 2 - 1, 1 - ny * 2);
     };
 
-    const dotX = selected ? (selected.position[0] / LOGO_X_RANGE + 1) / 2 * 100 : 50;
-    const dotY = selected ? (1 - (selected.position[1] / LOGO_Y_RANGE + 1) / 2) * 100 : 50;
+    const dotX = selected ? (((selected.position?.[0] ?? 0) + 1) / 2) * 100 : 50;
+    const dotY = selected ? ((1 - (selected.position?.[1] ?? 0)) / 2) * 100 : 50;
 
     return (
         <div className="glass-panel rounded-[11px] p-5">
@@ -172,7 +156,7 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
                             <button onClick={resetLogoTransform} className="text-[10px] font-bold opacity-40 hover:opacity-80 transition-opacity uppercase tracking-wider border border-white/20 px-2 py-0.5 rounded-[5px] hover:border-white/40">↺ По центру</button>
                         </div>
                         <div
-                            className="relative w-full aspect-[2/1] bg-white/8 rounded-[10px] border border-white/15 cursor-crosshair touch-none select-none overflow-hidden"
+                            className="relative w-full aspect-[3/4] bg-white/8 rounded-[10px] border border-white/15 cursor-crosshair touch-none select-none overflow-hidden"
                             onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); updatePos(e); }}
                             onPointerMove={(e) => { if (e.buttons) updatePos(e); }}
                             onPointerUp={(e) => e.currentTarget.releasePointerCapture(e.pointerId)}
@@ -227,14 +211,7 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
                         <input
                             type="range" min="0.1" max="1.2" step="0.02"
                             value={selected.scale ?? 0.6}
-                            onChange={(e) => {
-                                const newScale = parseFloat(e.target.value);
-                                setLogoScale(newScale);
-                                const [cx, cy] = clampedPos(selected.position[0], selected.position[1], newScale);
-                                if (cx !== selected.position[0] || cy !== selected.position[1]) {
-                                    setLogoPosition(cx, cy);
-                                }
-                            }}
+                            onChange={(e) => setLogoScale(parseFloat(e.target.value))}
                             className="w-full h-1 bg-white/30 rounded-full appearance-none accent-white"
                         />
                     </div>

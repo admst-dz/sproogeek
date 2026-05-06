@@ -1,11 +1,12 @@
-import React, { useRef } from 'react'
+import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { easing } from 'maath'
 import { useConfigurator } from '../../store'
-import { Decal, useTexture } from '@react-three/drei'
+import { Decal } from '@react-three/drei'
+import { useLogoTexture } from '../../utils/threeTextures'
 
 function LogoDecal({ texture }) {
-    const map = useTexture(texture);
+    const map = useLogoTexture(texture);
     return (
         <Decal position={[0.5, 0, 0.6]} rotation={[0, 0, -Math.PI / 3]} scale={[0.6, 0.6, 1]}>
             <meshPhysicalMaterial map={map} transparent polygonOffset polygonOffsetFactor={-1} roughness={0.6}/>

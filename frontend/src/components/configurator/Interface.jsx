@@ -25,7 +25,7 @@ export const Interface = ({ onFinish }) => {
         hasCorners, toggleCorners,
         setNotebookOpen,
         paperPattern, setPaperPattern,
-        logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale,
+        logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide,
         activeProduct,
         zoomLevel, setZoom,
         addToCart,
@@ -106,7 +106,7 @@ export const Interface = ({ onFinish }) => {
                             </div>
                         )}
                         <div className="glass-panel rounded-[11px] overflow-hidden"><ColorGlassList currentColor={coverColor} onSelect={(c) => setColor('cover', c)} label="Цвет обложки"/></div>
-                        <LogoPanel logos={logos} selectedLogoId={selectedLogoId} addLogo={addLogo} selectLogo={selectLogo} removeLogo={removeLogo} resetLogoTransform={resetLogoTransform} setLogoPosition={setLogoPosition} setLogoRotation={setLogoRotation} setLogoScale={setLogoScale} />
+                        <LogoPanel logos={logos} selectedLogoId={selectedLogoId} addLogo={addLogo} selectLogo={selectLogo} removeLogo={removeLogo} resetLogoTransform={resetLogoTransform} setLogoPosition={setLogoPosition} setLogoRotation={setLogoRotation} setLogoScale={setLogoScale} setLogoSide={setLogoSide} />
                     </div>
                 )}
 
@@ -158,30 +158,54 @@ export const Interface = ({ onFinish }) => {
 }
 
 // --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
-const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale }) => {
+const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide }) => {
     const selected = logos.find(l => l.id === selectedLogoId) || null;
+    const [uploadSide, setUploadSide] = useState('front');
     const rotStart = useRef(0);
     const rotStartX = useRef(null);
+    const activeSide = selected?.side ?? uploadSide;
 
     const updatePos = (e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
         const ny = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-        setLogoPosition((nx * 2 - 1) * 0.4, -(ny * 2 - 1) * 0.8);
+        setLogoPosition(nx * 2 - 1, 1 - ny * 2);
+    };
+
+    const selectSide = (side) => {
+        if (selected) setLogoSide(side);
+        setUploadSide(side);
     };
 
     return (
         <div className="glass-panel rounded-[11px] p-5">
             <h3 className="text-xl font-bold tracking-wide mb-4">Тиснение</h3>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+                {[
+                    ['front', 'Лицевая'],
+                    ['back', 'Обратная'],
+                ].map(([side, label]) => (
+                    <button
+                        key={side}
+                        onClick={() => selectSide(side)}
+                        className={`py-2 rounded-[7px] text-xs font-bold uppercase tracking-widest border transition-colors ${activeSide === side ? 'bg-white/25 border-white/40' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
             <label className="block w-full py-3 bg-white/10 rounded-[6px] text-center cursor-pointer border border-white/20 text-sm font-bold mb-4 hover:bg-white/20 transition-colors">
                 + ДОБАВИТЬ ЛОГОТИП
-                <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) { addLogo(e.target.files[0]); e.target.value = ''; } }} className="hidden"/>
+                <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) { addLogo(e.target.files[0], activeSide); e.target.value = ''; } }} className="hidden"/>
             </label>
             {logos.length > 0 && (
                 <div className="flex flex-col gap-2 mb-4">
                     {logos.map(logo => (
                         <div key={logo.id} className={`flex items-center rounded-[6px] border ${logo.id === selectedLogoId ? 'bg-white/30 border-white/40' : 'bg-white/10 border-white/10'}`}>
-                            <button onClick={() => selectLogo(logo.id)} className="flex-1 py-2 px-3 text-left text-sm font-bold truncate hover:opacity-80 transition-opacity">{logo.filename}</button>
+                            <button onClick={() => { selectLogo(logo.id); setUploadSide(logo.side ?? 'front'); }} className="flex-1 py-2 px-3 text-left text-sm font-bold truncate hover:opacity-80 transition-opacity">
+                                <span className="block truncate">{logo.filename}</span>
+                                <span className="block text-[9px] opacity-50 uppercase tracking-widest">{(logo.side ?? 'front') === 'back' ? 'Обратная' : 'Лицевая'}</span>
+                            </button>
                             <button onClick={() => removeLogo(logo.id)} className="px-3 py-2 text-white/40 hover:text-white/90 text-lg leading-none transition-colors shrink-0" title="Удалить">×</button>
                         </div>
                     ))}
@@ -208,8 +232,8 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
                             <div
                                 className="absolute w-4 h-4 bg-white rounded-full shadow-lg border-2 border-white/80 pointer-events-none"
                                 style={{
-                                    left: `${(selected.position[0] / 0.4 + 1) / 2 * 100}%`,
-                                    top: `${(1 - (selected.position[1] / 0.8 + 1) / 2) * 100}%`,
+                                    left: `${(((selected.position?.[0] ?? 0) + 1) / 2) * 100}%`,
+                                    top: `${((1 - (selected.position?.[1] ?? 0)) / 2) * 100}%`,
                                     transform: 'translate(-50%, -50%)'
                                 }}
                             />

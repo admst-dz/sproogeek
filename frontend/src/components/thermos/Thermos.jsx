@@ -2,9 +2,10 @@ import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { easing } from 'maath'
 import { useConfigurator } from '../../store'
-import { useTexture, useGLTF } from '@react-three/drei'
+import { useGLTF } from '@react-three/drei'
 import termosModelUrl from '../../assets/termos3.glb?url'
 import * as THREE from 'three'
+import { useLogoTexture } from '../../utils/threeTextures'
 
 const THERMOS_NECK_RATIO = 0.1;
 const CAP_SIDE_DISTANCE = 2.35;
@@ -96,7 +97,7 @@ function createCurvedLogoGeometry({ radius, centerTheta, centerY, width, height,
 
 // ─── Logo planes ───────────────────────────────────────────────────────────────
 function LogoPlane({ texture, position, rotation = 0, scale = 0.6, bodyRadius = 0.4, bodyCenterY = 0, bodyTopY = 999 }) {
-    const map = useTexture(texture);
+    const map = useLogoTexture(texture);
     const theta = (position[0] / 0.35) * Math.PI;
     const cylinderTop = bodyCenterY + (bodyTopY - bodyCenterY) * 0.4;
     const posY = Math.min(cylinderTop, position[1] + bodyCenterY);
@@ -117,7 +118,7 @@ function LogoPlane({ texture, position, rotation = 0, scale = 0.6, bodyRadius = 
 }
 
 function CapLogoPlane({ texture, target = 'capTop', position, rotation = 0, scale = 0.32, capRadius = 0.4, capMinY = 0, capMaxY = 1 }) {
-    const map = useTexture(texture);
+    const map = useLogoTexture(texture);
     const capHeight = capMaxY - capMinY;
     const capCenterY = (capMaxY + capMinY) / 2;
     const sideTheta = (position[0] / 0.35) * Math.PI;
