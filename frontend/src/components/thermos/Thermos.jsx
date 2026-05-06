@@ -2,74 +2,240 @@ import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { easing } from 'maath'
 import { useConfigurator } from '../../store'
-import { Decal, useTexture, useGLTF } from '@react-three/drei'
+import { useTexture, useGLTF } from '@react-three/drei'
 import termosModelUrl from '../../assets/termos3.glb?url'
+import * as THREE from 'three'
 
-function LogoDecal({ texture, position, rotation = 0, scale = 0.6, bodyRadius = 0.4, bodyCenterY = 0, bodyTopY = 999 }) {
-    const map = useTexture(texture);
+const THERMOS_NECK_RATIO = 0.1;
+const CAP_SIDE_DISTANCE = 2.35;
+const CAP_ARC_FORWARD_DISTANCE = 2.05;
+const CAP_FINAL_FORWARD_DISTANCE = 0.85;
+const LOGO_SURFACE_OFFSET = 0.018;
+const LOGO_POLYGON_OFFSET = -18;
 
-    const theta = (position[0] / 0.35) * (Math.PI * 0.45);
-    const posX = Math.sin(theta) * bodyRadius;
-    const posZ = Math.cos(theta) * bodyRadius;
-    const cylinderTop = bodyCenterY + (bodyTopY - bodyCenterY) * 0.4;
-    const posY = Math.min(cylinderTop, position[1] + bodyCenterY);
+// ─── Bezier arc for cap animation ─────────────────────────────────────────────
+function quadBezier(t, p0, p1, p2) {
+    const mt = 1 - t;
+    return [
+        mt * mt * p0[0] + 2 * mt * t * p1[0] + t * t * p2[0],
+        mt * mt * p0[1] + 2 * mt * t * p1[1] + t * t * p2[1],
+        mt * mt * p0[2] + 2 * mt * t * p1[2] + t * t * p2[2],
+    ];
+}
 
-    // Слегка выносим декаль наружу от поверхности
-    const offset = 0.002;
-    const finalX = posX + Math.sin(theta) * offset;
-    const finalZ = posZ + Math.cos(theta) * offset;
+function easeInOut(t) {
+    return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+}
 
+function LogoMaterial({ map, roughness = 0.42, metalness = 0.05 }) {
     return (
-        <Decal
-            position={[finalX, posY, finalZ]}
-            rotation={[0, theta, rotation]}
-            scale={[scale, scale, scale * 0.6]}
-            renderOrder={10}
-            depthTest={false}
-        >
-            <meshStandardMaterial
-                map={map}
-                transparent
-                alphaTest={0.15}
-                depthWrite={false}
-                polygonOffset
-                polygonOffsetFactor={-2}
-                polygonOffsetUnits={-2}
-                roughness={0.4}
-                metalness={0.1}
-            />
-        </Decal>
+        <meshStandardMaterial
+            map={map}
+            transparent={false}
+            alphaTest={0.08}
+            alphaToCoverage
+            depthTest
+            depthWrite={false}
+            polygonOffset
+            polygonOffsetFactor={LOGO_POLYGON_OFFSET}
+            polygonOffsetUnits={LOGO_POLYGON_OFFSET}
+            side={THREE.DoubleSide}
+            roughness={roughness}
+            metalness={metalness}
+        />
     );
 }
 
-function ThermosMesh({ geo, matRef, color, metalness = 0.0, roughness = 0.92, logos = [], bodyRadius = 0.4, bodyCenterY = 0, bodyTopY = 999, visible = true }) {
+function createCurvedLogoGeometry({ radius, centerTheta, centerY, width, height, rotation }) {
+    const segmentsX = 36;
+    const segmentsY = 14;
+    const surfaceRadius = radius + LOGO_SURFACE_OFFSET;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const positions = [];
+    const normals = [];
+    const uvs = [];
+    const indices = [];
+
+    for (let y = 0; y <= segmentsY; y++) {
+        const v = y / segmentsY;
+        for (let x = 0; x <= segmentsX; x++) {
+            const u = x / segmentsX;
+            const localX = (u - 0.5) * width;
+            const localY = (v - 0.5) * height;
+            const curvedX = localX * cos - localY * sin;
+            const curvedY = localX * sin + localY * cos;
+            const theta = centerTheta + curvedX / Math.max(radius, 0.001);
+            const nx = Math.sin(theta);
+            const nz = Math.cos(theta);
+
+            positions.push(nx * surfaceRadius, centerY + curvedY, nz * surfaceRadius);
+            normals.push(nx, 0, nz);
+            uvs.push(u, v);
+        }
+    }
+
+    for (let y = 0; y < segmentsY; y++) {
+        for (let x = 0; x < segmentsX; x++) {
+            const a = y * (segmentsX + 1) + x;
+            const b = a + 1;
+            const c = a + (segmentsX + 1);
+            const d = c + 1;
+            indices.push(a, c, b, b, c, d);
+        }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setIndex(indices);
+    geometry.computeBoundingSphere();
+    return geometry;
+}
+
+// ─── Logo planes ───────────────────────────────────────────────────────────────
+function LogoPlane({ texture, position, rotation = 0, scale = 0.6, bodyRadius = 0.4, bodyCenterY = 0, bodyTopY = 999 }) {
+    const map = useTexture(texture);
+    const theta = (position[0] / 0.35) * (Math.PI * 0.45);
+    const cylinderTop = bodyCenterY + (bodyTopY - bodyCenterY) * 0.4;
+    const posY = Math.min(cylinderTop, position[1] + bodyCenterY);
+    const geometry = useMemo(() => createCurvedLogoGeometry({
+        radius: bodyRadius,
+        centerTheta: theta,
+        centerY: posY,
+        width: scale,
+        height: scale,
+        rotation,
+    }), [bodyRadius, theta, posY, scale, rotation]);
+
     return (
-        <mesh geometry={geo} visible={visible}>
-            <meshStandardMaterial ref={matRef} color={color} metalness={metalness} roughness={roughness} />
+        <mesh geometry={geometry} renderOrder={20}>
+            <LogoMaterial map={map} roughness={0.4} metalness={0.1} />
+        </mesh>
+    );
+}
+
+function CapLogoPlane({ texture, target = 'capTop', position, rotation = 0, scale = 0.32, capRadius = 0.4, capMinY = 0, capMaxY = 1 }) {
+    const map = useTexture(texture);
+    const capHeight = capMaxY - capMinY;
+    const capCenterY = (capMaxY + capMinY) / 2;
+    const sideTheta = (position[0] / 0.35) * (Math.PI * 0.8);
+    const sideY = capCenterY + position[1] * capHeight * 0.35;
+    const sideGeometry = useMemo(() => createCurvedLogoGeometry({
+        radius: capRadius,
+        centerTheta: sideTheta,
+        centerY: sideY,
+        width: scale,
+        height: scale,
+        rotation,
+    }), [capRadius, sideTheta, sideY, scale, rotation]);
+
+    if (target === 'capSide') {
+        return (
+            <mesh geometry={sideGeometry} renderOrder={22}>
+                <LogoMaterial map={map} />
+            </mesh>
+        );
+    }
+
+    const posX = position[0] * capRadius * 1.4;
+    const posZ = position[1] * capRadius * 1.4;
+
+    return (
+        <group
+            position={[posX, capMaxY + LOGO_SURFACE_OFFSET, posZ]}
+            rotation={[-Math.PI / 2, 0, 0]}
+        >
+            <mesh rotation={[0, 0, rotation]} renderOrder={22}>
+                <planeGeometry args={[scale, scale]} />
+                <LogoMaterial map={map} />
+            </mesh>
+        </group>
+    );
+}
+
+// ─── Generic mesh component ────────────────────────────────────────────────────
+function ThermosMesh({ geo, matRef, color, neckStartY = null, capInner = null, capLogos = [], capRadius = 0.4, capMinY = 0, capMaxY = 1, metalness = 0.05, roughness = 0.82, logos = [], bodyRadius = 0.4, bodyCenterY = 0, bodyTopY = 999 }) {
+    const materialShader = useMemo(() => {
+        if (neckStartY === null && !capInner) return {};
+
+        const neckThreshold = neckStartY?.toFixed(4);
+        const capBottomLimit = capInner?.bottomLimitY.toFixed(4);
+        const capRimStart = capInner?.rimStartRadius.toFixed(4);
+        const capRimEnd = capInner?.rimEndRadius.toFixed(4);
+        return {
+            onBeforeCompile: (shader) => {
+                shader.vertexShader = shader.vertexShader
+                    .replace('#include <common>', '#include <common>\nvarying float vThermosLocalY;\nvarying float vThermosLocalRadius;')
+                    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvThermosLocalY = position.y;\nvThermosLocalRadius = length(position.xz);');
+
+                shader.fragmentShader = shader.fragmentShader
+                    .replace('#include <common>', '#include <common>\nvarying float vThermosLocalY;\nvarying float vThermosLocalRadius;')
+                    .replace(
+                        '#include <color_fragment>',
+                        `#include <color_fragment>
+                        float thermosNeckMask = ${neckThreshold ? `step(${neckThreshold}, vThermosLocalY)` : '0.0'};
+                        float thermosCapBottomMask = ${capBottomLimit ? `(1.0 - smoothstep(${capBottomLimit}, ${capBottomLimit} + 0.04, vThermosLocalY))` : '0.0'};
+                        float thermosCapRimMask = ${capRimStart && capRimEnd ? `smoothstep(${capRimStart}, ${capRimStart} + 0.03, vThermosLocalRadius) * (1.0 - smoothstep(${capRimEnd} - 0.03, ${capRimEnd}, vThermosLocalRadius))` : '0.0'};
+                        float thermosCapInsideMask = ${capRimEnd ? `(1.0 - smoothstep(${capRimEnd}, ${capRimEnd} + 0.03, vThermosLocalRadius))` : '0.0'};
+                        float thermosCapInnerMask = thermosCapBottomMask * max(thermosCapInsideMask, thermosCapRimMask);
+                        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.82, 0.82, 0.80), thermosNeckMask);
+                        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.055, 0.055, 0.052), thermosCapInnerMask);`
+                    )
+                    .replace(
+                        '#include <roughnessmap_fragment>',
+                        `#include <roughnessmap_fragment>
+                        roughnessFactor = mix(roughnessFactor, 0.16, thermosNeckMask);
+                        roughnessFactor = mix(roughnessFactor, 0.72, thermosCapInnerMask);`
+                    )
+                    .replace(
+                        '#include <metalnessmap_fragment>',
+                        `#include <metalnessmap_fragment>
+                        metalnessFactor = mix(metalnessFactor, 0.88, thermosNeckMask);
+                        metalnessFactor = mix(metalnessFactor, 0.08, thermosCapInnerMask);`
+                    );
+            },
+            customProgramCacheKey: () => `thermos-material-${neckThreshold ?? 'none'}-${capBottomLimit ?? 'none'}-${capRimStart ?? 'none'}-${capRimEnd ?? 'none'}`,
+        };
+    }, [neckStartY, capInner]);
+
+    return (
+        <mesh geometry={geo}>
+            <meshStandardMaterial
+                ref={matRef}
+                color={color}
+                metalness={metalness}
+                roughness={roughness}
+                {...materialShader}
+            />
             {logos.map(logo => (
-                <LogoDecal
-                    key={logo.id}
-                    texture={logo.texture}
-                    position={logo.position}
-                    rotation={logo.rotation ?? 0}
-                    scale={logo.scale ?? 0.6}
-                    bodyRadius={bodyRadius}
-                    bodyCenterY={bodyCenterY}
-                    bodyTopY={bodyTopY}
-                />
+                <LogoPlane key={logo.id} texture={logo.texture} position={logo.position}
+                    rotation={logo.rotation ?? 0} scale={logo.scale ?? 0.6}
+                    bodyRadius={bodyRadius} bodyCenterY={bodyCenterY} bodyTopY={bodyTopY} />
+            ))}
+            {capLogos.map(logo => (
+                <CapLogoPlane key={logo.id} texture={logo.texture} target={logo.target}
+                    position={logo.position} rotation={logo.rotation ?? 0} scale={logo.scale ?? 0.32}
+                    capRadius={capRadius} capMinY={capMinY} capMaxY={capMaxY} />
             ))}
         </mesh>
     );
 }
 
+// ─── Main component ────────────────────────────────────────────────────────────
 export function Thermos(props) {
-    const { thermosBodyColor, thermosCapColor, thermosCapVisible, thermosLogos } = useConfigurator();
+    const { thermosBodyColor, thermosCapVisible, thermosLogos } = useConfigurator();
     const { nodes } = useGLTF(termosModelUrl);
 
-    const { bodyGeo, capGeo, bodyRadius, bodyCenterY, bodyTopY, capFloatX, capFloatY } = useMemo(() => {
-        if (!nodes) return { bodyGeo: null, capGeo: null, bodyRadius: 0.4, bodyCenterY: 0, bodyTopY: 999, capFloatX: 0.7, capFloatY: 0 };
+    const bodyLogos = thermosLogos.filter(logo => (logo.target ?? 'body') === 'body');
+    const capLogos = thermosLogos.filter(logo => ['capTop', 'capSide'].includes(logo.target));
 
-        const meshEntries = Object.entries(nodes)
+    const { bodyGeo, capGeo, capInner, capLogoRadius, capMinY, capMaxY, bodyRadius, bodyCenterY, bodyTopY, bodyNeckStartY, capFloatX, capFloatY } = useMemo(() => {
+        const fallback = { bodyGeo: null, capGeo: null, capInner: null, capLogoRadius: 0.4, capMinY: 0, capMaxY: 1, bodyRadius: 0.4, bodyCenterY: 0, bodyTopY: 5, bodyNeckStartY: 4.25, capFloatX: 1.8, capFloatY: -2 };
+        if (!nodes) return fallback;
+
+        const entries = Object.entries(nodes)
             .filter(([, n]) => n.geometry)
             .map(([name, node]) => {
                 const geo = node.geometry;
@@ -77,102 +243,134 @@ export function Thermos(props) {
                 return { name, geo, bbox: geo.boundingBox };
             });
 
-        console.log('[Thermos] meshes found:', meshEntries.map(e => ({
-            name: e.name,
-            centerY: ((e.bbox.max.y + e.bbox.min.y) / 2).toFixed(3),
-            vol: ((e.bbox.max.x - e.bbox.min.x) * (e.bbox.max.y - e.bbox.min.y) * (e.bbox.max.z - e.bbox.min.z)).toFixed(3),
-        })));
+        if (entries.length === 0) return fallback;
 
-        if (meshEntries.length === 0) return { bodyGeo: null, capGeo: null, bodyRadius: 0.4, bodyCenterY: 0, bodyTopY: 999, capLiftY: 1.5 };
-
-        if (meshEntries.length === 1) {
-            const b = meshEntries[0].bbox;
+        if (entries.length === 1) {
+            const b = entries[0].bbox;
             const r = Math.max(Math.abs(b.max.x), Math.abs(b.min.x), Math.abs(b.max.z), Math.abs(b.min.z));
-            return { bodyGeo: meshEntries[0].geo, capGeo: null, bodyRadius: r || 0.4, bodyCenterY: (b.max.y + b.min.y) / 2, bodyTopY: b.max.y, capLiftY: 1.5 };
+            const cy = (b.max.y + b.min.y) / 2;
+            return {
+                bodyGeo: entries[0].geo,
+                capGeo: null,
+                capInner: null,
+                capLogoRadius: r || 0.4,
+                capMinY: b.min.y,
+                capMaxY: b.max.y,
+                bodyRadius: r || 0.4,
+                bodyCenterY: cy,
+                bodyTopY: b.max.y,
+                bodyNeckStartY: b.max.y - (b.max.y - b.min.y) * THERMOS_NECK_RATIO,
+                capFloatX: r * CAP_SIDE_DISTANCE,
+                capFloatY: cy - b.max.y,
+            };
         }
 
         // Name-based detection
         let capIdx = -1, bodyIdx = -1;
-        for (let i = 0; i < meshEntries.length; i++) {
-            const lower = meshEntries[i].name.toLowerCase();
-            if (capIdx === -1 && (lower.includes('cap') || lower.includes('lid') || lower.includes('top') || lower.includes('cover') || lower.includes('крышк'))) {
+        for (let i = 0; i < entries.length; i++) {
+            const lo = entries[i].name.toLowerCase();
+            if (capIdx === -1 && (lo.includes('cap') || lo.includes('lid') || lo.includes('top') || lo.includes('cover') || lo.includes('крышк'))) {
                 capIdx = i;
-            } else if (bodyIdx === -1 && (lower.includes('body') || lower.includes('cylinder') || lower.includes('main') || lower.includes('thermos') || lower.includes('корп'))) {
+            } else if (bodyIdx === -1 && (lo.includes('body') || lo.includes('cylinder') || lo.includes('main') || lo.includes('thermos') || lo.includes('корп'))) {
                 bodyIdx = i;
             }
         }
 
-        // Geometric fallback: cap = smallest volume mesh that sits in the top 30% by Y
+        // Geometric fallback: smallest-volume mesh in the top 30% Y = cap
         if (capIdx === -1) {
-            const maxY = Math.max(...meshEntries.map(e => e.bbox.max.y));
-            const minY = Math.min(...meshEntries.map(e => e.bbox.min.y));
+            const maxY = Math.max(...entries.map(e => e.bbox.max.y));
+            const minY = Math.min(...entries.map(e => e.bbox.min.y));
             const threshold = minY + (maxY - minY) * 0.7;
             let minVol = Infinity;
-            for (let i = 0; i < meshEntries.length; i++) {
-                const centerY = (meshEntries[i].bbox.max.y + meshEntries[i].bbox.min.y) / 2;
-                if (centerY >= threshold) {
-                    const b = meshEntries[i].bbox;
-                    const vol = (b.max.x - b.min.x) * (b.max.y - b.min.y) * (b.max.z - b.min.z);
+            for (let i = 0; i < entries.length; i++) {
+                const cy = (entries[i].bbox.max.y + entries[i].bbox.min.y) / 2;
+                if (cy >= threshold) {
+                    const bx = entries[i].bbox;
+                    const vol = (bx.max.x - bx.min.x) * (bx.max.y - bx.min.y) * (bx.max.z - bx.min.z);
                     if (vol < minVol) { minVol = vol; capIdx = i; }
                 }
             }
-            // If no mesh in top 30%, fall back to highest center Y
             if (capIdx === -1) {
-                let maxCenterY = -Infinity;
-                for (let i = 0; i < meshEntries.length; i++) {
-                    const centerY = (meshEntries[i].bbox.max.y + meshEntries[i].bbox.min.y) / 2;
-                    if (centerY > maxCenterY) { maxCenterY = centerY; capIdx = i; }
+                let maxCY = -Infinity;
+                for (let i = 0; i < entries.length; i++) {
+                    const cy = (entries[i].bbox.max.y + entries[i].bbox.min.y) / 2;
+                    if (cy > maxCY) { maxCY = cy; capIdx = i; }
                 }
             }
         }
 
-        // Body = largest volume mesh excluding cap
+        // Body = largest-volume mesh excluding cap
         if (bodyIdx === -1) {
             let maxVol = -Infinity;
-            for (let i = 0; i < meshEntries.length; i++) {
+            for (let i = 0; i < entries.length; i++) {
                 if (i === capIdx) continue;
-                const b = meshEntries[i].bbox;
-                const vol = (b.max.x - b.min.x) * (b.max.y - b.min.y) * (b.max.z - b.min.z);
+                const bx = entries[i].bbox;
+                const vol = (bx.max.x - bx.min.x) * (bx.max.y - bx.min.y) * (bx.max.z - bx.min.z);
                 if (vol > maxVol) { maxVol = vol; bodyIdx = i; }
             }
             if (bodyIdx === -1) bodyIdx = capIdx === 0 ? 1 : 0;
         }
 
-        const bodyEntry = meshEntries[bodyIdx];
+        const bodyEntry = entries[bodyIdx];
+        const capEntry = capIdx >= 0 ? entries[capIdx] : null;
         const bb = bodyEntry.bbox;
         const radius = Math.max(Math.abs(bb.max.x), Math.abs(bb.min.x), Math.abs(bb.max.z), Math.abs(bb.min.z)) || 0.4;
         const centerY = (bb.max.y + bb.min.y) / 2;
-
-        const capFloatX = radius * 1.8;
-        const capFloatY = centerY - bb.max.y;
-
-        console.log('[Thermos] body:', meshEntries[bodyIdx]?.name, '| cap:', meshEntries[capIdx]?.name, '| bodyCenterY:', centerY.toFixed(3));
+        const capConfig = capEntry ? (() => {
+            const cb = capEntry.bbox;
+            const capRadius = Math.max(Math.abs(cb.max.x), Math.abs(cb.min.x), Math.abs(cb.max.z), Math.abs(cb.min.z)) || radius * 0.6;
+            return {
+                inner: {
+                    bottomLimitY: cb.min.y + (cb.max.y - cb.min.y) * 0.34,
+                    rimStartRadius: capRadius * 0.48,
+                    rimEndRadius: capRadius * 0.84,
+                },
+                radius: capRadius,
+                minY: cb.min.y,
+                maxY: cb.max.y,
+            };
+        })() : null;
 
         return {
             bodyGeo: bodyEntry.geo,
-            capGeo: capIdx >= 0 ? meshEntries[capIdx].geo : null,
+            capGeo: capEntry ? capEntry.geo : null,
+            capInner: capConfig?.inner ?? null,
+            capLogoRadius: capConfig?.radius ?? radius * 0.6,
+            capMinY: capConfig?.minY ?? 0,
+            capMaxY: capConfig?.maxY ?? 1,
             bodyRadius: radius,
             bodyCenterY: centerY,
             bodyTopY: bb.max.y,
-            capFloatX,
-            capFloatY,
+            bodyNeckStartY: bb.max.y - (bb.max.y - bb.min.y) * THERMOS_NECK_RATIO,
+            capFloatX: radius * CAP_SIDE_DISTANCE,
+            capFloatY: centerY - bb.max.y,
         };
     }, [nodes]);
 
-    const bodyMatRef = useRef();
     const capMatRef = useRef();
     const capGroupRef = useRef();
+    const capProgress = useRef(0); // 0 = on bottle, 1 = floating
 
     useFrame((_, delta) => {
-        if (bodyMatRef.current) easing.dampC(bodyMatRef.current.color, thermosBodyColor, 0.25, delta);
-        if (capMatRef.current) easing.dampC(capMatRef.current.color, thermosCapColor, 0.25, delta);
+        // Cap color smoothly follows body color
+        if (capMatRef.current) easing.dampC(capMatRef.current.color, thermosBodyColor, 0.25, delta);
+
         if (capGroupRef.current) {
-            const targetX = thermosCapVisible ? capFloatX : 0;
-            const targetY = thermosCapVisible ? capFloatY : 0;
-            const targetRotY = thermosCapVisible ? Math.PI * 3 : 0;
-            easing.damp(capGroupRef.current.position, 'x', targetX, 0.45, delta);
-            easing.damp(capGroupRef.current.position, 'y', targetY, 0.45, delta);
-            easing.damp(capGroupRef.current.rotation, 'y', targetRotY, 0.45, delta);
+            const target = thermosCapVisible ? 1 : 0;
+            capProgress.current += (target - capProgress.current) * (1 - Math.exp(-2.8 * delta));
+
+            const t = easeInOut(Math.max(0, Math.min(1, capProgress.current)));
+
+            // Bezier arc: on-bottle → lift & orbit → float position
+            const liftY = bodyRadius * 0.9;
+            const p0 = [0, 0, 0];
+            const p1 = [capFloatX * 0.45, liftY, bodyRadius * CAP_ARC_FORWARD_DISTANCE];
+            const p2 = [capFloatX, capFloatY, bodyRadius * CAP_FINAL_FORWARD_DISTANCE];
+
+            const [px, py, pz] = quadBezier(t, p0, p1, p2);
+            capGroupRef.current.position.set(px, py, pz);
+            // Spin 3 full turns as it unscrews
+            capGroupRef.current.rotation.y = t * Math.PI * 6;
         }
     });
 
@@ -181,9 +379,11 @@ export function Thermos(props) {
             {bodyGeo && (
                 <ThermosMesh
                     geo={bodyGeo}
-                    matRef={bodyMatRef}
                     color={thermosBodyColor}
-                    logos={thermosLogos}
+                    neckStartY={bodyNeckStartY}
+                    metalness={0}
+                    roughness={0.9}
+                    logos={bodyLogos}
                     bodyRadius={bodyRadius}
                     bodyCenterY={bodyCenterY}
                     bodyTopY={bodyTopY}
@@ -194,9 +394,14 @@ export function Thermos(props) {
                     <ThermosMesh
                         geo={capGeo}
                         matRef={capMatRef}
-                        color={thermosCapColor}
-                        metalness={0.5}
-                        roughness={0.35}
+                        color={thermosBodyColor}
+                        capInner={capInner}
+                        capLogos={capLogos}
+                        capRadius={capLogoRadius}
+                        capMinY={capMinY}
+                        capMaxY={capMaxY}
+                        metalness={0}
+                        roughness={0.9}
                     />
                 </group>
             )}

@@ -39,8 +39,8 @@ export const useConfigurator = create((set) => ({
     zoomLevel: 1,
 
     // --- Параметры термоса ---
-    thermosBodyColor: '#C0C0C0',
-    thermosCapColor: '#C0C0C0',
+    thermosBodyColor: '#E65405',
+    thermosCapColor: '#E65405',
     thermosCapVisible: false,
     thermosLogos: [],
     selectedThermosLogoId: null,
@@ -132,12 +132,13 @@ export const useConfigurator = create((set) => ({
     setZoom: (val) => set({ zoomLevel: val }),
 
     // --- ACTIONS: ТЕРМОС ---
-    addThermosLogo: (file) => {
+    addThermosLogo: (file, target = 'body') => {
         if (file instanceof File) {
             const reader = new FileReader();
             const id = Date.now();
+            const scale = target === 'body' ? 0.6 : 0.32;
             reader.onload = (e) => set((state) => ({
-                thermosLogos: [...state.thermosLogos, { id, texture: e.target.result, filename: file.name, position: [0, 0], rotation: 0, scale: 0.6 }],
+                thermosLogos: [...state.thermosLogos, { id, target, texture: e.target.result, filename: file.name, position: [0, 0], rotation: 0, scale }],
                 selectedThermosLogoId: id
             }));
             reader.readAsDataURL(file);
@@ -154,7 +155,7 @@ export const useConfigurator = create((set) => ({
         thermosLogos: state.thermosLogos.map(l => l.id === state.selectedThermosLogoId ? { ...l, scale } : l)
     })),
     resetThermosLogoTransform: () => set((state) => ({
-        thermosLogos: state.thermosLogos.map(l => l.id === state.selectedThermosLogoId ? { ...l, position: [0, 0], rotation: 0, scale: 0.6 } : l)
+        thermosLogos: state.thermosLogos.map(l => l.id === state.selectedThermosLogoId ? { ...l, position: [0, 0], rotation: 0, scale: (l.target ?? 'body') === 'body' ? 0.6 : 0.32 } : l)
     })),
     removeThermosLogo: (id) => set((state) => {
         const remaining = state.thermosLogos.filter(l => l.id !== id);
