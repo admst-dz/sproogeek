@@ -3,6 +3,8 @@ import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { useConfigurator } from "../../store";
 import { fetchUserOrders, fetchAllProducts, createOrderInDB } from '../../api';
+import { LiveOrderToasts } from '../shared/LiveOrderToasts';
+import { ApprovalPanel } from '../shared/ApprovalPanel';
 import { Notebook } from '../shared/Notebook';
 import { Sketchbook } from '../sketchbook/Sketchbook';
 import { Thermos } from '../thermos/Thermos';
@@ -105,7 +107,7 @@ const OrderStatus = ({ status }) => {
     );
 };
 
-export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToastShown }) => {
+export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToastShown, initialTab, onTabChange }) => {
     const {
         currentUser, logout, cartItem, clearCart,
         activeProduct, coverColor, elasticColor, hasElastic,
@@ -248,6 +250,15 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
 
     return (
         <div className="min-h-screen font-sans text-white bg-[#0B0F19] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#1A2642] via-[#0B0F19] to-[#080B13] overflow-x-hidden flex flex-col">
+
+            <LiveOrderToasts onEvent={(ev) => {
+                const data = ev?.data;
+                if (!data?.order_id) return;
+                setOrders(prev => prev.map(o => String(o.id) === String(data.order_id)
+                    ? { ...o, status: data.status || o.status,
+                        stageHistory: [...(o.stageHistory || []), { status: data.status, comment: data.comment || '', updated_at: new Date().toISOString() }] }
+                    : o));
+            }} />
 
             {/* HEADER */}
             <header className="sticky top-0 z-30 px-6 py-4 border-b border-white/5 bg-[#0B0F19]/80 backdrop-blur-xl">
@@ -572,6 +583,15 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Статус выполнения</p>
                                                                 <OrderProgressBar status={order.status} stageHistory={order.stageHistory} />
                                                             </div>
+
+                                                            {/* Approval flow */}
+                                                            <ApprovalPanel
+                                                                order={order}
+                                                                role="client"
+                                                                onChanged={(updated) => setOrders(prev => prev.map(o => o.id === order.id
+                                                                    ? { ...o, ...updated, approvalStatus: updated.approval_status, status: updated.status, stageHistory: updated.stage_history || o.stageHistory }
+                                                                    : o))}
+                                                            />
                                                         </div>
                                                     </div>
                                                 </div>

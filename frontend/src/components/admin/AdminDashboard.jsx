@@ -1,6 +1,7 @@
 import { Fragment, useState, useEffect } from 'react';
 import { adminApi, productApi } from '../../api';
 import { VibeLoader } from '../shared/VibeLoader';
+import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 
 const STATUS_LABEL = { new: 'Новый', processing: 'В работе', production: 'Производство', in_delivery: 'Доставка', done: 'Готов' };
 const BINDING_LABEL = { hard: 'Твёрдый', spiral: 'На пружине', soft: 'Мягкий' };
@@ -147,6 +148,27 @@ function OrderDetails({ order, onSaved }) {
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState('');
+    const [tcBusy, setTcBusy] = useState(false);
+
+    const downloadTechcard = async () => {
+        try {
+            setTcBusy(true);
+            setMsg('');
+            const { data: meta } = await adminApi.generateTechcard(order.id);
+            const filename = (meta?.s3_key || '').split('/').pop() || `techcard-${order.id}.pdf`;
+            const { data: blob } = await adminApi.downloadTechcard(order.id, filename);
+            const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+            const a = document.createElement('a');
+            a.href = url; a.download = filename;
+            document.body.appendChild(a); a.click(); a.remove();
+            window.URL.revokeObjectURL(url);
+            setMsg('✓ Техкарта скачана');
+        } catch (e) {
+            setMsg('✗ ' + formatApiError(e));
+        } finally {
+            setTcBusy(false);
+        }
+    };
     const [form, setForm] = useState(() => ({
         product_name: order.product_name || '',
         user_email: order.user_email || '',
@@ -209,8 +231,16 @@ function OrderDetails({ order, onSaved }) {
                     </p>
                     {msg && <span className={`text-xs font-bold ${msg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{msg}</span>}
                     <button
+                        onClick={downloadTechcard}
+                        disabled={tcBusy}
+                        className="ml-auto px-3 py-1.5 rounded-[8px] bg-white/10 hover:bg-white/15 text-xs font-bold transition disabled:opacity-50"
+                        title="Сформировать и скачать техкарту в PDF"
+                    >
+                        {tcBusy ? 'Генерация…' : '⬇ Техкарта PDF'}
+                    </button>
+                    <button
                         onClick={() => setEditing(v => !v)}
-                        className="ml-auto px-3 py-1.5 rounded-[8px] bg-white/10 hover:bg-white/15 text-xs font-bold transition"
+                        className="px-3 py-1.5 rounded-[8px] bg-white/10 hover:bg-white/15 text-xs font-bold transition"
                     >
                         {editing ? 'Просмотр' : 'Редактировать'}
                     </button>
@@ -564,6 +594,7 @@ export const AdminDashboard = ({ onLogout }) => {
 
     return (
         <div className="fixed inset-0 bg-[#080B13] text-white flex flex-col font-sans overflow-hidden">
+            <LiveOrderToasts />
             <header className="flex items-center gap-2 px-6 py-3 border-b border-white/8 bg-[#0A0E1A] shrink-0">
                 <span className="text-[11px] font-black tracking-[0.25em] uppercase text-white/20">SPRUZHYK</span>
                 <span className="text-white/12 mx-2 select-none">|</span>

@@ -37,6 +37,12 @@ services:
       SENTRY_DSN: ${SENTRY_DSN:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost,http://127.0.0.1}
       RENDERER_URL: ${RENDERER_URL:-http://renderer:3000}
+      TECHCARD_URL: ${TECHCARD_URL:-http://techcard:8000}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-${MINIO_ROOT_USER:-spruzhyk}}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-${MINIO_ROOT_PASSWORD:-spruzhyk-dev-secret}}
+      S3_BUCKET: ${S3_BUCKET:-techcards}
     depends_on:
       db:
         condition: service_healthy
@@ -102,6 +108,56 @@ services:
       retries: 3
       start_period: 20s
 
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: spruzhuk_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-spruzhyk}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-spruzhyk-dev-secret}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - spruzhuk_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  techcard:
+    image: ghcr.io/admst-dz/spruzhyk-techcard:dev
+    pull_policy: always
+    build:
+      context: ./microservices/techcard
+    container_name: spruzhuk_techcard
+    restart: unless-stopped
+    environment:
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-${MINIO_ROOT_USER:-spruzhyk}}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-${MINIO_ROOT_PASSWORD:-spruzhyk-dev-secret}}
+      S3_BUCKET: ${S3_BUCKET:-techcards}
+      MANUFACTURER_NAME: ${MANUFACTURER_NAME:-ООО «Спружык»}
+      MANUFACTURER_ID: ${MANUFACTURER_ID:-SPRUZHYK-001}
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - spruzhuk_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
   watchtower:
     image: containrrr/watchtower
     container_name: spruzhuk_watchtower
@@ -116,7 +172,7 @@ services:
       WATCHTOWER_POLL_INTERVAL: "30"
       WATCHTOWER_INCLUDE_RESTARTING: "true"
       WATCHTOWER_ROLLING_RESTART: "true"
-    command: spruzhuk_app spruzhuk_app_render spruzhuk_backend spruzhuk_renderer
+    command: spruzhuk_app spruzhuk_app_render spruzhuk_backend spruzhuk_renderer spruzhuk_techcard
 
 networks:
   spruzhuk_net:
@@ -124,3 +180,4 @@ networks:
 
 volumes:
   postgres_data:
+  minio_data:

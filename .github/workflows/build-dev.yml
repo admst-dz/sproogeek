@@ -1,8 +1,8 @@
-name: Deploy to Production
+name: Build Dev Images
 
 on:
   push:
-    branches: [main]
+    branches: [dev]
   workflow_dispatch:
     inputs:
       target:
@@ -10,7 +10,7 @@ on:
         required: true
         default: "all"
         type: choice
-        options: [all, frontend, backend, renderer, techcard, deploy-only]
+        options: [all, frontend, backend, renderer, techcard]
 
 permissions:
   contents: read
@@ -46,7 +46,6 @@ jobs:
           targets=(frontend backend renderer techcard)
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             T="${{ inputs.target }}"
-            [ "$T" = "deploy-only" ] && T="none"
             for t in "${targets[@]}"; do
               [[ "$T" == "all" || "$T" == "$t" ]] && echo "$t=true" >> "$GITHUB_OUTPUT" || echo "$t=false" >> "$GITHUB_OUTPUT"
             done
@@ -64,7 +63,7 @@ jobs:
     with:
       image: frontend
       context: ./frontend
-      tag: latest
+      tag: dev
       build_args: |
         VITE_API_URL=/api/v1
 
@@ -75,7 +74,7 @@ jobs:
     with:
       image: backend
       context: ./backend
-      tag: latest
+      tag: dev
 
   renderer:
     needs: changes
@@ -84,7 +83,7 @@ jobs:
     with:
       image: renderer
       context: ./microservices/renderer
-      tag: latest
+      tag: dev
 
   techcard:
     needs: changes
@@ -93,4 +92,4 @@ jobs:
     with:
       image: techcard
       context: ./microservices/techcard
-      tag: latest
+      tag: dev

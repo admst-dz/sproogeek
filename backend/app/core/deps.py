@@ -9,8 +9,9 @@ from app.database import get_db
 
 
 bearer = HTTPBearer()
-STAFF_ROLES = {"admin", "dealer", "owner"}
+STAFF_ROLES = {"admin", "dealer", "owner", "manufacturer"}
 ADMIN_ROLES = {"admin", "owner"}
+MANUFACTURER_ROLES = {"manufacturer", "admin", "owner"}
 
 
 async def get_current_user(
@@ -50,6 +51,12 @@ async def get_staff_user(current_user=Depends(get_current_user)):
 
 async def get_admin_user(current_user=Depends(get_current_user)):
     if current_user.role not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return current_user
+
+
+async def get_manufacturer_user(current_user=Depends(get_current_user)):
+    if current_user.role not in MANUFACTURER_ROLES:
         raise HTTPException(status_code=403, detail="Access denied")
     return current_user
 

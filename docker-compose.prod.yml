@@ -40,6 +40,13 @@ services:
       ADMIN_BACKDOOR_LOGIN: ${ADMIN_BACKDOOR_LOGIN:-}
       ADMIN_BACKDOOR_PASSWORD: ${ADMIN_BACKDOOR_PASSWORD:-}
       ADMIN_BACKDOOR_KEY: ${ADMIN_BACKDOOR_KEY:-}
+      TECHCARD_URL: ${TECHCARD_URL:-http://techcard:8000}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET:-techcards}
     depends_on:
       db:
         condition: service_healthy
@@ -100,6 +107,29 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  techcard:
+    image: ghcr.io/admst-dz/spruzhyk-techcard:latest
+    pull_policy: always
+    container_name: spruzhuk_techcard
+    restart: unless-stopped
+    environment:
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET:-techcards}
+      MANUFACTURER_NAME: ${MANUFACTURER_NAME:-ООО «Спружык»}
+      MANUFACTURER_ID: ${MANUFACTURER_ID:-SPRUZHYK-001}
+    networks:
+      - spruzhuk_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
 networks:
   spruzhuk_net:

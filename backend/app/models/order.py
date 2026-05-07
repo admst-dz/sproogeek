@@ -20,6 +20,13 @@ class Order(Base):
     currency = Column(String, default='BYN')
     is_guest = Column(Boolean, default=False)
     stage_history = Column(JSONB, default=list, nullable=True)
+
+    approval_status = Column(String, default="pending", nullable=True, index=True)  # pending|approved|rejected
+    approval_pdf_key = Column(String, nullable=True)
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+    approval_comment = Column(String, nullable=True)
+    dealer_confirmed_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=True)
 
