@@ -1,8 +1,8 @@
 from functools import lru_cache
-from typing import List
+from typing import Annotated, List
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -29,8 +29,8 @@ class Settings(BaseSettings):
 
     sentry_dsn: str = Field("", alias="SENTRY_DSN")
 
-    allowed_hosts: List[str] = Field(default_factory=list, alias="ALLOWED_HOSTS")
-    allowed_origins: List[str] = Field(
+    allowed_hosts: Annotated[List[str], NoDecode] = Field(default_factory=list, alias="ALLOWED_HOSTS")
+    allowed_origins: Annotated[List[str], NoDecode] = Field(
         default_factory=lambda: [
             "http://localhost:5173",
             "http://127.0.0.1:5173",
