@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Response
@@ -6,6 +7,15 @@ from fastapi import FastAPI, HTTPException, Response
 from app.render import render_pdf
 from app.schemas import TechCardRequest, TechCardResponse
 from app.storage import ensure_bucket, presign_get, upload_pdf, get_object
+
+
+_SAFE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _safe(value: str) -> str:
+    if not value or len(value) > 255 or value in {".", ".."} or not _SAFE.fullmatch(value):
+        raise HTTPException(status_code=400, detail="invalid path component")
+    return value
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -36,7 +46,8 @@ def generate(req: TechCardRequest):
         raise HTTPException(500, f"render failed: {exc}") from exc
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    key = f"{req.order_id}/techcard-{ts}.pdf"
+    prefix = "approval" if req.doc_type == "approval" else "techcard"
+    key = f"{_safe(req.order_id)}/{prefix}-{ts}.pdf"
     upload_pdf(key, pdf)
     return TechCardResponse(
         s3_key=key,
@@ -47,7 +58,7 @@ def generate(req: TechCardRequest):
 
 @app.get("/api/techcard/file/{order_id}/{filename}")
 def fetch(order_id: str, filename: str):
-    key = f"{order_id}/{filename}"
+    key = f"{_safe(order_id)}/{_safe(filename)}"
     try:
         data = get_object(key)
     except Exception as exc:  # noqa: BLE001
@@ -55,5 +66,5 @@ def fetch(order_id: str, filename: str):
     return Response(
         content=data,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'attachment; filename="{_safe(filename)}"'},
     )

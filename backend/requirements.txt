@@ -17,4 +17,4 @@ aiofiles>=23.2.1
 python-multipart>=0.0.6
 gunicorn>=21.2.0
 uvicorn[standard]>=0.23.0
-aiokafka>=0.8.1
+aiokafka>=0.8.1qrcode[pil]>=7.4.2

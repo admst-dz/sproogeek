@@ -4,6 +4,7 @@ import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { useConfigurator } from "../../store";
 import { fetchUserOrders, fetchAllProducts, createOrderInDB } from '../../api';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
+import { ApprovalPanel } from '../shared/ApprovalPanel';
 import { Notebook } from '../shared/Notebook';
 import { Sketchbook } from '../sketchbook/Sketchbook';
 import { Thermos } from '../thermos/Thermos';
@@ -582,6 +583,15 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Статус выполнения</p>
                                                                 <OrderProgressBar status={order.status} stageHistory={order.stageHistory} />
                                                             </div>
+
+                                                            {/* Approval flow */}
+                                                            <ApprovalPanel
+                                                                order={order}
+                                                                role="client"
+                                                                onChanged={(updated) => setOrders(prev => prev.map(o => o.id === order.id
+                                                                    ? { ...o, ...updated, approvalStatus: updated.approval_status, status: updated.status, stageHistory: updated.stage_history || o.stageHistory }
+                                                                    : o))}
+                                                            />
                                                         </div>
                                                     </div>
                                                 </div>

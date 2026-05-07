@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Согласование заказа №{{ req.order_number or req.order_id }}</title>
+<style>
+@page {
+    size: A4;
+    margin: 22mm 18mm 22mm 18mm;
+    @bottom-right { content: "Стр. " counter(page) " / " counter(pages); font-size: 8pt; color: #666; }
+}
+body { font-family: "DejaVu Sans", sans-serif; font-size: 10pt; color: #111; }
+.brand { display: flex; justify-content: space-between; align-items: center; border-bottom: 2pt solid #111; padding-bottom: 4mm; margin-bottom: 8mm; }
+.brand .title { font-size: 22pt; font-weight: 700; letter-spacing: -.5pt; }
+.brand .meta { text-align: right; font-size: 9pt; color: #555; }
+h2 { font-size: 13pt; margin: 6mm 0 3mm; padding-bottom: 1mm; border-bottom: .8pt solid #ccc; }
+.summary { background: #f7f7f7; border-radius: 4mm; padding: 5mm 6mm; margin: 4mm 0 6mm; }
+.summary table { width: 100%; border-collapse: collapse; }
+.summary td { padding: 1.5mm 0; vertical-align: top; }
+.summary td.label { color: #666; width: 38%; font-size: 9pt; }
+.summary td.value { font-weight: 600; }
+.swatch { display: inline-block; width: 4mm; height: 4mm; border: .3pt solid #555; vertical-align: middle; margin-right: 1.5mm; border-radius: 1mm; }
+.items { width: 100%; border-collapse: collapse; margin-top: 3mm; }
+.items th, .items td { border: .3pt solid #ccc; padding: 2mm 3mm; text-align: left; }
+.items th { background: #f0f0f0; font-size: 9pt; }
+.preview { text-align: center; margin: 6mm 0; }
+.preview img { max-width: 100%; max-height: 90mm; border: .5pt solid #ddd; border-radius: 2mm; }
+.signature-block { margin-top: 12mm; padding: 6mm; border: 1pt solid #111; border-radius: 3mm; }
+.signature-block h3 { margin: 0 0 4mm; font-size: 11pt; text-transform: uppercase; letter-spacing: .5pt; }
+.sig-row { display: flex; justify-content: space-between; gap: 10mm; margin-top: 8mm; }
+.sig-cell { flex: 1; }
+.sig-cell .line { border-bottom: 1pt solid #111; height: 12mm; }
+.sig-cell .label { text-align: center; font-size: 8pt; color: #666; margin-top: 1mm; text-transform: uppercase; letter-spacing: .4pt; }
+.note { font-size: 8pt; color: #777; margin-top: 6mm; line-height: 1.4; }
+.total { font-size: 14pt; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div class="brand">
+    <div>
+        <div class="title">Согласование заказа</div>
+        <div style="color:#555; margin-top:1mm">№ {{ req.order_number or req.order_id }}</div>
+    </div>
+    <div class="meta">
+        Дата: <b>{{ order_date }}</b><br>
+        Сформирован: {{ generated_at }}
+    </div>
+</div>
+
+<h2>Заказчик</h2>
+<div class="summary">
+    <table>
+        <tr><td class="label">Клиент</td><td class="value">{{ req.client.name | safe_dash }}</td></tr>
+        <tr><td class="label">Email</td><td class="value">{{ req.client.email | safe_dash }}</td></tr>
+        {% if req.client.requisites %}<tr><td class="label">Реквизиты</td><td class="value">{{ req.client.requisites }}</td></tr>{% endif %}
+        <tr><td class="label">Менеджер</td><td class="value">{{ req.manager.name | safe_dash }}</td></tr>
+    </table>
+</div>
+
+{% if req.render_url %}
+<h2>Внешний вид</h2>
+<div class="preview">
+    <img src="{{ req.render_url }}" alt="Превью изделия">
+</div>
+{% endif %}
+
+<h2>Состав заказа</h2>
+<table class="items">
+    <thead>
+        <tr>
+            <th style="width:6%">№</th>
+            <th>Наименование</th>
+            <th style="width:15%">Тираж</th>
+            <th>Описание</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for it in req.items %}
+        <tr>
+            <td>{{ it.index }}</td>
+            <td>
+                <b>{{ it.name }}</b>
+                {% set c = it.config %}
+                {% if c.format or c.bindingType or c.paperPattern %}
+                    <div style="font-size:8.5pt; color:#555; margin-top:1mm">
+                        {% if c.format %}Формат: {{ c.format }}{% endif %}
+                        {% if c.bindingType %} · Переплёт: {{ c.bindingType }}{% endif %}
+                        {% if c.paperPattern %} · Разлиновка: {{ c.paperPattern }}{% endif %}
+                        {% if c.coverColor %} · Обложка: <span class="swatch" style="background:{{ c.coverColor }}"></span>{{ c.coverColor }}{% endif %}
+                    </div>
+                {% endif %}
+            </td>
+            <td>{{ it.quantity }} шт.</td>
+            <td>{{ it.description | safe_dash }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% if req.total_price %}
+<div class="summary" style="margin-top:6mm">
+    <table>
+        <tr>
+            <td class="label">Итого к оплате</td>
+            <td class="value total" style="text-align:right">{{ '%.2f' % req.total_price }} {{ req.currency or 'BYN' }}</td>
+        </tr>
+    </table>
+</div>
+{% endif %}
+
+{% if req.notes %}
+<h2>Комментарий клиента</h2>
+<p style="white-space:pre-wrap">{{ req.notes }}</p>
+{% endif %}
+
+<div class="signature-block">
+    <h3>Подтверждение заказчика</h3>
+    <p style="font-size:9.5pt; line-height:1.5; margin:0 0 5mm 0">
+        Я ознакомлен(а) с составом заказа, дизайном и стоимостью, изложенными выше.
+        Подтверждаю своё согласие на запуск заказа в производство в указанной конфигурации.
+    </p>
+    <div class="sig-row">
+        <div class="sig-cell"><div class="line"></div><div class="label">Дата</div></div>
+        <div class="sig-cell" style="flex:2"><div class="line"></div><div class="label">Подпись / расшифровка</div></div>
+    </div>
+</div>
+
+<p class="note">
+    Документ сформирован автоматически в системе Spruzhyk.
+    Подписанный экземпляр загружается обратно в личный кабинет клиента
+    или передаётся менеджеру для запуска заказа в работу.
+</p>
+
+</body>
+</html>

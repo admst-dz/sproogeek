@@ -37,6 +37,16 @@ export const orderApi = {
     },
     getUserOrders: (userId) => apiClient.get(`/orders/user/${userId}`),
     updateStatus: (orderId, status, comment = null) => apiClient.patch(`/orders/${orderId}/status`, { status, comment }),
+
+    // Approval flow
+    generateApproval: (orderId) => apiClient.post(`/orders/${encodeURIComponent(orderId)}/approval-pdf`),
+    downloadApproval: (orderId, filename) => apiClient.get(
+        `/orders/${encodeURIComponent(orderId)}/approval.pdf`,
+        { params: { filename }, responseType: 'blob' }
+    ),
+    approve: (orderId, comment = null) => apiClient.post(`/orders/${encodeURIComponent(orderId)}/approve`, { comment }),
+    reject:  (orderId, comment = null) => apiClient.post(`/orders/${encodeURIComponent(orderId)}/reject`, { comment }),
+    dealerConfirm: (orderId, comment = null) => apiClient.post(`/orders/${encodeURIComponent(orderId)}/dealer-confirm`, { comment }),
 };
 
 export const adminApi = {
@@ -67,6 +77,10 @@ export const manufacturerApi = {
     stats: () => apiClient.get('/manufacturer/stats'),
     updateStatus: (orderId, status, comment = null) =>
         apiClient.patch(`/manufacturer/orders/${encodeURIComponent(orderId)}/status`, { status, comment }),
+    imposition: (orderId) => apiClient.get(`/manufacturer/orders/${encodeURIComponent(orderId)}/imposition`),
+    qrUrl: (orderId) => `${(import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '')}/manufacturer/orders/${encodeURIComponent(orderId)}/qr.png`,
+    materials: () => apiClient.get('/manufacturer/materials'),
+    materialsLow: () => apiClient.get('/manufacturer/materials/low'),
 };
 
 export const fetchManufacturerQueue = async (status = null) => {
@@ -149,6 +163,12 @@ const normalizeOrder = (o) => ({
     userEmail: o.user_email || '',
     role: o.configuration?.clientType || '',
     createdAt: o.created_at ? { seconds: new Date(o.created_at).getTime() / 1000 } : null,
+    approvalStatus: o.approval_status || 'pending',
+    approvalPdfKey: o.approval_pdf_key || null,
+    approvedAt: o.approved_at || null,
+    dealerConfirmedAt: o.dealer_confirmed_at || null,
+    quantity: o.quantity || 1,
+    configuration: o.configuration || null,
 });
 
 export const createOrderInDB = async (orderData) => {

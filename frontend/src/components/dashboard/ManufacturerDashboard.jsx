@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useConfigurator } from '../../store';
 import { adminApi, fetchManufacturerQueue, fetchManufacturerStats, manufacturerApi } from '../../api';
+import { downloadBlob } from '../../utils/download';
 import { getUserSecondaryLabel } from '../../utils/user';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 
@@ -103,7 +104,12 @@ export const ManufacturerDashboard = ({ onBack }) => {
     const toggleExpand = (id) => {
         setExpanded(prev => {
             const next = new Set(prev);
-            next.has(id) ? next.delete(id) : next.add(id);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+                loadImposition(id);
+            }
             return next;
         });
     };
@@ -126,15 +132,26 @@ export const ManufacturerDashboard = ({ onBack }) => {
             const { data: meta } = await adminApi.generateTechcard(orderId);
             const filename = (meta?.s3_key || '').split('/').pop() || `techcard-${orderId}.pdf`;
             const { data: blob } = await adminApi.downloadTechcard(orderId, filename);
-            const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
-            const a = document.createElement('a');
-            a.href = url; a.download = filename;
-            document.body.appendChild(a); a.click(); a.remove();
-            window.URL.revokeObjectURL(url);
+            downloadBlob(blob, filename);
         } finally {
             setTechcardBusy(null);
         }
     };
+
+    const [impositionMap, setImpositionMap] = useState({});
+    const loadImposition = async (orderId) => {
+        if (impositionMap[orderId]) return;
+        try {
+            const { data } = await manufacturerApi.imposition(orderId);
+            setImpositionMap(prev => ({ ...prev, [orderId]: data }));
+        } catch { /* ignore */ }
+    };
+
+    const [materials, setMaterials] = useState([]);
+    useEffect(() => {
+        if (activeTab !== 'materials') return;
+        manufacturerApi.materials().then(({ data }) => setMaterials(data || []));
+    }, [activeTab]);
 
     const summary = useMemo(() => ({
         total: stats.total || 0,
@@ -166,6 +183,7 @@ export const ManufacturerDashboard = ({ onBack }) => {
                 <nav className="flex-1 p-3 space-y-1">
                     {[
                         { id: 'queue', icon: '🏭', label: 'Очередь' },
+                        { id: 'materials', icon: '📦', label: 'Склад' },
                         { id: 'history', icon: '📜', label: 'Архив' },
                     ].map(tab => (
                         <button
@@ -220,10 +238,12 @@ export const ManufacturerDashboard = ({ onBack }) => {
                 <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
                     <div>
                         <h2 className="text-xl font-bold uppercase tracking-widest text-white">
-                            {activeTab === 'history' ? 'Архив заказов' : 'Очередь производства'}
+                            {activeTab === 'history' ? 'Архив заказов' : activeTab === 'materials' ? 'Склад материалов' : 'Очередь производства'}
                         </h2>
                         <p className="text-xs text-gray-500 mt-1">
-                            {activeTab === 'history' ? 'Готовые заказы за последние периоды' : 'Активные заказы — от приёма до отгрузки'}
+                            {activeTab === 'history' ? 'Готовые заказы за последние периоды'
+                                : activeTab === 'materials' ? 'Расходные материалы и автоматическое списание по заказам'
+                                : 'Активные заказы — от приёма до отгрузки'}
                         </p>
                     </div>
                     <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-full">
@@ -232,6 +252,46 @@ export const ManufacturerDashboard = ({ onBack }) => {
                     </div>
                 </div>
 
+                {activeTab === 'materials' && (
+                    <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[24px] overflow-hidden">
+                        {materials.length === 0 ? (
+                            <div className="py-20 flex flex-col items-center gap-4">
+                                <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10 text-2xl">📦</div>
+                                <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Каталог материалов пуст</p>
+                                <p className="text-gray-600 text-[11px] max-w-md text-center">Добавьте позиции через POST /api/v1/manufacturer/materials/{`{id}`}/topup или импортируйте seed.</p>
+                            </div>
+                        ) : (
+                            <table className="w-full text-sm">
+                                <thead className="bg-white/5 text-[10px] uppercase tracking-widest text-gray-500">
+                                    <tr>
+                                        <th className="text-left px-5 py-3 font-bold">SKU</th>
+                                        <th className="text-left px-5 py-3 font-bold">Наименование</th>
+                                        <th className="text-right px-5 py-3 font-bold">Остаток</th>
+                                        <th className="text-right px-5 py-3 font-bold">Минимум</th>
+                                        <th className="text-left px-5 py-3 font-bold">Ед.</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {materials.map((m, i) => {
+                                        const low = m.stock_qty < (m.reorder_threshold || 0);
+                                        return (
+                                            <tr key={m.id} className={i !== materials.length - 1 ? 'border-b border-white/5' : ''}>
+                                                <td className="px-5 py-3 font-mono text-xs text-white/70">{m.id}</td>
+                                                <td className="px-5 py-3 text-white">{m.name}</td>
+                                                <td className={`px-5 py-3 text-right font-bold ${low ? 'text-red-400' : 'text-white'}`}>{m.stock_qty}</td>
+                                                <td className="px-5 py-3 text-right text-gray-400">{m.reorder_threshold || 0}</td>
+                                                <td className="px-5 py-3 text-gray-500 text-xs uppercase">{m.unit}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                )}
+
+                {activeTab !== 'materials' && (
+                <>
                 {/* STATUS PILL FILTER */}
                 <div className="flex flex-wrap gap-2 mb-5">
                     <button
@@ -332,7 +392,7 @@ export const ManufacturerDashboard = ({ onBack }) => {
                                                 </div>
 
                                                 <div className="space-y-3">
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Документы</p>
+                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Документы и трекинг</p>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); downloadTechcard(orderId); }}
                                                         disabled={isTcBusy}
@@ -350,6 +410,30 @@ export const ManufacturerDashboard = ({ onBack }) => {
                                                             🖼 Превью рендера
                                                         </a>
                                                     )}
+                                                    {/* QR for sheet tracking */}
+                                                    <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-[10px] p-3" onClick={e => e.stopPropagation()}>
+                                                        <img src={manufacturerApi.qrUrl(orderId)} alt="QR" className="w-20 h-20 rounded-[6px] bg-white p-1" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">QR заказа</p>
+                                                            <p className="text-[10px] text-gray-400 mt-1 truncate">spruzhyk://order/{orderId.substring(0,8)}…</p>
+                                                            <p className="text-[10px] text-gray-500 mt-0.5">сканируется на каждом этапе</p>
+                                                        </div>
+                                                    </div>
+                                                    {/* Imposition plan */}
+                                                    {impositionMap[orderId]?.ok && (
+                                                        <div className="bg-white/5 border border-white/10 rounded-[10px] p-3 text-[11px] text-gray-300" onClick={e => e.stopPropagation()}>
+                                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Спуск SRA3</p>
+                                                            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                                                <span className="text-gray-500">Изделий/лист</span><span className="text-white font-bold">{impositionMap[orderId].layout.items_per_sheet}</span>
+                                                                <span className="text-gray-500">Сетка</span><span>{impositionMap[orderId].layout.cols}×{impositionMap[orderId].layout.rows} {impositionMap[orderId].layout.orientation === 'landscape' ? '↔' : '↕'}</span>
+                                                                <span className="text-gray-500">Листов всего</span><span className="text-white font-bold">{impositionMap[orderId].totals.sheets_required}</span>
+                                                                <span className="text-gray-500">Отход</span><span>{impositionMap[orderId].totals.waste_per_sheet}</span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {impositionMap[orderId] && !impositionMap[orderId].ok && (
+                                                        <p className="text-[11px] text-red-400 italic">{impositionMap[orderId].reason}</p>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -359,12 +443,15 @@ export const ManufacturerDashboard = ({ onBack }) => {
                         })
                     )}
                 </div>
+                </>
+                )}
             </main>
 
             {/* MOBILE BOTTOM NAV */}
             <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#0B0F19]/95 backdrop-blur-xl border-t border-white/5 flex items-center px-2 pb-safe">
                 {[
                     { id: 'queue', label: 'Очередь', icon: (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="6"/><rect x="2" y="14" width="20" height="6"/></svg>) },
+                    { id: 'materials', label: 'Склад', icon: (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>) },
                     { id: 'history', label: 'Архив', icon: (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 12 8 7 13 12"/><polyline points="11 12 16 7 21 12"/></svg>) },
                 ].map(tab => (
                     <button

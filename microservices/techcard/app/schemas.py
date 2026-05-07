@@ -43,6 +43,10 @@ class TechCardRequest(BaseModel):
     download_all_url: Optional[str] = None
     storage_location: str = ""
     notes: str = ""
+    doc_type: str = Field("techcard", pattern="^(techcard|approval)$")
+    render_url: Optional[str] = None
+    total_price: Optional[float] = None
+    currency: Optional[str] = "BYN"
 
 
 class TechCardResponse(BaseModel):

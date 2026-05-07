@@ -23,6 +23,7 @@ from app.schemas.admin import (
 )
 from app.schemas.order import OrderResponse
 from app.services import order_type_store
+from app.core.security_utils import safe_filename, safe_path_segment
 from app.services.event_hub import event_hub
 from app.services.techcard_client import fetch_techcard_pdf, generate_techcard
 
@@ -85,6 +86,7 @@ async def create_order_techcard(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_admin_user),
 ):
+    safe_path_segment(order_id)
     order = await crud_order.get_order(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -110,17 +112,19 @@ async def create_order_techcard(
 @router.get("/orders/{order_id}/techcard.pdf")
 async def download_order_techcard(
     order_id: str,
-    filename: str = Query(...),
+    filename: str = Query(..., min_length=1, max_length=255),
     current_user=Depends(get_admin_user),
 ):
+    safe_id = safe_path_segment(order_id)
+    safe_name = safe_filename(filename)
     try:
-        data = await fetch_techcard_pdf(order_id, filename)
+        data = await fetch_techcard_pdf(safe_id, safe_name)
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=404, detail=f"techcard not found: {exc}") from exc
     return Response(
         content=data,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
     )
 
 

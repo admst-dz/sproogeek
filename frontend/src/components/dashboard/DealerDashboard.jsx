@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useConfigurator } from "../../store";
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
+import { ApprovalPanel } from '../shared/ApprovalPanel';
 import {
     fetchAllOrders, fetchAdminOrders, updateOrderStatus,
     fetchDealerProducts, saveProduct, updateProduct, deleteProduct,
@@ -822,6 +823,17 @@ export const DealerDashboard = ({ onBack }) => {
                                                 <div className="px-4 md:px-6 pb-6 border-t border-white/5 bg-white/[0.02]">
                                                     {/* Progress bar */}
                                                     <OrderProgressBar status={order.status} stageHistory={order.stageHistory} />
+
+                                                    {/* Approval review */}
+                                                    <div className="mt-4">
+                                                        <ApprovalPanel
+                                                            order={order}
+                                                            role={isAdmin ? 'admin' : 'dealer'}
+                                                            onChanged={(updated) => setOrders(prev => prev.map(o => String(o.id) === String(order.id)
+                                                                ? { ...o, status: updated.status || o.status, approvalStatus: updated.approval_status || o.approvalStatus, dealerConfirmedAt: updated.dealer_confirmed_at || o.dealerConfirmedAt, stageHistory: updated.stage_history || o.stageHistory }
+                                                                : o))}
+                                                        />
+                                                    </div>
 
                                                     {/* Status controls */}
                                                     <div className="mt-5 space-y-3">

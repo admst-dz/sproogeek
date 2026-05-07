@@ -41,7 +41,8 @@ _env.filters["safe_dash"] = _safe
 
 def render_pdf(req: TechCardRequest) -> bytes:
     settings = get_settings()
-    template = _env.get_template("techcard.html")
+    template_name = "approval.html" if req.doc_type == "approval" else "techcard.html"
+    template = _env.get_template(template_name)
     html = template.render(
         req=req,
         manufacturer_name=settings.manufacturer_name,

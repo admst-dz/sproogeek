@@ -104,6 +104,21 @@ async def generate_techcard(order: Order, db: AsyncSession) -> dict[str, Any]:
         return resp.json()
 
 
+async def generate_approval(order: Order, db: AsyncSession) -> dict[str, Any]:
+    """Approval (согласование) PDF — same service, different template."""
+    settings = get_settings()
+    payload = await _build_request(order, db)
+    cfg = order.configuration or {}
+    payload["doc_type"] = "approval"
+    payload["render_url"] = cfg.get("server_render_url")
+    payload["total_price"] = float(order.total_price) if order.total_price else None
+    payload["currency"] = order.currency or "BYN"
+    async with httpx.AsyncClient(timeout=settings.techcard_timeout_seconds) as client:
+        resp = await client.post(f"{settings.techcard_url}/api/techcard", json=payload)
+        resp.raise_for_status()
+        return resp.json()
+
+
 async def fetch_techcard_pdf(order_id: str, filename: str) -> bytes:
     settings = get_settings()
     async with httpx.AsyncClient(timeout=settings.techcard_timeout_seconds) as client:

@@ -3,7 +3,10 @@ from typing import Optional, Dict, Any, List, Literal
 from uuid import UUID
 from datetime import datetime
 
-ORDER_STATUSES = ("new", "processing", "production", "in_delivery", "done")
+ORDER_STATUSES = (
+    "draft", "new", "processing", "production",
+    "in_delivery", "done", "approved", "rejected", "cancelled",
+)
 
 
 class OrderCreate(BaseModel):
@@ -18,7 +21,8 @@ class OrderCreate(BaseModel):
 
 
 class OrderStatusUpdate(BaseModel):
-    status: Literal["new", "processing", "production", "in_delivery", "done"]
+    status: Literal["draft", "new", "processing", "production",
+                    "in_delivery", "done", "approved", "rejected", "cancelled"]
     comment: Optional[str] = Field(None, max_length=1000)
 
 
@@ -34,6 +38,11 @@ class OrderResponse(BaseModel):
     is_guest: Optional[bool] = None
     status: str
     stage_history: Optional[List[Dict[str, Any]]] = None
+    approval_status: Optional[str] = None
+    approval_pdf_key: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    approval_comment: Optional[str] = None
+    dealer_confirmed_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
