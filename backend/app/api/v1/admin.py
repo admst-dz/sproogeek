@@ -1,6 +1,8 @@
 from typing import List
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from fastapi_pagination import Page, Params
 from fastapi_pagination.ext.sqlalchemy import paginate
 from sqlalchemy import select
@@ -21,6 +23,7 @@ from app.schemas.admin import (
 )
 from app.schemas.order import OrderResponse
 from app.services import order_type_store
+from app.services.techcard_client import fetch_techcard_pdf, generate_techcard
 
 
 router = APIRouter(dependencies=[Depends(get_admin_user)])
@@ -65,6 +68,51 @@ async def update_admin_order(
         details={"fields": sorted(data.keys())},
     )
     return order
+
+
+@router.post("/orders/{order_id}/techcard")
+async def create_order_techcard(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_admin_user),
+):
+    order = await crud_order.get_order(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    try:
+        result = await generate_techcard(order, db)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"techcard service unavailable: {exc}") from exc
+
+    event_logger.log(
+        "ORDER_TECHCARD_GENERATED",
+        "Admin generated tech card for order",
+        direction="admin->backend",
+        actor_type=current_user.role,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        entity_type="order",
+        entity_id=order_id,
+        details={"s3_key": result.get("s3_key"), "bytes": result.get("bytes")},
+    )
+    return result
+
+
+@router.get("/orders/{order_id}/techcard.pdf")
+async def download_order_techcard(
+    order_id: str,
+    filename: str = Query(...),
+    current_user=Depends(get_admin_user),
+):
+    try:
+        data = await fetch_techcard_pdf(order_id, filename)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=404, detail=f"techcard not found: {exc}") from exc
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/order-types", response_model=OrderTypeListResponse)

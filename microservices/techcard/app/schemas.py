@@ -1,0 +1,51 @@
+from datetime import datetime
+from typing import Any, List, Optional
+
+from pydantic import BaseModel, Field
+
+
+class ClientInfo(BaseModel):
+    id: str = ""
+    name: str = ""
+    email: str = ""
+    requisites: str = ""
+
+
+class ManagerInfo(BaseModel):
+    id: str = ""
+    name: str = ""
+
+
+class FileLink(BaseModel):
+    name: str
+    url: str
+
+
+class TechCardItem(BaseModel):
+    """One row in the product list (page 2)."""
+    index: int
+    item_id: str
+    name: str
+    quantity: int = 1
+    description: str = ""
+    product_kind: str = "notebook"  # notebook | sketchbook | thermos | powerbank | souvenir
+    config: dict[str, Any] = Field(default_factory=dict)
+    file_url: Optional[str] = None
+
+
+class TechCardRequest(BaseModel):
+    order_id: str
+    order_number: Optional[str] = None
+    created_at: Optional[datetime] = None
+    client: ClientInfo = Field(default_factory=ClientInfo)
+    manager: ManagerInfo = Field(default_factory=ManagerInfo)
+    items: List[TechCardItem] = Field(default_factory=list)
+    download_all_url: Optional[str] = None
+    storage_location: str = ""
+    notes: str = ""
+
+
+class TechCardResponse(BaseModel):
+    s3_key: str
+    download_url: str
+    bytes: int

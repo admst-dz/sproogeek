@@ -43,6 +43,11 @@ export const adminApi = {
     getOrders: (page = 1, size = 100) => apiClient.get(`/admin/orders?${new URLSearchParams({ page, size })}`),
     updateOrder: (orderId, data) => apiClient.patch(`/admin/orders/${encodeURIComponent(orderId)}`, data),
     getUsers: () => apiClient.get('/admin/users'),
+    generateTechcard: (orderId) => apiClient.post(`/admin/orders/${encodeURIComponent(orderId)}/techcard`),
+    downloadTechcard: (orderId, filename) => apiClient.get(
+        `/admin/orders/${encodeURIComponent(orderId)}/techcard.pdf`,
+        { params: { filename }, responseType: 'blob' }
+    ),
     listOrderTypes: () => apiClient.get('/admin/order-types'),
     getOrderType: (typeId) => apiClient.get(`/admin/order-types/${encodeURIComponent(typeId)}`),
     updateOrderType: (typeId, data) => apiClient.put(`/admin/order-types/${encodeURIComponent(typeId)}`, { data }),
