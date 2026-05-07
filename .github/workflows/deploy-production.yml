@@ -24,6 +24,7 @@ jobs:
       backend:  ${{ steps.result.outputs.backend }}
       renderer: ${{ steps.result.outputs.renderer }}
       techcard: ${{ steps.result.outputs.techcard }}
+      compose:  ${{ steps.result.outputs.compose }}
     steps:
       - uses: actions/checkout@v4
 
@@ -40,6 +41,8 @@ jobs:
               - 'microservices/renderer/**'
             techcard:
               - 'microservices/techcard/**'
+            compose:
+              - 'docker-compose.prod.yml'
 
       - id: result
         run: |
@@ -50,11 +53,13 @@ jobs:
             for t in "${targets[@]}"; do
               [[ "$T" == "all" || "$T" == "$t" ]] && echo "$t=true" >> "$GITHUB_OUTPUT" || echo "$t=false" >> "$GITHUB_OUTPUT"
             done
+            echo "compose=true" >> "$GITHUB_OUTPUT"
           else
             echo "frontend=${{ steps.filter.outputs.frontend }}" >> "$GITHUB_OUTPUT"
             echo "backend=${{ steps.filter.outputs.backend }}"   >> "$GITHUB_OUTPUT"
             echo "renderer=${{ steps.filter.outputs.renderer }}" >> "$GITHUB_OUTPUT"
             echo "techcard=${{ steps.filter.outputs.techcard }}" >> "$GITHUB_OUTPUT"
+            echo "compose=${{ steps.filter.outputs.compose }}"   >> "$GITHUB_OUTPUT"
           fi
 
   frontend:
@@ -94,3 +99,59 @@ jobs:
       image: techcard
       context: ./microservices/techcard
       tag: latest
+
+  deploy:
+    needs: [changes, frontend, backend, renderer, techcard]
+    if: ${{ always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write env file
+        run: |
+          mkdir -p .deploy
+          cat > .deploy/.env <<'ENVEOF'
+          ${{ secrets.PROD_ENV_FILE }}
+          ENVEOF
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.PROD_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload compose and env
+        env:
+          USER: ${{ secrets.PROD_USER }}
+          HOST: ${{ secrets.PROD_HOST }}
+          PATH_REMOTE: ${{ secrets.PROD_PATH }}
+        run: |
+          ssh "$USER@$HOST" "mkdir -p $PATH_REMOTE"
+          scp docker-compose.prod.yml "$USER@$HOST:$PATH_REMOTE/docker-compose.prod.yml"
+          scp .deploy/.env "$USER@$HOST:$PATH_REMOTE/.env"
+
+      - name: Pull and restart
+        env:
+          USER: ${{ secrets.PROD_USER }}
+          HOST: ${{ secrets.PROD_HOST }}
+          PATH_REMOTE: ${{ secrets.PROD_PATH }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          ssh "$USER@$HOST" bash -s <<EOF
+          set -euo pipefail
+          cd "$PATH_REMOTE"
+          echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+          docker compose -f docker-compose.prod.yml pull
+          docker compose -f docker-compose.prod.yml up -d --remove-orphans
+          docker image prune -f
+          docker compose -f docker-compose.prod.yml ps
+          EOF
+
+      - name: Wipe env file
+        if: always()
+        run: rm -f .deploy/.env
