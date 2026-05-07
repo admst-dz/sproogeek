@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     techcard_url: str = Field("http://techcard:8000", alias="TECHCARD_URL")
     techcard_timeout_seconds: float = Field(60.0, alias="TECHCARD_TIMEOUT_SECONDS")
 
+    abacus_api_key: str = Field("", alias="ABACUS_API_KEY")
+    abacus_base_url: str = Field("https://routellm.abacus.ai/v1", alias="ABACUS_BASE_URL")
+    abacus_image_model: str = Field("nano_banana", alias="ABACUS_IMAGE_MODEL")
+    abacus_timeout_seconds: float = Field(120.0, alias="ABACUS_TIMEOUT_SECONDS")
+
     s3_endpoint_url: str = Field("", alias="S3_ENDPOINT_URL")
     s3_public_endpoint: str = Field("", alias="S3_PUBLIC_ENDPOINT")
     s3_region: str = Field("us-east-1", alias="S3_REGION")

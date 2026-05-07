@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api.v1 import admin, auth, dealer, events, files, manufacturer, orders, products, users
+from app.api.v1 import ai, admin, auth, dealer, events, files, manufacturer, orders, products, users
 from app.core.config import get_settings
 from app.core.event_logger import event_logger
 from app.core.kafka import kafka_producer
@@ -137,6 +137,7 @@ app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["Orders"])
 app.include_router(products.router, prefix="/api/v1/products", tags=["Products"])
 app.include_router(files.router, prefix="/api/v1/files", tags=["Files"])
+app.include_router(ai.router, prefix="/api/v1/ai", tags=["AI"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(dealer.router, prefix="/api/v1/dealer", tags=["Dealer"])
 app.include_router(manufacturer.router, prefix="/api/v1/manufacturer", tags=["Manufacturer"])
