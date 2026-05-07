@@ -20,6 +20,30 @@ services:
       timeout: 5s
       retries: 5
 
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: spruzhuk_kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_CFG_NODE_ID: "1"
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka_data:/bitnami/kafka
+    networks:
+      - spruzhuk_net
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
   backend:
     image: ghcr.io/admst-dz/spruzhyk-backend:latest
     pull_policy: always
@@ -31,7 +55,7 @@ services:
       APP_ENV: ${APP_ENV:-production}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SENTRY_DSN: ${SENTRY_DSN:-}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
@@ -49,6 +73,8 @@ services:
       S3_BUCKET: ${S3_BUCKET:-techcards}
     depends_on:
       db:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     networks:
       - spruzhuk_net
@@ -137,3 +163,4 @@ networks:
 
 volumes:
   postgres_data:
+  kafka_data:
