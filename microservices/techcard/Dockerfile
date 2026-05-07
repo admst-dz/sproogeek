@@ -7,6 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # WeasyPrint runtime deps + tini
 RUN apt-get update && apt-get install -y --no-install-recommends \
         tini \
+        wget \
         libpango-1.0-0 \
         libpangoft2-1.0-0 \
         libharfbuzz0b \

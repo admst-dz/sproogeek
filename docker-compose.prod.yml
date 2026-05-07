@@ -96,11 +96,11 @@ services:
     networks:
       - spruzhuk_net
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost/ >/dev/null || exit 1"]
-      interval: 10s
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/healthz || exit 1"]
+      interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
 
   frontend-render:
     image: ghcr.io/admst-dz/spruzhyk-frontend:latest
@@ -110,11 +110,11 @@ services:
     networks:
       - spruzhuk_net
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost/render/ >/dev/null || exit 1"]
-      interval: 10s
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/healthz || exit 1"]
+      interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
 
   renderer:
     image: ghcr.io/admst-dz/spruzhyk-renderer:latest
