@@ -5,6 +5,12 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 
 let browser;
+let ready = false;
+
+app.get('/healthz', (_req, res) => {
+    if (ready && browser) res.status(200).send('ok');
+    else res.status(503).send('starting');
+});
 
 async function init() {
     browser = await puppeteer.launch({
@@ -18,6 +24,7 @@ async function init() {
             '--window-size=1024,1024'
         ]
     });
+    ready = true;
     console.log("Renderer ready.");
 }
 
