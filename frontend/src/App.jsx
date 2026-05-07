@@ -5,6 +5,7 @@ import { Interface, ZoomControls } from './components/configurator/Interface'
 import { Home } from './components/home/Home'
 import { Order } from './components/order/Order'
 import { DealerDashboard } from './components/dashboard/DealerDashboard'
+import { ManufacturerDashboard } from './components/dashboard/ManufacturerDashboard'
 import { AuthModal } from './components/auth/AuthModal'
 import { ClientDashboard } from './components/dashboard/ClientDashboard'
 import { useConfigurator } from './store'
@@ -129,9 +130,11 @@ function App() {
             setScreen('admin_dashboard');
         } else if (userRole === 'dealer') {
             setScreen('dealer');
+        } else if (userRole === 'manufacturer') {
+            setScreen('manufacturer');
         } else if (userRole === 'client') {
             setScreen('client_dashboard');
-        } else if (!userRole && ['dealer', 'client_dashboard', 'admin_dashboard'].includes(screen)) {
+        } else if (!userRole && ['dealer', 'manufacturer', 'client_dashboard', 'admin_dashboard'].includes(screen)) {
             setScreen('home');
         }
     }, [userRole, screen]);
@@ -245,6 +248,12 @@ function App() {
             {/* --- ЭКРАН: КАБИНЕТ ДИЛЕРА --- */}
             {screen === 'dealer' && (
                 <DealerDashboard onBack={() => setScreen('home')} />
+            )}
+
+
+            {/* --- ЭКРАН: КАБИНЕТ ПРОИЗВОДСТВА --- */}
+            {screen === 'manufacturer' && (
+                <ManufacturerDashboard onBack={() => setScreen('home')} />
             )}
 
 

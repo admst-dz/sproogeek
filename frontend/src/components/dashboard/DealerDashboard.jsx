@@ -1,6 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useConfigurator } from "../../store";
-import { fetchAllOrders, updateOrderStatus, fetchDealerProducts, saveProduct, updateProduct, deleteProduct } from '../../api';
+import { LiveOrderToasts } from '../shared/LiveOrderToasts';
+import {
+    fetchAllOrders, fetchAdminOrders, updateOrderStatus,
+    fetchDealerProducts, saveProduct, updateProduct, deleteProduct,
+    fetchOrderTypes, fetchOrderType, saveOrderType,
+    fetchDealerClients,
+} from '../../api';
 import { getUserSecondaryLabel } from '../../utils/user';
 import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';
@@ -386,6 +392,33 @@ export const DealerDashboard = ({ onBack }) => {
     const [statusUpdating, setStatusUpdating] = useState(null);
     const [commentDraft, setCommentDraft] = useState({});
 
+    const [clients, setClients] = useState([]);
+
+    const [orderTypes, setOrderTypes] = useState([]);
+    const [selectedOrderType, setSelectedOrderType] = useState(null);
+    const [orderTypeDraft, setOrderTypeDraft] = useState('');
+    const [orderTypeError, setOrderTypeError] = useState('');
+    const [orderTypeSaving, setOrderTypeSaving] = useState(false);
+
+    const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'owner';
+
+    const handleLiveEvent = useCallback((event) => {
+        const data = event?.data;
+        if (!data) return;
+        if (event.type === 'order.created' && activeTab === 'orders') {
+            // refetch silently to avoid flicker; cheap
+            const request = isAdmin ? fetchAdminOrders() : fetchAllOrders(currentUser?.id);
+            request.then(d => {
+                d.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
+                setOrders(d);
+            }).catch(() => {});
+        } else if ((event.type === 'order.status_changed' || event.type === 'order.updated') && data.order_id) {
+            setOrders(prev => prev.map(o => String(o.id) === String(data.order_id)
+                ? { ...o, status: data.status || o.status }
+                : o));
+        }
+    }, [activeTab, isAdmin, currentUser]);
+
     useEffect(() => {
         if (isAdmin && activeTab === 'products') setActiveTab('orders');
     }, [isAdmin, activeTab]);
@@ -412,6 +445,13 @@ export const DealerDashboard = ({ onBack }) => {
             setLoading(true);
             fetchDealerProducts(currentUser.id).then(data => {
                 setProducts(data);
+                setLoading(false);
+            }).catch(() => setLoading(false));
+        }
+        if (activeTab === 'clients') {
+            setLoading(true);
+            fetchDealerClients().then(data => {
+                setClients(data);
                 setLoading(false);
             }).catch(() => setLoading(false));
         }
@@ -488,6 +528,8 @@ export const DealerDashboard = ({ onBack }) => {
     return (
         <div className="flex h-screen font-sans text-white bg-[#0B0F19] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#1A2642] via-[#0B0F19] to-[#080B13] overflow-hidden">
 
+            <LiveOrderToasts onEvent={handleLiveEvent} />
+
             {showModal && (
                 <ProductModal
                     product={editingProduct}
@@ -512,8 +554,9 @@ export const DealerDashboard = ({ onBack }) => {
 
                 <nav className="flex-1 p-3 space-y-1">
                     {[
-                        { id: 'products', icon: '🗂️', label: 'Мои продукты' },
+                        ...(isAdmin ? [] : [{ id: 'products', icon: '🗂️', label: 'Мои продукты' }]),
                         { id: 'orders',   icon: '📦', label: 'Заказы' },
+                        { id: 'clients',  icon: '👥', label: 'Мои клиенты' },
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -829,6 +872,53 @@ export const DealerDashboard = ({ onBack }) => {
                         </div>
                     </div>
                 )}
+
+                {activeTab === 'clients' && (
+                    <div>
+                        <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
+                            <div>
+                                <h2 className="text-xl font-bold uppercase tracking-widest text-white">Мои клиенты</h2>
+                                <p className="text-xs text-gray-500 mt-1">Пользователи, которые сделали заказы через вас</p>
+                            </div>
+                        </div>
+                        <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[24px] overflow-hidden">
+                            {loading ? (
+                                <div className="py-20 flex flex-col items-center gap-3">
+                                    <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Загрузка...</p>
+                                </div>
+                            ) : clients.length === 0 ? (
+                                <div className="py-20 flex flex-col items-center gap-4">
+                                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10 text-2xl">👥</div>
+                                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Нет клиентов</p>
+                                </div>
+                            ) : (
+                                <table className="w-full text-sm">
+                                    <thead className="bg-white/5 text-[10px] uppercase tracking-widest text-gray-500">
+                                        <tr>
+                                            <th className="text-left px-5 py-3 font-bold">Клиент</th>
+                                            <th className="text-left px-5 py-3 font-bold">Email</th>
+                                            <th className="text-left px-5 py-3 font-bold">Роль</th>
+                                            <th className="text-right px-5 py-3 font-bold">Заказов</th>
+                                            <th className="text-right px-5 py-3 font-bold">Последний</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    {clients.map((c, i) => (
+                                        <tr key={c.id} className={i !== clients.length - 1 ? 'border-b border-white/5' : ''}>
+                                            <td className="px-5 py-3 text-white font-bold">{c.display_name || c.company_name || '—'}</td>
+                                            <td className="px-5 py-3 text-gray-300">{c.email}</td>
+                                            <td className="px-5 py-3 text-gray-400 text-xs uppercase tracking-wider">{c.role}{c.sub_role ? ` · ${c.sub_role}` : ''}</td>
+                                            <td className="px-5 py-3 text-right text-white font-bold">{c.orders_count}</td>
+                                            <td className="px-5 py-3 text-right text-gray-400 text-xs">{c.last_order_at ? new Date(c.last_order_at).toLocaleDateString('ru-RU') : '—'}</td>
+                                        </tr>
+                                    ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    </div>
+                )}
             </main>
 
             {/* BOTTOM NAV — только на mobile */}
@@ -839,6 +929,9 @@ export const DealerDashboard = ({ onBack }) => {
                     )},
                     { id: 'orders', label: 'Заказы', icon: (
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/></svg>
+                    )},
+                    { id: 'clients', label: 'Клиенты', icon: (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                     )},
                 ].map(tab => (
                     <button

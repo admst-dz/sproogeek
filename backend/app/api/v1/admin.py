@@ -23,6 +23,7 @@ from app.schemas.admin import (
 )
 from app.schemas.order import OrderResponse
 from app.services import order_type_store
+from app.services.event_hub import event_hub
 from app.services.techcard_client import fetch_techcard_pdf, generate_techcard
 
 
@@ -67,6 +68,14 @@ async def update_admin_order(
         entity_id=order_id,
         details={"fields": sorted(data.keys())},
     )
+    await event_hub.publish("order.updated", {
+        "order_id": str(order.id),
+        "user_id": order.user_id,
+        "user_email": order.user_email,
+        "product_name": order.product_name,
+        "status": order.status,
+        "actor_id": current_user.id,
+    })
     return order
 
 

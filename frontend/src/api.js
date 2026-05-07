@@ -53,6 +53,32 @@ export const adminApi = {
     updateOrderType: (typeId, data) => apiClient.put(`/admin/order-types/${encodeURIComponent(typeId)}`, { data }),
 };
 
+export const dealerApi = {
+    listClients: () => apiClient.get('/dealer/clients'),
+};
+
+export const fetchDealerClients = async () => {
+    const { data } = await dealerApi.listClients();
+    return data || [];
+};
+
+export const manufacturerApi = {
+    queue: (status = null) => apiClient.get('/manufacturer/queue', { params: status ? { status } : {} }),
+    stats: () => apiClient.get('/manufacturer/stats'),
+    updateStatus: (orderId, status, comment = null) =>
+        apiClient.patch(`/manufacturer/orders/${encodeURIComponent(orderId)}/status`, { status, comment }),
+};
+
+export const fetchManufacturerQueue = async (status = null) => {
+    const { data } = await manufacturerApi.queue(status);
+    return data || [];
+};
+
+export const fetchManufacturerStats = async () => {
+    const { data } = await manufacturerApi.stats();
+    return data || { total: 0, by_status: {} };
+};
+
 export const productApi = {
     getAll: () => apiClient.get('/products/'),
     getByDealer: (dealerId) => apiClient.get(`/products/?dealer_id=${encodeURIComponent(dealerId)}`),

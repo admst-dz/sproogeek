@@ -1,6 +1,7 @@
 import { Fragment, useState, useEffect } from 'react';
 import { adminApi, productApi } from '../../api';
 import { VibeLoader } from '../shared/VibeLoader';
+import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 
 const STATUS_LABEL = { new: 'Новый', processing: 'В работе', production: 'Производство', in_delivery: 'Доставка', done: 'Готов' };
 const BINDING_LABEL = { hard: 'Твёрдый', spiral: 'На пружине', soft: 'Мягкий' };
@@ -593,6 +594,7 @@ export const AdminDashboard = ({ onLogout }) => {
 
     return (
         <div className="fixed inset-0 bg-[#080B13] text-white flex flex-col font-sans overflow-hidden">
+            <LiveOrderToasts />
             <header className="flex items-center gap-2 px-6 py-3 border-b border-white/8 bg-[#0A0E1A] shrink-0">
                 <span className="text-[11px] font-black tracking-[0.25em] uppercase text-white/20">SPRUZHYK</span>
                 <span className="text-white/12 mx-2 select-none">|</span>

@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { useConfigurator } from "../../store";
 import { fetchUserOrders, fetchAllProducts, createOrderInDB } from '../../api';
+import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 import { Notebook } from '../shared/Notebook';
 import { Sketchbook } from '../sketchbook/Sketchbook';
 import { Thermos } from '../thermos/Thermos';
@@ -105,7 +106,7 @@ const OrderStatus = ({ status }) => {
     );
 };
 
-export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToastShown }) => {
+export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToastShown, initialTab, onTabChange }) => {
     const {
         currentUser, logout, cartItem, clearCart,
         activeProduct, coverColor, elasticColor, hasElastic,
@@ -248,6 +249,15 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
 
     return (
         <div className="min-h-screen font-sans text-white bg-[#0B0F19] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#1A2642] via-[#0B0F19] to-[#080B13] overflow-x-hidden flex flex-col">
+
+            <LiveOrderToasts onEvent={(ev) => {
+                const data = ev?.data;
+                if (!data?.order_id) return;
+                setOrders(prev => prev.map(o => String(o.id) === String(data.order_id)
+                    ? { ...o, status: data.status || o.status,
+                        stageHistory: [...(o.stageHistory || []), { status: data.status, comment: data.comment || '', updated_at: new Date().toISOString() }] }
+                    : o));
+            }} />
 
             {/* HEADER */}
             <header className="sticky top-0 z-30 px-6 py-4 border-b border-white/5 bg-[#0B0F19]/80 backdrop-blur-xl">

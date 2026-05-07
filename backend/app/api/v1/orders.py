@@ -16,6 +16,7 @@ from app.crud import order as crud_order
 from app.database import get_db
 from app.models.order import Order
 from app.schemas.order import OrderCreate, OrderResponse, OrderStatusUpdate
+from app.services.event_hub import event_hub
 from app.services.order_service import OrderService
 
 
@@ -161,6 +162,16 @@ async def create_order(
         req_id=req_id,
     )
 
+    await event_hub.publish("order.created", {
+        "order_id": str(new_order.id),
+        "user_id": current_user.id,
+        "user_email": current_user.email,
+        "product_name": new_order.product_name,
+        "status": new_order.status,
+        "dealer_id": _extract_dealer_id(new_order),
+        "created_at": new_order.created_at.isoformat() if new_order.created_at else None,
+    })
+
     return new_order
 
 
@@ -237,5 +248,16 @@ async def update_order_status(
         },
         req_id=request_id(request),
     )
+
+    await event_hub.publish("order.status_changed", {
+        "order_id": str(order.id),
+        "user_id": order.user_id,
+        "user_email": order.user_email,
+        "product_name": order.product_name,
+        "status": order.status,
+        "comment": status_data.comment,
+        "dealer_id": _extract_dealer_id(order),
+        "actor_id": current_user.id,
+    })
 
     return order

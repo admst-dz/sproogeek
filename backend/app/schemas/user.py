@@ -9,7 +9,7 @@ class UserRegister(BaseModel):
     # Имя не длиннее 50 символов
     display_name: Optional[str] = Field(None, max_length=50)
     # Не даем юзеру передать role="admin" при регистрации
-    role: str = Field("client", pattern="^(client|dealer)$")
+    role: str = Field("client", pattern="^(client|dealer|manufacturer)$")
     sub_role: Optional[str] = Field(None, max_length=20)
 
     @field_validator('password')
