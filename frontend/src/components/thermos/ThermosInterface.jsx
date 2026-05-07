@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useConfigurator, captureRender } from '../../store';
+import { aiApi } from '../../api';
 
 const palette = [
     { name: 'Оранжевый',  bg: '#e65405' },
@@ -18,10 +19,9 @@ export const ThermosInterface = ({ onFinish }) => {
         thermosBodyColor, thermosCapColor, thermosCapVisible,
         setColor, toggleThermosCap,
         thermosLogos, selectedThermosLogoId,
-        addThermosLogo, selectThermosLogo, removeThermosLogo,
+        addThermosLogo, addGeneratedThermosLogo, selectThermosLogo, removeThermosLogo,
         resetThermosLogoTransform, setThermosLogoPosition,
         setThermosLogoRotation, setThermosLogoScale,
-        zoomLevel, setZoom,
         addToCart, setRenderSnapshot,
     } = useConfigurator();
     const activeLogoTarget = logoArea === 'body' ? 'body' : capLogoTarget;
@@ -90,7 +90,10 @@ export const ThermosInterface = ({ onFinish }) => {
                     capLogoTarget={capLogoTarget}
                     setCapLogoTarget={setCapLogoTarget}
                     activeLogoTarget={activeLogoTarget}
+                    thermosBodyColor={thermosBodyColor}
+                    thermosCapColor={thermosCapColor}
                     addLogo={addThermosLogo}
+                    addGeneratedLogo={addGeneratedThermosLogo}
                     selectLogo={selectThermosLogo}
                     removeLogo={removeThermosLogo}
                     resetLogoTransform={resetThermosLogoTransform}
@@ -114,7 +117,11 @@ export const ThermosInterface = ({ onFinish }) => {
 
 // --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
 
-const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLogoTarget, setCapLogoTarget, activeLogoTarget, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale }) => {
+const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLogoTarget, setCapLogoTarget, activeLogoTarget, thermosBodyColor, thermosCapColor, addLogo, addGeneratedLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale }) => {
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [aiFiles, setAiFiles] = useState([]);
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiError, setAiError] = useState('');
     const visibleLogos = logos.filter(l => (l.target ?? 'body') === activeLogoTarget);
     const selected = visibleLogos.find(l => l.id === selectedLogoId) || null;
     const rotStart = useRef(0);
@@ -127,6 +134,33 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLog
         const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
         const ny = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
         setLogoPosition((nx * 2 - 1) * xRange, -(ny * 2 - 1) * yRange);
+    };
+
+    const handleAiGenerate = async () => {
+        if (aiLoading) return;
+        if (!aiPrompt.trim() && aiFiles.length === 0) {
+            setAiError('Добавьте логотип или опишите дизайн.');
+            return;
+        }
+
+        setAiLoading(true);
+        setAiError('');
+        try {
+            const { data } = await aiApi.generateThermosDesign({
+                prompt: aiPrompt,
+                target: activeLogoTarget,
+                bodyColor: thermosBodyColor,
+                capColor: thermosCapColor,
+                files: aiFiles,
+            });
+            addGeneratedLogo(data.image, data.filename, data.target);
+            setAiPrompt('');
+            setAiFiles([]);
+        } catch (error) {
+            setAiError(error.response?.data?.detail || 'Не получилось сгенерировать дизайн.');
+        } finally {
+            setAiLoading(false);
+        }
     };
 
 
@@ -167,6 +201,58 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLog
                 + ДОБАВИТЬ ЛОГОТИП
                 <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) { addLogo(e.target.files[0], activeLogoTarget); e.target.value = ''; } }} className="hidden" />
             </label>
+
+            <div className="rounded-[10px] border border-white/15 bg-white/10 p-3 mb-4">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                    <span className="text-[11px] font-bold uppercase tracking-widest opacity-50">AI дизайн</span>
+                    {aiFiles.length > 0 && (
+                        <span className="text-[10px] font-bold opacity-50">{aiFiles.length}/4</span>
+                    )}
+                </div>
+                <textarea
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    placeholder="Например: белый минималистичный логотип, зеленые линии, без фона"
+                    rows={3}
+                    className="w-full resize-none rounded-[8px] border border-white/10 bg-black/15 px-3 py-2 text-sm outline-none placeholder:text-white/30 focus:border-white/35"
+                />
+                <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+                    <label className="min-w-0 px-3 py-2 rounded-[7px] border border-white/15 bg-white/10 text-center text-[11px] font-bold uppercase tracking-wider cursor-pointer hover:bg-white/15 transition-colors truncate">
+                        Референсы
+                        <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={(e) => {
+                                setAiFiles(Array.from(e.target.files || []).slice(0, 4));
+                                e.target.value = '';
+                            }}
+                            className="hidden"
+                        />
+                    </label>
+                    <button
+                        onClick={handleAiGenerate}
+                        disabled={aiLoading}
+                        className="px-4 py-2 rounded-[7px] bg-white text-[#1a1a1a] text-[11px] font-black uppercase tracking-wider disabled:opacity-50 disabled:cursor-wait hover:bg-gray-100 transition-colors"
+                    >
+                        {aiLoading ? '...' : 'Создать'}
+                    </button>
+                </div>
+                {aiFiles.length > 0 && (
+                    <div className="mt-2 flex flex-col gap-1">
+                        {aiFiles.map((file) => (
+                            <div key={`${file.name}-${file.size}`} className="text-[11px] opacity-60 truncate">
+                                {file.name}
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {aiError && (
+                    <div className="mt-2 text-[11px] font-bold text-red-200">
+                        {aiError}
+                    </div>
+                )}
+            </div>
             {visibleLogos.length > 0 && (
                 <div className="flex flex-col gap-2 mb-4">
                     {visibleLogos.map(logo => (
@@ -259,4 +345,3 @@ export const ZoomControls = ({ zoomLevel, setZoom }) => (
         </button>
     </div>
 );
-

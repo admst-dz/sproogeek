@@ -1,0 +1,218 @@
+import base64
+from typing import Any
+
+import httpx
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+
+from app.core.config import get_settings
+from app.core.deps import request_id
+from app.core.event_logger import event_logger
+
+
+router = APIRouter()
+settings = get_settings()
+
+ALLOWED_IMAGE_TYPES = {
+    "image/png": lambda content: content.startswith(b"\x89PNG\r\n\x1a\n"),
+    "image/jpeg": lambda content: content.startswith(b"\xff\xd8\xff"),
+    "image/webp": lambda content: content.startswith(b"RIFF") and content[8:12] == b"WEBP",
+}
+
+TARGET_LABELS = {
+    "body": "корпус термоса",
+    "capTop": "верх крышки термоса",
+    "capSide": "боковая поверхность крышки термоса",
+}
+
+TARGET_ASPECT_RATIOS = {
+    "body": "3:4",
+    "capTop": "1:1",
+    "capSide": "4:3",
+}
+
+
+def _normalize_base_url(value: str) -> str:
+    return (value or "https://routellm.abacus.ai/v1").rstrip("/")
+
+
+def _data_uri(content: bytes, content_type: str) -> str:
+    encoded = base64.b64encode(content).decode("ascii")
+    return f"data:{content_type};base64,{encoded}"
+
+
+async def _read_reference_images(files: list[UploadFile]) -> list[dict[str, str]]:
+    images: list[dict[str, str]] = []
+    for file in files[:4]:
+        content_type = file.content_type or ""
+        validate = ALLOWED_IMAGE_TYPES.get(content_type)
+        if not validate:
+            raise HTTPException(status_code=400, detail="Unsupported reference image format")
+
+        content = await file.read()
+        if len(content) > settings.max_logo_bytes:
+            raise HTTPException(status_code=413, detail="Reference image is too large")
+        if not validate(content):
+            raise HTTPException(status_code=400, detail="Reference image content does not match declared type")
+
+        images.append({
+            "filename": file.filename or "reference-image",
+            "data_uri": _data_uri(content, content_type),
+        })
+
+    return images
+
+
+def _build_prompt(
+    *,
+    user_prompt: str,
+    target: str,
+    body_color: str,
+    cap_color: str,
+    reference_count: int,
+) -> str:
+    target_label = TARGET_LABELS.get(target, TARGET_LABELS["body"])
+    reference_note = (
+        "Use the uploaded logo/reference image as the main brand element. "
+        "Preserve the logo identity and make it cleanly printable."
+        if reference_count
+        else "Create a clean printable decal graphic from the text brief."
+    )
+    return (
+        "Create one flat production-ready graphic decal for a thermos configurator. "
+        f"The decal will be placed on: {target_label}. "
+        f"Thermos body color: {body_color}. Cap color: {cap_color}. "
+        f"{reference_note} "
+        "Use a transparent or plain light background when possible, centered composition, "
+        "sharp edges, high contrast, no mockup, no bottle, no shadows, no perspective, "
+        "no extra UI, no text unless the user explicitly asks for text. "
+        f"User brief: {user_prompt.strip()}"
+    )
+
+
+def _extract_image_urls(payload: dict[str, Any]) -> list[str]:
+    urls: list[str] = []
+
+    for choice in payload.get("choices") or []:
+        message = choice.get("message") or {}
+
+        for item in message.get("images") or []:
+            url = (item.get("image_url") or {}).get("url")
+            if url:
+                urls.append(url)
+
+        content = message.get("content")
+        if isinstance(content, list):
+            for item in content:
+                if item.get("type") == "image_url":
+                    url = (item.get("image_url") or {}).get("url")
+                    if url:
+                        urls.append(url)
+
+    return urls
+
+
+async def _download_as_data_uri(client: httpx.AsyncClient, image_url: str) -> str:
+    if image_url.startswith("data:image/"):
+        return image_url
+    if not image_url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=502, detail="AI returned an unsupported image URL")
+
+    response = await client.get(image_url)
+    response.raise_for_status()
+    content_type = response.headers.get("content-type", "image/png").split(";")[0]
+    if content_type not in ALLOWED_IMAGE_TYPES:
+        content_type = "image/png"
+    return _data_uri(response.content, content_type)
+
+
+@router.post("/thermos-design")
+async def generate_thermos_design(
+    request: Request,
+    prompt: str = Form(...),
+    target: str = Form("body"),
+    body_color: str = Form("#E65405"),
+    cap_color: str = Form("#E65405"),
+    files: list[UploadFile] | None = File(default=None),
+):
+    if not settings.abacus_api_key:
+        raise HTTPException(status_code=503, detail="Abacus API key is not configured")
+    if target not in TARGET_LABELS:
+        raise HTTPException(status_code=400, detail="Unsupported thermos target")
+    uploaded_files = files or []
+    if not prompt.strip() and not uploaded_files:
+        raise HTTPException(status_code=400, detail="Prompt or reference image is required")
+
+    reference_images = await _read_reference_images(uploaded_files)
+    generated_prompt = _build_prompt(
+        user_prompt=prompt,
+        target=target,
+        body_color=body_color,
+        cap_color=cap_color,
+        reference_count=len(reference_images),
+    )
+    image_config: dict[str, Any] = {
+        "prompt": generated_prompt,
+        "num_images": 1,
+        "aspect_ratio": TARGET_ASPECT_RATIOS.get(target, "1:1"),
+    }
+    if reference_images:
+        image_config["image_prompt"] = [item["data_uri"] for item in reference_images]
+
+    abacus_payload = {
+        "model": settings.abacus_image_model,
+        "messages": [{"role": "user", "content": generated_prompt}],
+        "modalities": ["image"],
+        "image_config": image_config,
+    }
+    headers = {
+        "Authorization": f"Bearer {settings.abacus_api_key}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=settings.abacus_timeout_seconds) as client:
+            response = await client.post(
+                f"{_normalize_base_url(settings.abacus_base_url)}/chat/completions",
+                headers=headers,
+                json=abacus_payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+            image_urls = _extract_image_urls(data)
+            if not image_urls:
+                raise HTTPException(status_code=502, detail="AI response did not contain an image")
+            image_data_url = await _download_as_data_uri(client, image_urls[0])
+    except HTTPException:
+        raise
+    except httpx.HTTPStatusError as exc:
+        detail = "Abacus image generation failed"
+        try:
+            detail = exc.response.json().get("error", {}).get("message") or detail
+        except ValueError:
+            pass
+        raise HTTPException(status_code=502, detail=detail) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="Could not reach Abacus image API") from exc
+
+    event_logger.log(
+        "AI_THERMOS_DESIGN_GENERATED",
+        "Generated thermos decal through Abacus RouteLLM",
+        direction="backend->external",
+        method=request.method,
+        path=request.url.path,
+        status_code=200,
+        request_id=request_id(request),
+        entity_type="ai_thermos_design",
+        details={
+            "target": target,
+            "model": settings.abacus_image_model,
+            "reference_count": len(reference_images),
+        },
+    )
+    return {
+        "image": image_data_url,
+        "filename": f"ai-{target}-design.png",
+        "target": target,
+        "prompt": generated_prompt,
+        "model": settings.abacus_image_model,
+    }

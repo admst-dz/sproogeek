@@ -165,6 +165,15 @@ export const useConfigurator = create((set) => ({
             }
         }
     },
+    addGeneratedThermosLogo: (texture, filename = 'AI дизайн.png', target = 'body') => {
+        if (!texture) return;
+        const id = Date.now();
+        const scale = target === 'body' ? 0.75 : 0.38;
+        set((state) => ({
+            thermosLogos: [...state.thermosLogos, { id, target, texture, filename, position: [0, 0], rotation: 0, scale }],
+            selectedThermosLogoId: id
+        }));
+    },
     selectThermosLogo: (id) => set({ selectedThermosLogoId: id }),
     setThermosLogoPosition: (x, y) => set((state) => ({
         thermosLogos: state.thermosLogos.map(l => l.id === state.selectedThermosLogoId ? { ...l, position: [x, y] } : l)
