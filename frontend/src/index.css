@@ -112,34 +112,13 @@ html.dark, html.dark body, html.dark #root {
 }
 
 .vibe-loader__logo {
-  position: relative;
-  width: 178px;
-  height: 98px;
-  filter: drop-shadow(0 20px 34px rgba(0, 0, 0, 0.34));
+  width: 200px;
+  height: 200px;
 }
 
 .vibe-loader--compact .vibe-loader__logo {
-  width: 86px;
-  height: 47px;
-}
-
-.vibe-loader__logo-frame {
-  --frame-step: 0.5s;
-  --frame-duration: 0.42s;
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  opacity: 0;
-  transform: scale(0.985);
-  animation: vibe-logo-frame-flow var(--frame-duration) ease-out forwards;
-  animation-delay: calc(var(--frame-index) * var(--frame-step));
-}
-
-.vibe-loader__logo-frame--final {
-  animation-name: vibe-logo-frame-hold;
+  width: 96px;
+  height: 96px;
 }
 
 .vibe-loader__meta {
@@ -190,17 +169,6 @@ html.dark, html.dark body, html.dark #root {
 @keyframes scene-loader-fade {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-
-@keyframes vibe-logo-frame-flow {
-  0% { opacity: 1; transform: scale(1); }
-  72% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.015); }
-}
-
-@keyframes vibe-logo-frame-hold {
-  0% { opacity: 1; transform: scale(1); }
-  100% { opacity: 1; transform: scale(1); }
 }
 
 @keyframes vibe-bar-sheen {

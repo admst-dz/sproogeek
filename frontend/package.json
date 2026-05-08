@@ -16,6 +16,7 @@
     "@types/three": "^0.182.0",
     "axios": "^1.15.2",
     "cmdk": "^1.1.1",
+    "lottie-react": "^2.4.1",
     "maath": "^0.10.8",
     "pdfjs-dist": "^5.7.284",
     "react": "^19.2.0",
