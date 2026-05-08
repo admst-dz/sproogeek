@@ -110,7 +110,7 @@ def _build_image_config(
     aspect_ratio = TARGET_ASPECT_RATIOS.get(target, "1:1")
 
     if _is_nano_banana(model):
-        image_config: dict[str, Any] = {"aspect_ratio": aspect_ratio}
+        image_config: dict[str, Any] = {"num_images": 1, "aspect_ratio": aspect_ratio}
     else:
         image_config = {
             "prompt": generated_prompt,
