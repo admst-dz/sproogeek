@@ -10,7 +10,7 @@ import loaderFrame07 from '../../assets/loader/logo-loader-07.svg';
 import loaderFrame08 from '../../assets/loader/logo-loader-08.svg';
 
 const clampProgress = (value) => Math.max(0, Math.min(100, Math.round(value || 0)));
-const LOGO_ANIMATION_MS = 10000;
+const LOGO_ANIMATION_MS = 3200;
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 const loaderFrames = [
     loaderFrame01,

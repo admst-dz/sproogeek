@@ -124,7 +124,7 @@ html.dark, html.dark body, html.dark #root {
 }
 
 .vibe-loader__logo-frame {
-  --frame-step: 0.28s;
+  --frame-step: 0.4s;
   position: absolute;
   inset: 0;
   display: block;
@@ -133,7 +133,7 @@ html.dark, html.dark body, html.dark #root {
   object-fit: contain;
   opacity: 0;
   transform: scale(0.985);
-  animation: vibe-logo-frame-flow 2.24s linear infinite both;
+  animation: vibe-logo-frame-flow 3.2s linear infinite both;
   animation-delay: calc((var(--frame-index) - 8) * var(--frame-step));
 }
 
