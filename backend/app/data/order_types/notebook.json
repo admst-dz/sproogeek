@@ -1,0 +1,34 @@
+{
+  "id": "notebook",
+  "title": "Ежедневник",
+  "description": "Базовый тип заказа для персонализированного ежедневника.",
+  "status_flow": [
+    "new",
+    "processing",
+    "production",
+    "in_delivery",
+    "done"
+  ],
+  "fields": {
+    "binding": {
+      "type": "array",
+      "required": true,
+      "options": ["hard", "spiral"]
+    },
+    "format": {
+      "type": "string",
+      "required": true,
+      "options": ["A5", "A4"]
+    },
+    "coverColor": {
+      "type": "color",
+      "required": true
+    },
+    "quantity": {
+      "type": "integer",
+      "required": true,
+      "min": 1,
+      "max": 10000
+    }
+  }
+}

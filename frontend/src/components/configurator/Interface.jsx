@@ -1,5 +1,19 @@
 import { useState, useRef } from 'react';
 import { useConfigurator, captureRender } from "../../store"
+import { BlockPDFPreview } from './BlockPDFPreview';
+import patternBlank  from '../../assets/icons/pattern-blank.svg';
+import patternLined  from '../../assets/icons/pattern-lined.svg';
+import patternTlined from '../../assets/icons/pattern-tlined.svg';
+import patternGrid   from '../../assets/icons/pattern-grid.svg';
+import patternDotted from '../../assets/icons/pattern-dotted.svg';
+
+const PATTERNS = [
+    { id: 'blank',  label: 'Пустой',   icon: patternBlank },
+    { id: 'lined',  label: 'Линейка',  icon: patternLined },
+    { id: 'tlined', label: 'Т. линейка', icon: patternTlined },
+    { id: 'grid',   label: 'Клетка',   icon: patternGrid },
+    { id: 'dotted', label: 'Точка',    icon: patternDotted },
+];
 
 const palette = [
     { name: 'Yellow', bg: '#FDD835' },
@@ -22,9 +36,10 @@ export const Interface = ({ onFinish }) => {
         bindingType, setBindingType,
         setColor, coverColor, elasticColor, spiralColor,
         hasElastic, setHasElastic,
+        hasCorners, toggleCorners,
         setNotebookOpen,
         paperPattern, setPaperPattern,
-        logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale,
+        logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide,
         activeProduct,
         zoomLevel, setZoom,
         addToCart,
@@ -45,13 +60,15 @@ export const Interface = ({ onFinish }) => {
     const handleAddToCart = () => {
         const snapshot = captureRender();
         if (snapshot) setRenderSnapshot(snapshot);
+        const bindingLabel = bindingType === 'hard' ? 'Твердый' : bindingType === 'spiral' ? 'На пружине' : 'Мягкий';
+        const orderHasElastic = bindingType !== 'hard' && hasElastic;
         const newItem = {
             productName: `Ежедневник ${format}`,
-            design: `Переплет: ${bindingType === 'hard' ? 'Твердый' : 'Пружина'}, Блок: ${paperPattern}`,
+            design: `Переплет: ${bindingLabel}, Блок: ${paperPattern}`,
             priceBYN: 1500,
             type: 'notebook',
-            config: { format, coverColor, hasElastic, elasticColor, paperPattern, bindingType, spiralColor },
-            format, coverColor, hasElastic, elasticColor, paperPattern, bindingType, spiralColor,
+            config: { format, coverColor, hasElastic: orderHasElastic, elasticColor, paperPattern, bindingType, spiralColor, hasCorners },
+            format, coverColor, hasElastic: orderHasElastic, elasticColor, paperPattern, bindingType, spiralColor, hasCorners,
             status: 'draft',
             rendersGenerated: 0,
             quantity,
@@ -72,47 +89,69 @@ export const Interface = ({ onFinish }) => {
             <div className="flex-1 px-4 md:px-6 pt-4 overflow-y-auto custom-scrollbar flex flex-col gap-3 relative z-0">
                 {tab === 'cover' && (
                     <div className="animate-fade-in flex flex-col gap-3 pb-40">
-                        <GlassDropdown label="Переплет" currentValue={bindingType === 'hard' ? 'Твердый' : 'Пружина'}>
+                        <GlassDropdown label="Переплет" currentValue={bindingType === 'hard' ? 'Твердый' : bindingType === 'spiral' ? 'На пружине' : 'Мягкий'}>
                             <div className="flex flex-col gap-1">
-                                <button onClick={() => setBindingType('hard')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'hard' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>Твердый переплет</span> {bindingType === 'hard' && <span>✓</span>}</button>
-                                <button onClick={() => setBindingType('spiral')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'spiral' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>На пружине (Soft)</span> {bindingType === 'spiral' && <span>✓</span>}</button>
+                                <button onClick={() => setBindingType('hard')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'hard' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>Твёрдый переплёт</span> {bindingType === 'hard' && <span>✓</span>}</button>
+                                <button onClick={() => setBindingType('spiral')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'spiral' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>На пружине</span> {bindingType === 'spiral' && <span>✓</span>}</button>
+                                <button onClick={() => setBindingType('soft')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'soft' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>Мягкий переплёт</span> {bindingType === 'soft' && <span>✓</span>}</button>
                             </div>
                         </GlassDropdown>
                         {bindingType === 'spiral' && (<div className="glass-panel rounded-[11px] overflow-hidden animate-fade-in"><ColorGlassList currentColor={spiralColor} onSelect={(c) => setColor('spiral', c)} label="Цвет пружины"/></div>)}
+                        {(bindingType === 'hard' || bindingType === 'soft') && (
+                            <div className="glass-panel rounded-[11px] overflow-hidden transition-all animate-fade-in">
+                                <div className="p-5 flex items-center justify-between cursor-pointer" onClick={toggleCorners}>
+                                    <span className="text-xl font-bold tracking-wide">Уголки</span>
+                                    <div className={`w-12 h-7 rounded-full p-1 transition-colors border border-white/30 ${hasCorners ? 'bg-green-500/80' : 'bg-gray-500/50'}`}><div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${hasCorners ? 'translate-x-5' : ''}`} /></div>
+                                </div>
+                            </div>
+                        )}
                         <GlassDropdown label="Формат" currentValue={format}>
                             <div className="flex flex-col gap-1">
                                 {['A5', 'A6'].map(f => (<button key={f} onClick={() => setFormat(f)} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${format === f ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>{f}</span> {format === f && <span>✓</span>}</button>))}
                             </div>
                         </GlassDropdown>
-                        <div className="glass-panel rounded-[11px] overflow-hidden transition-all">
-                            <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setHasElastic(!hasElastic)}>
-                                <span className="text-xl font-bold tracking-wide">Резинка</span>
-                                <div className={`w-12 h-7 rounded-full p-1 transition-colors border border-white/30 ${hasElastic ? 'bg-green-500/80' : 'bg-gray-500/50'}`}><div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${hasElastic ? 'translate-x-5' : ''}`} /></div>
+                        {bindingType !== 'hard' && (
+                            <div className="glass-panel rounded-[11px] overflow-hidden transition-all">
+                                <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setHasElastic(!hasElastic)}>
+                                    <span className="text-xl font-bold tracking-wide">Резинка</span>
+                                    <div className={`w-12 h-7 rounded-full p-1 transition-colors border border-white/30 ${hasElastic ? 'bg-green-500/80' : 'bg-gray-500/50'}`}><div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${hasElastic ? 'translate-x-5' : ''}`} /></div>
+                                </div>
+                                {hasElastic && (<div className="border-t border-white/10"><ColorGlassList currentColor={elasticColor} onSelect={(c) => setColor('elastic', c)} label="Цвет резинки" /></div>)}
                             </div>
-                            {hasElastic && (<div className="border-t border-white/10"><ColorGlassList currentColor={elasticColor} onSelect={(c) => setColor('elastic', c)} label="Цвет резинки" /></div>)}
-                        </div>
+                        )}
                         <div className="glass-panel rounded-[11px] overflow-hidden"><ColorGlassList currentColor={coverColor} onSelect={(c) => setColor('cover', c)} label="Цвет обложки"/></div>
-                        <LogoPanel logos={logos} selectedLogoId={selectedLogoId} addLogo={addLogo} selectLogo={selectLogo} removeLogo={removeLogo} resetLogoTransform={resetLogoTransform} setLogoPosition={setLogoPosition} setLogoRotation={setLogoRotation} setLogoScale={setLogoScale} />
+                        <LogoPanel logos={logos} selectedLogoId={selectedLogoId} addLogo={addLogo} selectLogo={selectLogo} removeLogo={removeLogo} resetLogoTransform={resetLogoTransform} setLogoPosition={setLogoPosition} setLogoRotation={setLogoRotation} setLogoScale={setLogoScale} setLogoSide={setLogoSide} />
                     </div>
                 )}
 
                 {tab === 'block' && (
-                    <div className="animate-fade-in flex flex-col h-full pb-40">
-                        <div className="glass-panel rounded-[11px] p-4 mb-4 text-center opacity-80 text-sm border-white/10">Выберите разлиновку страниц</div>
-                        <div className="grid grid-cols-2 gap-3 h-full content-start">
-                            {['blank', 'lined', 'grid', 'dotted'].map((pt) => (
-                                <button key={pt} onClick={() => setPaperPattern(pt)} className={`glass-panel rounded-[11px] aspect-square flex flex-col items-center justify-center gap-3 transition-all group hover:bg-white/20 ${paperPattern === pt ? 'bg-white/30 border-white/50 shadow-lg scale-[1.02]' : ''}`}>
-                                    <div className={`w-14 h-14 rounded-[11px] border-2 p-2 ${paperPattern === pt ? 'border-white bg-white/20' : 'border-white/20 bg-transparent'}`}><BlockIcon type={pt} /></div>
-                                    <span className="text-lg font-bold tracking-wide">{pt === 'blank' && 'Пустой'}{pt === 'lined' && 'Линейка'}{pt === 'grid' && 'Клетка'}{pt === 'dotted' && 'Точка'}</span>
+                    <div className="animate-fade-in flex flex-col gap-4 pb-40">
+                        <div className="grid grid-cols-5 gap-2">
+                            {PATTERNS.map(({ id, label, icon }) => (
+                                <button
+                                    key={id}
+                                    onClick={() => setPaperPattern(id)}
+                                    className={`glass-panel rounded-[11px] flex flex-col items-center justify-center gap-1.5 py-3 px-1 transition-all hover:bg-white/20 ${paperPattern === id ? 'bg-white/30 border-white/50 shadow-lg scale-[1.02]' : ''}`}
+                                >
+                                    <div className={`w-10 h-10 rounded-[8px] border p-1.5 flex items-center justify-center ${paperPattern === id ? 'border-white bg-white/20' : 'border-white/20'}`}>
+                                        <img src={icon} alt={label} className="w-full h-full object-contain" />
+                                    </div>
+                                    <span className="text-[10px] font-bold tracking-wide text-center leading-tight opacity-90">{label}</span>
                                 </button>
                             ))}
                         </div>
+                        <BlockPDFPreview pattern={paperPattern} />
+                        {paperPattern === 'blank' && (
+                            <div className="glass-panel rounded-[11px] p-6 flex items-center justify-center opacity-60 text-sm text-center">
+                                Чистые страницы без разлиновки
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
 
             {/* КНОПКА ОФОРМЛЕНИЯ */}
-            <div className="absolute bottom-0 left-0 w-full px-4 md:px-6 pt-3 pb-4 md:pb-6 z-20 border-t border-white/10 bg-[#A4B0C9]/95 dark:bg-[#060911]/95 backdrop-blur-xl flex flex-col gap-3">
+            <div className="absolute bottom-0 left-0 w-full px-4 md:px-6 pt-3 pb-4 md:pb-6 z-20 border-t border-white/10 bg-[#0E2235]/85 dark:bg-[#0E2235]/85 backdrop-blur-xl flex flex-col gap-3">
                 <div className="flex items-center justify-between gap-4">
                     <div className="flex flex-col gap-1">
                         <span className="text-[10px] opacity-50 font-bold uppercase tracking-widest">Тираж (шт.)</span>
@@ -144,30 +183,54 @@ export const Interface = ({ onFinish }) => {
 }
 
 // --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
-const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale }) => {
+const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide }) => {
     const selected = logos.find(l => l.id === selectedLogoId) || null;
+    const [uploadSide, setUploadSide] = useState('front');
     const rotStart = useRef(0);
     const rotStartX = useRef(null);
+    const activeSide = selected?.side ?? uploadSide;
 
     const updatePos = (e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
         const ny = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-        setLogoPosition((nx * 2 - 1) * 0.4, -(ny * 2 - 1) * 0.8);
+        setLogoPosition(nx * 2 - 1, 1 - ny * 2);
+    };
+
+    const selectSide = (side) => {
+        if (selected) setLogoSide(side);
+        setUploadSide(side);
     };
 
     return (
         <div className="glass-panel rounded-[11px] p-5">
             <h3 className="text-xl font-bold tracking-wide mb-4">Тиснение</h3>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+                {[
+                    ['front', 'Лицевая'],
+                    ['back', 'Обратная'],
+                ].map(([side, label]) => (
+                    <button
+                        key={side}
+                        onClick={() => selectSide(side)}
+                        className={`py-2 rounded-[7px] text-xs font-bold uppercase tracking-widest border transition-colors ${activeSide === side ? 'bg-white/25 border-white/40' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
             <label className="block w-full py-3 bg-white/10 rounded-[6px] text-center cursor-pointer border border-white/20 text-sm font-bold mb-4 hover:bg-white/20 transition-colors">
                 + ДОБАВИТЬ ЛОГОТИП
-                <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) { addLogo(e.target.files[0]); e.target.value = ''; } }} className="hidden"/>
+                <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) { addLogo(e.target.files[0], activeSide); e.target.value = ''; } }} className="hidden"/>
             </label>
             {logos.length > 0 && (
                 <div className="flex flex-col gap-2 mb-4">
                     {logos.map(logo => (
                         <div key={logo.id} className={`flex items-center rounded-[6px] border ${logo.id === selectedLogoId ? 'bg-white/30 border-white/40' : 'bg-white/10 border-white/10'}`}>
-                            <button onClick={() => selectLogo(logo.id)} className="flex-1 py-2 px-3 text-left text-sm font-bold truncate hover:opacity-80 transition-opacity">{logo.filename}</button>
+                            <button onClick={() => { selectLogo(logo.id); setUploadSide(logo.side ?? 'front'); }} className="flex-1 py-2 px-3 text-left text-sm font-bold truncate hover:opacity-80 transition-opacity">
+                                <span className="block truncate">{logo.filename}</span>
+                                <span className="block text-[9px] opacity-50 uppercase tracking-widest">{(logo.side ?? 'front') === 'back' ? 'Обратная' : 'Лицевая'}</span>
+                            </button>
                             <button onClick={() => removeLogo(logo.id)} className="px-3 py-2 text-white/40 hover:text-white/90 text-lg leading-none transition-colors shrink-0" title="Удалить">×</button>
                         </div>
                     ))}
@@ -194,8 +257,8 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
                             <div
                                 className="absolute w-4 h-4 bg-white rounded-full shadow-lg border-2 border-white/80 pointer-events-none"
                                 style={{
-                                    left: `${(selected.position[0] / 0.4 + 1) / 2 * 100}%`,
-                                    top: `${(1 - (selected.position[1] / 0.8 + 1) / 2) * 100}%`,
+                                    left: `${(((selected.position?.[0] ?? 0) + 1) / 2) * 100}%`,
+                                    top: `${((1 - (selected.position?.[1] ?? 0)) / 2) * 100}%`,
                                     transform: 'translate(-50%, -50%)'
                                 }}
                             />

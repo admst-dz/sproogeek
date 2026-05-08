@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: public.ecr.aws/docker/library/postgres:15-alpine
@@ -21,82 +19,125 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 256M
 
   kafka:
-    image: public.ecr.aws/bitnami/kafka:latest
+    image: public.ecr.aws/bitnami/kafka:3.6
     container_name: spruzhuk_kafka
-    hostname: kafka
     restart: unless-stopped
     environment:
-      - KAFKA_CFG_NODE_ID=0
-      - KAFKA_CFG_PROCESS_ROLES=controller,broker
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      - KAFKA_CFG_CONTROLLER_QUORUM_BOOTSTRAP_SERVERS=localhost:9093
-      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      - KAFKA_CLUSTER_ID=MkU3OEVBNTcwNTJENDM2Qk
-      - KAFKA_INITIAL_CONTROLLERS=0@localhost:9093:MkU3OEVBNTcwNTJENDM2Qk
-      - KAFKA_HEAP_OPTS=-Xmx256m -Xms256m
+      KAFKA_CFG_NODE_ID: "1"
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
     volumes:
       - kafka_data:/bitnami/kafka
     networks:
       - spruzhuk_net
     healthcheck:
-      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
-      interval: 30s
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 15s
       timeout: 10s
-      retries: 3
-      start_period: 60s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 256M
+      retries: 5
+      start_period: 30s
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: spruzhuk_pgbouncer
+    restart: unless-stopped
+    environment:
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 25
+      RESERVE_POOL_SIZE: 5
+      RESERVE_POOL_TIMEOUT: 3
+      SERVER_RESET_QUERY: DISCARD ALL
+      AUTH_TYPE: scram-sha-256
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - spruzhuk_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   backend:
     image: ghcr.io/admst-dz/spruzhyk-backend:latest
     pull_policy: always
-    container_name: spruzhuk_backend
+    # container_name снят: позволяет запускать через `--scale backend=2|3`.
     restart: unless-stopped
+    deploy:
+      replicas: 2  # подсказка для swarm; в обычном compose используется --scale backend=2
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      # Бэкенд собирает SQLAlchemy URL сам, чтобы пароли со спецсимволами
+      # не ломали строку подключения.
+      DATABASE_USER: ${POSTGRES_USER}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_HOST: pgbouncer
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${POSTGRES_DB}
       SECRET_KEY: ${SECRET_KEY}
+      APP_ENV: ${APP_ENV:-production}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SENTRY_DSN: ${SENTRY_DSN:-}
-    volumes:
-      - /opt/spruzhyk/backend/app:/app/app
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      RENDERER_URL: ${RENDERER_URL:-http://renderer:3000}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      ADMIN_BACKDOOR_ENABLED: ${ADMIN_BACKDOOR_ENABLED:-false}
+      ADMIN_BACKDOOR_LOGIN: ${ADMIN_BACKDOOR_LOGIN:-}
+      ADMIN_BACKDOOR_PASSWORD: ${ADMIN_BACKDOOR_PASSWORD:-}
+      ADMIN_BACKDOOR_KEY: ${ADMIN_BACKDOOR_KEY:-}
+      TECHCARD_URL: ${TECHCARD_URL:-http://techcard:8000}
+      ABACUS_API_KEY: ${ABACUS_API_KEY:-}
+      ABACUS_BASE_URL: ${ABACUS_BASE_URL:-https://routellm.abacus.ai/v1}
+      ABACUS_IMAGE_MODEL: ${ABACUS_IMAGE_MODEL:-nano_banana}
+      ABACUS_TIMEOUT_SECONDS: ${ABACUS_TIMEOUT_SECONDS:-120}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET:-techcards}
     depends_on:
-      db:
+      pgbouncer:
         condition: service_healthy
       kafka:
         condition: service_healthy
-    healthcheck:
-      disable: true
+        required: false
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - spruzhuk_net
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 512M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+
+  redis:
+    image: public.ecr.aws/docker/library/redis:7-alpine
+    container_name: spruzhuk_redis
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
+    networks:
+      - spruzhuk_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   frontend:
     image: ghcr.io/admst-dz/spruzhyk-frontend:latest
@@ -105,117 +146,104 @@ services:
     restart: unless-stopped
     ports:
       - "8080:80"
-    volumes:
-      - /opt/spruzhyk/frontend/dist:/usr/share/nginx/html
     depends_on:
-      backend:
-        condition: service_started
+      - backend
     networks:
       - spruzhuk_net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80"]
-      interval: 10s
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/healthz || exit 1"]
+      interval: 15s
       timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-        reservations:
-          memory: 128M
+      retries: 5
+      start_period: 60s
 
   frontend-render:
     image: ghcr.io/admst-dz/spruzhyk-frontend:latest
     pull_policy: always
     container_name: spruzhuk_app_render
     restart: unless-stopped
-    volumes:
-      - /opt/spruzhyk/frontend/dist:/usr/share/nginx/html
     networks:
       - spruzhuk_net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/render/"]
-      interval: 10s
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/healthz || exit 1"]
+      interval: 15s
       timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-        reservations:
-          memory: 128M
+      retries: 5
+      start_period: 60s
 
   renderer:
     image: ghcr.io/admst-dz/spruzhyk-renderer:latest
     pull_policy: always
     container_name: spruzhuk_renderer
     restart: unless-stopped
-    command:
-      - /bin/sh
-      - -lc
-      - >
-        node -e "const fs=require('fs'); const path='/app/package.json';
-        const pkg=JSON.parse(fs.readFileSync(path,'utf8'));
-        if (pkg.type !== 'module') { pkg.type = 'module'; fs.writeFileSync(path, JSON.stringify(pkg, null, 2)); }"
-        && npm start
     environment:
       RENDER_FRONTEND_HOST: frontend-render
       RENDER_FRONTEND_PORT: 80
       RENDER_FRONTEND_PATH: /render/
+      RENDER_MAX_CONCURRENCY: ${RENDER_MAX_CONCURRENCY:-3}
+      RENDER_PAGE_TIMEOUT_MS: ${RENDER_PAGE_TIMEOUT_MS:-20000}
     depends_on:
       frontend-render:
         condition: service_healthy
     networks:
       - spruzhuk_net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 256M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
 
-  watchtower:
-    image: containrrr/watchtower
-    container_name: spruzhuk_watchtower
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: spruzhuk_minio
     restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+    command: server /data --console-address ":9001"
     environment:
-      - WATCHTOWER_CLEANUP=true
-      - WATCHTOWER_POLL_INTERVAL=3600
-      - WATCHTOWER_LABEL_ENABLE=true
-      - WATCHTOWER_INCLUDE_RESTARTING=true
-      - DOCKER_API_VERSION=1.41
-    command: --label-enable --cleanup --interval 3600
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-        reservations:
-          memory: 64M
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    networks:
+      - spruzhuk_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  techcard:
+    image: ghcr.io/admst-dz/spruzhyk-techcard:latest
+    pull_policy: always
+    container_name: spruzhuk_techcard
+    restart: unless-stopped
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET:-techcards}
+      MANUFACTURER_NAME: ${MANUFACTURER_NAME:-ООО «Спружык»}
+      MANUFACTURER_ID: ${MANUFACTURER_ID:-SPRUZHYK-001}
+    networks:
+      - spruzhuk_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
 networks:
   spruzhuk_net:
     driver: bridge
-    name: spruzhyk_spruzhuk_net
 
 volumes:
   postgres_data:
-    name: spruzhyk_postgres_data
-    driver: local
   kafka_data:
-    name: spruzhyk_kafka_data
-    driver: local
+  minio_data:

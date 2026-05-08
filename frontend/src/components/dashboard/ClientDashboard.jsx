@@ -3,10 +3,13 @@ import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { useConfigurator } from "../../store";
 import { fetchUserOrders, fetchAllProducts, createOrderInDB } from '../../api';
+import { LiveOrderToasts } from '../shared/LiveOrderToasts';
+import { ApprovalPanel } from '../shared/ApprovalPanel';
 import { Notebook } from '../shared/Notebook';
 import { Sketchbook } from '../sketchbook/Sketchbook';
 import { Thermos } from '../thermos/Thermos';
 import { getUserDisplayName, getUserSecondaryLabel } from '../../utils/user';
+import { SceneLoadingOverlay } from '../shared/VibeLoader';
 
 const TabBtn = ({ active, children, onClick }) => (
     <button
@@ -244,7 +247,16 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
     };
 
     return (
-        <div className="min-h-screen font-sans text-white bg-[#0B0F19] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#1A2642] via-[#0B0F19] to-[#080B13] overflow-x-hidden flex flex-col">
+        <div className="app-bg min-h-screen font-sans text-gray-900 dark:text-white overflow-x-hidden flex flex-col">
+
+            <LiveOrderToasts onEvent={(ev) => {
+                const data = ev?.data;
+                if (!data?.order_id) return;
+                setOrders(prev => prev.map(o => String(o.id) === String(data.order_id)
+                    ? { ...o, status: data.status || o.status,
+                        stageHistory: [...(o.stageHistory || []), { status: data.status, comment: data.comment || '', updated_at: new Date().toISOString() }] }
+                    : o));
+            }} />
 
             {/* HEADER */}
             <header className="sticky top-0 z-30 px-6 py-4 border-b border-white/5 bg-[#0B0F19]/80 backdrop-blur-xl">
@@ -346,6 +358,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                     </Stage>
                                                 </PresentationControls>
                                             </Canvas>
+                                            <SceneLoadingOverlay compact label="3D" />
                                             <div className="absolute top-3 left-3 text-white/30 text-[10px] font-bold tracking-wider pointer-events-none uppercase">Перетащи для вращения</div>
                                         </div>
 
@@ -361,7 +374,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                 <>
                                                     <CartRow label="Формат" value={format} />
                                                     <CartRow label="Переплет" value={bindingType === 'hard' ? 'Твердый' : 'На пружине'} />
-                                                    <CartRow label="Разлиновка" value={{ blank: 'Пустой', lined: 'Линейка', grid: 'Клетка', dotted: 'Точка' }[paperPattern]} />
+                                                    <CartRow label="Разлиновка" value={{ blank: 'Пустой', lined: 'Линейка', tlined: 'Т. линейка', grid: 'Клетка', dotted: 'Точка' }[paperPattern]} />
                                                     <CartRow label="Обложка" value={<ColorDot color={coverColor} />} />
                                                     {hasElastic && <CartRow label="Резинка" value={<ColorDot color={elasticColor} />} />}
                                                     {bindingType === 'spiral' && <CartRow label="Пружина" value={<ColorDot color={spiralColor} />} />}
@@ -399,6 +412,8 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                             {clientType === 'phys' ? (<>
                                                 <CartInput name="name" label="ФИО *" placeholder="Иванов Иван" value={formData.name} onChange={handleInputChange} />
                                                 <CartInput name="phone" label="Телефон *" placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} />
+                                                <CartInput name="email" label="Email" placeholder="mail@..." type="email" value={formData.email} onChange={handleInputChange} />
+                                                <CartInput name="address" label="Адрес доставки" placeholder="Город, улица..." value={formData.address} onChange={handleInputChange} />
                                                 <div className="md:col-span-2">
                                                     <CartInput name="address" label="Адрес доставки" placeholder="Город, улица..." value={formData.address} onChange={handleInputChange} />
                                                 </div>
@@ -544,7 +559,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                                         <ClientDetailRow label="Переплёт" value={order.configuration.productConfig.bindingType === 'hard' ? 'Твёрдый' : 'На пружине'} />
                                                                     )}
                                                                     {order.configuration?.productConfig?.paperPattern && (
-                                                                        <ClientDetailRow label="Разлиновка" value={{ blank: 'Пустой', lined: 'Линейка', grid: 'Клетка', dotted: 'Точка' }[order.configuration.productConfig.paperPattern] || ''} />
+                                                                        <ClientDetailRow label="Разлиновка" value={{ blank: 'Пустой', lined: 'Линейка', tlined: 'Т. линейка', grid: 'Клетка', dotted: 'Точка' }[order.configuration.productConfig.paperPattern] || ''} />
                                                                     )}
                                                                     {order.configuration?.productConfig?.coverColor && (
                                                                         <ClientDetailRow label="Обложка" value={<ClientColorDot color={order.configuration.productConfig.coverColor} />} />
@@ -566,6 +581,15 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Статус выполнения</p>
                                                                 <OrderProgressBar status={order.status} stageHistory={order.stageHistory} />
                                                             </div>
+
+                                                            {/* Approval flow */}
+                                                            <ApprovalPanel
+                                                                order={order}
+                                                                role="client"
+                                                                onChanged={(updated) => setOrders(prev => prev.map(o => o.id === order.id
+                                                                    ? { ...o, ...updated, approvalStatus: updated.approval_status, status: updated.status, stageHistory: updated.stage_history || o.stageHistory }
+                                                                    : o))}
+                                                            />
                                                         </div>
                                                     </div>
                                                 </div>
@@ -623,60 +647,5 @@ const CartInput = ({ label, name, placeholder, type = 'text', value, onChange, i
                 className="w-full p-3 bg-white/5 border border-white/10 rounded-[12px] text-white font-bold placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-white/20 text-sm transition-colors"
             />
         )}
-    </div>
-);
-
-const ClientOrder3DPreview = ({ configuration, productName }) => {
-    const pc = configuration?.productConfig;
-    const name = (productName || pc?.productName || '').toLowerCase();
-    const productType = pc?.type || pc?.activeProduct ||
-        (name.includes('термос') ? 'thermos' : name.includes('скетчбук') ? 'sketchbook' : 'notebook');
-
-    const config3D = {
-        format: pc?.format || pc?.config?.format || 'A5',
-        bindingType: pc?.bindingType || pc?.config?.bindingType || 'hard',
-        coverColor: pc?.coverColor || pc?.config?.coverColor || '#D2B48C',
-        hasElastic: pc?.hasElastic ?? pc?.config?.hasElastic ?? false,
-        elasticColor: pc?.elasticColor || pc?.config?.elasticColor || '#1a1a1a',
-        spiralColor: pc?.spiralColor || pc?.config?.spiralColor || '#1a1a1a',
-        paperPattern: pc?.paperPattern || pc?.config?.paperPattern || 'blank',
-        logos: [],
-        isNotebookOpen: false,
-        thermosBodyColor: pc?.thermosBodyColor || '#C0C0C0',
-        thermosCapColor: pc?.thermosCapColor || '#C0C0C0',
-        thermosCapVisible: true,
-        thermosLogos: pc?.thermosLogos || [],
-    };
-
-    return (
-        <div className="bg-white/[0.03] border border-white/10 rounded-[16px] overflow-hidden">
-            <div style={{ height: 200, pointerEvents: 'none' }}>
-                <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true }}>
-                    <Environment preset="city" />
-                    <ambientLight intensity={0.6} />
-                    <directionalLight position={[10, 10, 5]} intensity={1.5} />
-                    <directionalLight position={[-10, 5, 2]} intensity={0.5} />
-                    <PresentationControls speed={1.5} global polar={[-0.1, Math.PI / 4]}>
-                        <Stage environment={null} intensity={0} contactShadow={false}>
-                            {productType === 'sketchbook' ? <Sketchbook config={config3D} /> : productType === 'thermos' ? <Thermos config={config3D} /> : <Notebook config={config3D} />}
-                        </Stage>
-                    </PresentationControls>
-                </Canvas>
-            </div>
-        </div>
-    );
-};
-
-const ClientDetailRow = ({ label, value, accent }) => (
-    <div className="flex flex-col gap-0.5 bg-white/[0.03] border border-white/5 rounded-[10px] px-3 py-2.5">
-        <span className="text-[9px] font-bold uppercase tracking-widest text-gray-600">{label}</span>
-        <span className={`text-xs font-bold truncate ${accent ? 'text-white' : 'text-gray-300'}`}>{value}</span>
-    </div>
-);
-
-const ClientColorDot = ({ color }) => (
-    <div className="flex items-center gap-1.5">
-        <div className="w-3 h-3 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: color }} />
-        <span className="text-xs font-bold text-gray-300">{color}</span>
     </div>
 );

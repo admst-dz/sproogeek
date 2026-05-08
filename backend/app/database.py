@@ -1,37 +1,30 @@
-import os
-from dotenv import load_dotenv
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base
 
-load_dotenv()
+from app.core.config import get_settings
 
-DATABASE_URL = os.getenv("DATABASE_URL")
 
-if not DATABASE_URL:
-    db_user = os.getenv("DB_USER", "postgres")
-    db_password = os.getenv("DB_PASSWORD", "rootpassword")
-    db_host = os.getenv("DB_HOST", "localhost")
-    db_port = os.getenv("DB_PORT", "5432")
-    db_name = os.getenv("DB_NAME", "spruzhuk")
+settings = get_settings()
 
-    DATABASE_URL = f"postgresql+asyncpg://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-
-if not DATABASE_URL or "None" in DATABASE_URL:
-    raise ValueError("CRITICAL ERROR: Failed to construct DATABASE_URL. Check your environment variables.")
-
+# При работе через PgBouncer в transaction pool mode серверные prepared
+# statements asyncpg конфликтуют с пулом (statement готовится на одном
+# backend-коннекте, а исполняется на другом). Отключаем кеш PS.
 engine = create_async_engine(
-    DATABASE_URL,
+    settings.sqlalchemy_database_url,
     echo=False,
     pool_size=10,
     max_overflow=20,
     pool_recycle=1800,
-    pool_pre_ping=True
+    pool_pre_ping=True,
+    connect_args={
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    },
 )
 
-AsyncSessionLocal = sessionmaker(
+AsyncSessionLocal = async_sessionmaker(
     bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False
+    expire_on_commit=False,
 )
 
 Base = declarative_base()
@@ -39,7 +32,4 @@ Base = declarative_base()
 
 async def get_db():
     async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+        yield session

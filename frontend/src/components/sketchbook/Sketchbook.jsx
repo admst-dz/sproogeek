@@ -1,20 +1,13 @@
-import React, { useRef, useMemo } from 'react'
+import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { easing } from 'maath'
 import { useConfigurator } from '../../store'
-import { Decal, useTexture } from '@react-three/drei'
+import { Decal } from '@react-three/drei'
 import * as THREE from 'three'
+import { useLogoTexture } from '../../utils/threeTextures'
 
 function LogoDecal({ texture, x, y, z, rotation = 0, scale = 0.6 }) {
-    const map = useTexture(texture);
-    React.useEffect(() => {
-        if (map) {
-            map.wrapS = THREE.ClampToEdgeWrapping;
-            map.wrapT = THREE.ClampToEdgeWrapping;
-            map.anisotropy = 16;
-            map.needsUpdate = true;
-        }
-    }, [map]);
+    const map = useLogoTexture(texture);
     return (
         <Decal position={[x, y, z]} rotation={[0, 0, rotation]} scale={[scale, scale, 1]}>
             <meshStandardMaterial map={map} transparent alphaTest={0.08} depthWrite={false} roughness={0.8} side={THREE.FrontSide}/>
@@ -24,7 +17,7 @@ function LogoDecal({ texture, x, y, z, rotation = 0, scale = 0.6 }) {
 
 // --- ГЕНЕРАТОР УЗОРОВ ---
 function createPatternTexture(type) {
-    if (type === 'blank') return null;
+    if (!type || type === 'blank') return null;
     const size = 128;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -34,6 +27,7 @@ function createPatternTexture(type) {
     ctx.strokeStyle = '#000000'; ctx.fillStyle = '#000000';
     ctx.lineWidth = 4; ctx.lineCap = 'square';
     if (type === 'lined') { ctx.beginPath(); ctx.moveTo(0, size); ctx.lineTo(size, size); ctx.stroke(); }
+    else if (type === 'tlined') { ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, size); ctx.lineTo(size, size); ctx.stroke(); }
     else if (type === 'grid') { ctx.beginPath(); ctx.moveTo(0, size); ctx.lineTo(size, size); ctx.lineTo(size, 0); ctx.stroke(); }
     else if (type === 'dotted') { ctx.beginPath(); ctx.arc(size/2, size/2, 5, 0, 2 * Math.PI); ctx.fill(); }
     const texture = new THREE.CanvasTexture(canvas);

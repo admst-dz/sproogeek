@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Техкарта №{{ req.order_number or req.order_id }}</title>
+<style>
+@page {
+    size: A4;
+    margin: 18mm 14mm 18mm 14mm;
+    @bottom-left { content: "Техкарта №" string(card-no); font-size: 8pt; color: #666; }
+    @bottom-right { content: "Стр. " counter(page) " / " counter(pages); font-size: 8pt; color: #666; }
+}
+body { font-family: "DejaVu Sans", sans-serif; font-size: 9pt; color: #111; }
+h1 { font-size: 16pt; margin: 0 0 4mm 0; string-set: card-no attr(data-no); }
+h2 { font-size: 12pt; margin: 6mm 0 3mm 0; padding-bottom: 1.5mm; border-bottom: 1.2pt solid #111; }
+h3 { font-size: 10pt; margin: 5mm 0 2mm 0; color: #333; text-transform: uppercase; letter-spacing: .5pt; }
+table { width: 100%; border-collapse: collapse; margin-top: 2mm; }
+th, td { border: 0.4pt solid #888; padding: 1.6mm 2mm; vertical-align: top; }
+th { background: #f0f0f0; text-align: left; font-weight: 700; }
+.kv { width: 100%; border-collapse: collapse; }
+.kv td { border: 0.4pt solid #ccc; padding: 1.4mm 2mm; }
+.kv td.k { background: #f7f7f7; width: 55%; font-weight: 600; }
+.kv td.v { width: 45%; }
+.muted { color: #666; }
+.page-break { page-break-after: always; }
+.section { page-break-inside: avoid; }
+.header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 3mm; }
+.header .meta { text-align: right; font-size: 8.5pt; color: #444; }
+.badge { display: inline-block; padding: 0.5mm 2mm; background: #111; color: #fff; border-radius: 2mm; font-size: 8pt; }
+.empty-row td { color: #aaa; font-style: italic; }
+ul.files { margin: 2mm 0 0 5mm; padding: 0; }
+ul.files li { margin-bottom: 1mm; font-size: 9pt; }
+.swatch { display: inline-block; width: 4mm; height: 4mm; border: 0.3pt solid #333; vertical-align: middle; margin-right: 1.5mm; border-radius: 1mm; }
+.shipment-block { border: 1pt solid #111; padding: 5mm; margin-top: 8mm; }
+.shipment-block .ord-no { font-size: 18pt; font-weight: 700; letter-spacing: 1pt; }
+</style>
+</head>
+<body>
+
+{# ============ PAGE 1 — HEADER ============ #}
+<div class="page-break">
+<div class="header">
+    <h1 data-no="{{ req.order_number or req.order_id }}">ТЕХКАРТА № {{ req.order_number or req.order_id }}</h1>
+    <div class="meta">
+        Дата заказа: <b>{{ order_date }}</b><br>
+        Сформирована: {{ generated_at }}
+    </div>
+</div>
+
+<table class="kv">
+    <tr><td class="k">Идентификатор клиента</td><td class="v">{{ req.client.id | safe_dash }}</td></tr>
+    <tr><td class="k">Идентификатор поставщика / производителя</td><td class="v">{{ manufacturer_id }} — {{ manufacturer_name }}</td></tr>
+    <tr><td class="k">Клиент (реквизиты)</td><td class="v">
+        {{ req.client.name | safe_dash }}{% if req.client.email %}<br>{{ req.client.email }}{% endif %}
+        {% if req.client.requisites %}<br>{{ req.client.requisites }}{% endif %}
+    </td></tr>
+    <tr><td class="k">Менеджер сервиса (ФИО, ID)</td><td class="v">
+        {{ req.manager.name | safe_dash }}{% if req.manager.id %} — {{ req.manager.id }}{% endif %}
+    </td></tr>
+</table>
+
+<h3>Файлы товаров</h3>
+{% if req.download_all_url %}
+    <p><a href="{{ req.download_all_url }}">Скачать все файлы одним архивом</a></p>
+{% endif %}
+<ul class="files">
+{% for it in req.items %}
+    <li>Товар {{ it.index }} — {{ it.name }}{% if it.file_url %} — <a href="{{ it.file_url }}">ссылка</a>{% else %} <span class="muted">(файл не приложен)</span>{% endif %}</li>
+{% else %}
+    <li class="muted">—</li>
+{% endfor %}
+</ul>
+</div>
+
+{# ============ PAGE 2 — PRODUCT TABLE ============ #}
+<div class="page-break">
+<h2>Список товаров в заказе</h2>
+<table>
+    <thead>
+        <tr>
+            <th style="width:8%">№</th>
+            <th style="width:22%">Идентификатор товара</th>
+            <th style="width:30%">Наименование</th>
+            <th style="width:10%">Тираж</th>
+            <th>Описание</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for it in req.items %}
+        <tr>
+            <td>{{ it.index }}</td>
+            <td>{{ it.item_id | safe_dash }}</td>
+            <td>{{ it.name }}</td>
+            <td>{{ it.quantity }}</td>
+            <td>{{ it.description | safe_dash }}</td>
+        </tr>
+    {% else %}
+        <tr class="empty-row"><td colspan="5">Нет позиций</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+{# ============ PAGES 3-5 — NOTEBOOK DETAILS ============ #}
+{% for it in req.items if it.product_kind in ('notebook', 'sketchbook') %}
+{% set c = it.config %}
+<div class="page-break">
+<h2>Тех. карта товара №{{ it.index }} — {{ it.name }} (Ежедневник / Скетчбук)</h2>
+
+<h3>Обложка</h3>
+<table class="kv">
+    <tr><td class="k">Формат</td><td class="v">{{ c.format | safe_dash }}</td></tr>
+    <tr><td class="k">Вид переплёта</td><td class="v">{{ c.bindingType | safe_dash }}</td></tr>
+    <tr><td class="k">Уголки</td><td class="v">{{ c.hasCorners | yn }}</td></tr>
+    <tr><td class="k">Цвет уголков</td><td class="v">{% if c.cornerColor %}<span class="swatch" style="background:{{ c.cornerColor }}"></span>{{ c.cornerColor }}{% else %}—{% endif %}</td></tr>
+    <tr><td class="k">Строчка</td><td class="v">{{ c.hasStitch | yn }}</td></tr>
+    <tr><td class="k">Цвет строчки</td><td class="v">{{ c.stitchColor | safe_dash }}</td></tr>
+    <tr><td class="k">Пружина (для «На пружине»)</td><td class="v">{{ (c.bindingType == 'spiral') | yn }}</td></tr>
+    <tr><td class="k">Цвет пружины</td><td class="v">{% if c.spiralColor %}<span class="swatch" style="background:{{ c.spiralColor }}"></span>{{ c.spiralColor }}{% else %}—{% endif %}</td></tr>
+    <tr><td class="k">Обложка — внешний слой, материал</td><td class="v">{% if c.coverColor %}<span class="swatch" style="background:{{ c.coverColor }}"></span>{{ c.coverColor }}{% else %}—{% endif %}</td></tr>
+    <tr><td class="k">Обложка — внутренний слой</td><td class="v">{{ c.hasInnerCover | yn }}</td></tr>
+    <tr><td class="k">Внутренний материал</td><td class="v">{{ c.innerCoverMaterial | safe_dash }}</td></tr>
+    <tr><td class="k">Картон переплётный (тв. обл.)</td><td class="v">{{ c.hasCardboard | yn }}</td></tr>
+    <tr><td class="k">Толщина картона</td><td class="v">{{ c.cardboardThickness | safe_dash }}</td></tr>
+    <tr><td class="k">Размер сторонок (картон), мм</td><td class="v">{{ c.cardboardSize | safe_dash }}</td></tr>
+    <tr><td class="k">Резинка вертикальная</td><td class="v">{{ c.hasElastic | yn }}</td></tr>
+    <tr><td class="k">Цвет резинки</td><td class="v">{% if c.elasticColor %}<span class="swatch" style="background:{{ c.elasticColor }}"></span>{{ c.elasticColor }}{% else %}—{% endif %}</td></tr>
+    <tr><td class="k">Резинка для ручки</td><td class="v">{{ c.hasPenElastic | yn }}</td></tr>
+    <tr><td class="k">Цвет резинки для ручки</td><td class="v">{{ c.penElasticColor | safe_dash }}</td></tr>
+    <tr><td class="k">Ляссе</td><td class="v">{{ c.hasLasse | yn }}</td></tr>
+    <tr><td class="k">Цвет ляссе</td><td class="v">{{ c.lasseColor | safe_dash }}</td></tr>
+    <tr><td class="k">Ширина ляссе, мм</td><td class="v">{{ c.lasseWidth | safe_dash }}</td></tr>
+    <tr><td class="k">Длина ляссе, мм</td><td class="v">{{ c.lasseLength | safe_dash }}</td></tr>
+    <tr><td class="k">Печать на ляссе</td><td class="v">{{ c.lassePrint | yn }}</td></tr>
+    <tr><td class="k">Метод нанесения на ляссе</td><td class="v">{{ c.lassePrintMethod | safe_dash }}</td></tr>
+    <tr><td class="k">Цветность ляссе</td><td class="v">{{ c.lasseColors | safe_dash }}</td></tr>
+    <tr><td class="k">Шильд на ляссе</td><td class="v">{{ c.hasShield | yn }}</td></tr>
+    <tr><td class="k">Форма шильда</td><td class="v">{{ c.shieldShape | safe_dash }}</td></tr>
+</table>
+
+<h3>Нанесение на обложку</h3>
+<table>
+    <thead><tr><th style="width:6%">№</th><th>Вид нанесения</th><th>Размер</th><th>Файл</th></tr></thead>
+    <tbody>
+    {% for l in (c.logos or []) %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ l.kind or 'тиснение' }} ({{ l.side or 'front' }})</td>
+            <td>{{ '%.0f%%' % ((l.scale or 0.6) * 100) }}</td>
+            <td>{% if l.url %}<a href="{{ l.url }}">{{ l.filename or 'файл' }}</a>{% else %}{{ l.filename | safe_dash }}{% endif %}</td>
+        </tr>
+    {% else %}
+        <tr class="empty-row"><td colspan="4">нанесений не задано</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<div class="page-break">
+<h2>Блок ежедневника — №{{ it.index }} — {{ it.name }}</h2>
+<table class="kv">
+    <tr><td class="k">Формат, мм</td><td class="v">{{ c.blockFormat or c.format | safe_dash }}</td></tr>
+    <tr><td class="k">Сшивка, вид</td><td class="v">{{ c.blockBinding | safe_dash }}</td></tr>
+    <tr><td class="k">Бумага, вид</td><td class="v">{{ c.paperType | safe_dash }}</td></tr>
+    <tr><td class="k">Плотность бумаги</td><td class="v">{{ c.paperDensity | safe_dash }}</td></tr>
+    <tr><td class="k">Цвет бумаги</td><td class="v">{{ c.paperColor | safe_dash }}</td></tr>
+    <tr><td class="k">Разлиновка</td><td class="v">{{ c.paperPattern | safe_dash }}</td></tr>
+    <tr><td class="k">Количество страниц, шт.</td><td class="v">{{ c.pagesCount | safe_dash }}</td></tr>
+    <tr><td class="k">Кол-во тетрадок (на нитку)</td><td class="v">{{ c.signaturesCount | safe_dash }}</td></tr>
+    <tr><td class="k">Печать ч/б, страниц</td><td class="v">{{ c.bwPagesCount | safe_dash }}</td></tr>
+    <tr><td class="k">Номера страниц с ч/б</td><td class="v">{{ c.bwPagesList | safe_dash }}</td></tr>
+    <tr><td class="k">Печать цветная, страниц</td><td class="v">{{ c.colorPagesCount | safe_dash }}</td></tr>
+    <tr><td class="k">Номера страниц с цветной печатью</td><td class="v">{{ c.colorPagesList | safe_dash }}</td></tr>
+    <tr><td class="k">Кругление углов</td><td class="v">{{ c.cornerRounding | yn }}</td></tr>
+    <tr><td class="k">Прокрас торца блока</td><td class="v">{{ c.edgeColor | yn }}</td></tr>
+    <tr><td class="k">Цвет торца</td><td class="v">{{ c.edgeColorValue | safe_dash }}</td></tr>
+    <tr><td class="k">Закладка (пружина) — цвет / изображение</td><td class="v">{{ c.bookmarkColor | safe_dash }}</td></tr>
+</table>
+
+<h3>Допы (пружина)</h3>
+<table>
+    <thead><tr><th style="width:6%">№</th><th>Допэлемент</th><th>Цвет / изображение</th></tr></thead>
+    <tbody>
+    {% for extra in (c.extras or []) %}
+        <tr><td>{{ loop.index }}</td><td>{{ extra.kind | safe_dash }}</td><td>{{ extra.value | safe_dash }}</td></tr>
+    {% else %}
+        <tr class="empty-row"><td colspan="3">допов не задано</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<div class="page-break">
+<h2>Технологические операции — №{{ it.index }}</h2>
+<table>
+    <thead>
+        <tr>
+            <th style="width:6%">№</th>
+            <th style="width:14%">Код операции</th>
+            <th>Операция</th>
+            <th style="width:12%">Кол-во операций / ед.</th>
+            <th style="width:12%">Время операции, ч/ч</th>
+            <th style="width:12%">Общее время, ч/ч</th>
+            <th style="width:18%">Пояснения</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr class="empty-row"><td colspan="7">Заполняется производством на этапе планирования.</td></tr>
+    </tbody>
+</table>
+</div>
+{% endfor %}
+
+{# ============ PAGE 6 — SOUVENIRS ============ #}
+{% set souvenirs = req.items | selectattr('product_kind', 'in', ['thermos', 'powerbank', 'souvenir']) | list %}
+{% if souvenirs %}
+{% for it in souvenirs %}
+{% set c = it.config %}
+<div class="page-break">
+<h2>Тех. карта товара №{{ it.index }} — {{ it.name }} (Сувенирная продукция)</h2>
+<table class="kv">
+    <tr><td class="k">Наименование вида сувенирной продукции</td><td class="v">{{ it.name }}</td></tr>
+    <tr><td class="k">Тираж, шт.</td><td class="v">{{ it.quantity }}</td></tr>
+    <tr><td class="k">Цвет (ID, название)</td><td class="v">{% set col = c.thermosBodyColor or c.powerbankBodyColor or c.bodyColor %}{% if col %}<span class="swatch" style="background:{{ col }}"></span>{{ col }}{% else %}—{% endif %}</td></tr>
+</table>
+
+<h3>Нанесение</h3>
+<table>
+    <thead><tr><th style="width:6%">№</th><th>Вид</th><th>Размер</th><th>Цветность</th><th>Файл макета</th></tr></thead>
+    <tbody>
+    {% set logos = c.thermosLogos or c.powerbankLogos or c.logos or [] %}
+    {% for l in logos %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ l.kind or 'УФ-печать' }}</td>
+            <td>{{ '%.0f%%' % ((l.scale or 0.6) * 100) }}</td>
+            <td>{{ l.colors | safe_dash }}</td>
+            <td>{% if l.url %}<a href="{{ l.url }}">{{ l.filename or 'файл' }}</a>{% else %}{{ l.filename | safe_dash }}{% endif %}</td>
+        </tr>
+    {% else %}
+        <tr class="empty-row"><td colspan="5">нанесений не задано</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<table class="kv" style="margin-top:4mm">
+    <tr><td class="k">Распаковка</td><td class="v">{{ c.unpacking | yn }}</td></tr>
+    <tr><td class="k">Упаковка</td><td class="v">{{ c.packaging | yn }}</td></tr>
+</table>
+</div>
+{% endfor %}
+{% endif %}
+
+{# ============ PAGE 7 — SHIPMENT CARD ============ #}
+<div class="page-break">
+<h2>Карточка отгрузки</h2>
+<table class="kv">
+    <tr><td class="k">Название</td><td class="v">{{ req.items[0].name if req.items else '—' }}</td></tr>
+    <tr><td class="k">ID заказчика</td><td class="v">{{ req.client.id | safe_dash }}</td></tr>
+    <tr><td class="k">Наименование заказчика</td><td class="v">{{ req.client.name | safe_dash }}</td></tr>
+</table>
+
+<div class="shipment-block">
+    <p class="muted" style="margin:0 0 2mm 0">НОМЕР ЗАКАЗА</p>
+    <p class="ord-no">{{ req.order_number or req.order_id }}</p>
+    <p class="muted" style="margin:6mm 0 2mm 0">Размещение на складе</p>
+    <p>{{ req.storage_location | safe_dash }}</p>
+</div>
+</div>
+
+{# ============ PAGE 8 — DESCRIPTION ============ #}
+<div>
+<h2>Описание заказа</h2>
+<div class="shipment-block">
+    <p class="muted" style="margin:0 0 2mm 0">НОМЕР ЗАКАЗА</p>
+    <p class="ord-no">{{ req.order_number or req.order_id }}</p>
+    <h3 style="margin-top:6mm">Описание</h3>
+    <p style="white-space:pre-wrap">{{ req.notes | safe_dash }}</p>
+</div>
+</div>
+
+</body>
+</html>

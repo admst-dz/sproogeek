@@ -1,10 +1,13 @@
-import { useEffect, Suspense, useRef } from 'react';
+import { useEffect, Suspense, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF, Stage } from '@react-three/drei';
+import * as THREE from 'three';
 import { useConfigurator } from '../../store';
 import { t } from '../../i18n';
 import { getUserDisplayName } from '../../utils/user';
+import { SceneLoadingOverlay } from '../shared/VibeLoader';
 import termosModelUrl from '../../assets/termos3.glb?url';
+import powerbankModelUrl from '../../assets/poverbank.glb?url';
 
 function ThermosPreviewScene() {
     const groupRef = useRef();
@@ -19,11 +22,7 @@ function ThermosPreviewScene() {
         <group ref={groupRef}>
             {meshes.map(([name, node]) => (
                 <mesh key={name} geometry={node.geometry} castShadow receiveShadow>
-                    <meshStandardMaterial
-                        color={'#C0C0C0'}
-                        metalness={0.0}
-                        roughness={0.92}
-                    />
+                    <meshStandardMaterial color={'#C0C0C0'} metalness={0.8} roughness={0.2} />
                 </mesh>
             ))}
         </group>
@@ -32,20 +31,119 @@ function ThermosPreviewScene() {
 
 function ThermosPreview() {
     return (
-        <Canvas
-            camera={{ position: [0, 0.5, 4], fov: 40 }}
-            gl={{ antialias: true }}
-            style={{ pointerEvents: 'none' }}
-        >
-            <ambientLight intensity={0.7} />
-            <directionalLight position={[5, 8, 5]} intensity={1.5} />
-            <directionalLight position={[-4, 3, 2]} intensity={0.6} />
-            <Suspense fallback={null}>
-                <Stage environment="city" intensity={0.3} contactShadow={false} adjustCamera>
-                    <ThermosPreviewScene />
-                </Stage>
-            </Suspense>
-        </Canvas>
+        <div className="relative w-full h-full">
+            <Canvas camera={{ position: [0, 0.5, 4], fov: 40 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
+                <ambientLight intensity={0.7} />
+                <directionalLight position={[5, 8, 5]} intensity={1.5} />
+                <directionalLight position={[-4, 3, 2]} intensity={0.6} />
+                <Suspense fallback={null}>
+                    <Stage environment="city" intensity={0.3} contactShadow={false} adjustCamera>
+                        <ThermosPreviewScene />
+                    </Stage>
+                </Suspense>
+            </Canvas>
+            <SceneLoadingOverlay compact label="3D" />
+        </div>
+    );
+}
+
+function PowerbankPreviewScene() {
+    const groupRef = useRef();
+    const { nodes } = useGLTF(powerbankModelUrl);
+    const meshes = useMemo(() => (
+        Object.entries(nodes)
+            .filter(([, n]) => n.geometry || n.isMesh)
+            .map(([name, node]) => {
+                const geo = node.geometry;
+                geo.computeBoundingBox();
+                return { name, geo, bbox: geo.boundingBox };
+            })
+    ), [nodes]);
+
+    const bbox = useMemo(() => {
+        const box = new THREE.Box3();
+        meshes.forEach(mesh => box.union(mesh.bbox));
+        return box;
+    }, [meshes]);
+
+    const width = bbox.max.x - bbox.min.x;
+    const height = bbox.max.y - bbox.min.y;
+    const frontZ = bbox.max.z;
+    const centerX = (bbox.min.x + bbox.max.x) / 2;
+    const ringOuterRadius = Math.min(width * 0.34, height * 0.235);
+    const ringThickness = Math.max(width * 0.018, 0.018);
+    const capsuleWidth = width * 0.06;
+    const capsuleHeight = height * 0.18;
+
+    const ringGeometry = useMemo(() => (
+        new THREE.RingGeometry(ringOuterRadius - ringThickness, ringOuterRadius, 96)
+    ), [ringOuterRadius, ringThickness]);
+
+    const capsuleGeometry = useMemo(() => {
+        const x = -capsuleWidth / 2;
+        const y = -capsuleHeight / 2;
+        const r = capsuleWidth / 2;
+        const shape = new THREE.Shape();
+
+        shape.moveTo(x + r, y);
+        shape.lineTo(x + capsuleWidth - r, y);
+        shape.quadraticCurveTo(x + capsuleWidth, y, x + capsuleWidth, y + r);
+        shape.lineTo(x + capsuleWidth, y + capsuleHeight - r);
+        shape.quadraticCurveTo(x + capsuleWidth, y + capsuleHeight, x + capsuleWidth - r, y + capsuleHeight);
+        shape.lineTo(x + r, y + capsuleHeight);
+        shape.quadraticCurveTo(x, y + capsuleHeight, x, y + capsuleHeight - r);
+        shape.lineTo(x, y + r);
+        shape.quadraticCurveTo(x, y, x + r, y);
+
+        return new THREE.ShapeGeometry(shape);
+    }, [capsuleWidth, capsuleHeight]);
+
+    useFrame((_, delta) => {
+        if (groupRef.current) groupRef.current.rotation.y += delta * 0.5;
+    });
+
+    return (
+        <group ref={groupRef}>
+            {meshes.map(({ name, geo }) => (
+                <mesh key={name} geometry={geo} castShadow receiveShadow>
+                    <meshStandardMaterial color="#6b6f73" metalness={0.02} roughness={0.92} />
+                </mesh>
+            ))}
+            <group position={[centerX, 0, frontZ + 0.006]}>
+                <mesh
+                    geometry={ringGeometry}
+                    position={[0, bbox.min.y + height * 0.72, 0]}
+                    renderOrder={5}
+                >
+                    <meshStandardMaterial color="#2f3235" roughness={0.88} metalness={0.02} depthWrite={false} />
+                </mesh>
+                <mesh
+                    geometry={capsuleGeometry}
+                    position={[0, bbox.min.y + height * 0.35, 0]}
+                    renderOrder={6}
+                >
+                    <meshStandardMaterial color="#2f3235" roughness={0.88} metalness={0.02} depthWrite={false} />
+                </mesh>
+            </group>
+        </group>
+    );
+}
+
+function PowerbankPreview() {
+    return (
+        <div className="relative w-full h-full">
+            <Canvas camera={{ position: [0, 0.5, 4], fov: 40 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
+                <ambientLight intensity={0.7} />
+                <directionalLight position={[5, 8, 5]} intensity={1.5} />
+                <directionalLight position={[-4, 3, 2]} intensity={0.6} />
+                <Suspense fallback={null}>
+                    <Stage environment="city" intensity={0.3} contactShadow={false} adjustCamera>
+                        <PowerbankPreviewScene />
+                    </Stage>
+                </Suspense>
+            </Canvas>
+            <SceneLoadingOverlay compact label="3D" />
+        </div>
     );
 }
 
@@ -60,15 +158,11 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
         else document.documentElement.classList.remove('dark');
     }, [theme]);
 
-    // ОБНОВЛЕННАЯ ФУНКЦИЯ
     const handleSelect = (productType, config = {}) => {
         setProduct(productType);
-
-        // Сброс и применение настроек
         setFormat(config.format || 'A5');
         setBindingType(config.bindingType || 'hard');
-        setHasElastic(config.hasElastic !== undefined ? config.hasElastic : true);
-
+        setHasElastic(config.bindingType === 'hard' ? false : (config.hasElastic !== undefined ? config.hasElastic : true));
         onStart();
     };
 
@@ -79,12 +173,11 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
     };
 
     return (
-        <div className="min-h-screen w-full flex flex-col font-sans transition-colors duration-500 bg-gray-50 text-gray-900 dark:bg-[#0B0F19] dark:bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] dark:from-[#1A2642] dark:via-[#0B0F19] dark:to-[#080B13] dark:text-white overflow-x-hidden selection:bg-blue-500/30 md:h-screen">
+        <div className="app-bg min-h-screen w-full flex flex-col font-sans transition-colors duration-500 text-gray-900 dark:text-white overflow-x-hidden selection:bg-blue-500/30 md:h-screen">
 
-            {/* ... ШАПКА ОСТАЕТСЯ БЕЗ ИЗМЕНЕНИЙ ... */}
             <header className="w-full px-6 py-5 flex items-center justify-between z-50">
                 <div className="flex items-center gap-3 bg-white border border-gray-200 dark:bg-white/5 dark:border-white/10 px-4 py-2 rounded-full backdrop-blur-md shadow-sm dark:shadow-none transition-colors">
-                <img src="/SprooGeek.svg" alt="Spruzhuk logo" className="w-4 h-4 object-contain" />
+                    <img src="/SprooGeek.svg" alt="Spruzhuk logo" className="w-4 h-4 object-contain" />
                     <span className="font-bold text-sm tracking-wide">Spruzhuk</span>
                 </div>
 
@@ -118,28 +211,27 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
 
             <main className="md:flex-1 flex flex-col items-center justify-center pt-10 pb-20 px-4 z-10">
                 <h1 className="text-5xl md:text-7xl font-bold text-center leading-tight tracking-tight mb-6 text-gray-900 dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-b dark:from-white dark:to-gray-400 drop-shadow-sm dark:drop-shadow-2xl transition-colors">
-                    {t(language, 'title1')}<br/>{t(language, 'title2')}
+                    {t(language, 'title1')}<br />{t(language, 'title2')}
                 </h1>
                 <p className="text-gray-500 dark:text-gray-400 text-sm md:text-base text-center max-w-lg mb-16 font-medium leading-relaxed transition-colors">
                     {t(language, 'subtitle')}
                 </p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">
 
                     {/* Карточка 1: Ежедневник */}
-                    <div onClick={() => handleSelect('notebook', { format: 'A5', bindingType: 'hard', hasElastic: true, isSketchbook: false })} className="group relative flex flex-col items-center p-6 rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none cursor-pointer dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-all duration-500 overflow-hidden">
+                    <div onClick={() => handleSelect('notebook', { format: 'A5', bindingType: 'hard', hasElastic: false })} className="group relative flex flex-col items-center p-6 rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none cursor-pointer dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-all duration-500 overflow-hidden">
                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-blue-500/10 dark:bg-blue-500/20 blur-[60px] group-hover:bg-blue-500/20 dark:group-hover:bg-blue-400/30 transition-colors duration-500"></div>
-                        <div className="h-64 w-full flex items-center justify-center relative z-10">
-                            <svg width="140" height="180" viewBox="0 0 100 130" fill="none" className="drop-shadow-xl dark:drop-shadow-2xl group-hover:scale-105 transition-transform duration-500">
-                                <rect x="20" y="10" width="60" height="110" rx="3" fill="#151515" stroke="#333" strokeWidth="1"/>
+                        <div className="h-56 w-full flex items-center justify-center relative z-10">
+                            <svg width="120" height="160" viewBox="0 0 100 130" fill="none" className="drop-shadow-xl dark:drop-shadow-2xl group-hover:scale-105 transition-transform duration-500">
+                                <rect x="20" y="10" width="60" height="110" rx="3" fill="#151515" stroke="#333" strokeWidth="1" />
                                 <path d="M76 12 V118 L82 116 V14 Z" fill="#D4AF37" />
                                 <rect x="20" y="10" width="8" height="110" fill="black" fillOpacity="0.4" />
                             </svg>
                         </div>
                         <div className="text-center relative z-10 mt-2">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 transition-colors">{t(language, 'notebook')}</h3>
-                            <p className="text-xs text-gray-500 font-medium mb-6 transition-colors">{t(language, 'notebookDesc')}</p>
-                            <button className="px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'notebook')}</h3>
+                            <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
                                 {t(language, 'openBtn')}
                             </button>
                         </div>
@@ -148,13 +240,26 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
                     {/* Карточка 2: Термос */}
                     <div onClick={() => handleSelect('thermos', {})} className="group relative flex flex-col items-center p-6 rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none cursor-pointer dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-all duration-500 overflow-hidden">
                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-slate-500/10 dark:bg-slate-400/20 blur-[60px] group-hover:bg-slate-500/20 dark:group-hover:bg-slate-400/30 transition-colors duration-500"></div>
-                        <div className="h-64 w-full relative z-10">
+                        <div className="h-56 w-full relative z-10">
                             <ThermosPreview />
                         </div>
                         <div className="text-center relative z-10 mt-2">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 transition-colors">{t(language, 'thermos')}</h3>
-                            <p className="text-xs text-gray-500 font-medium mb-6 transition-colors">{t(language, 'thermosDesc')}</p>
-                            <button className="px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-slate-50 group-hover:text-slate-700 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'thermos')}</h3>
+                            <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-slate-50 group-hover:text-slate-700 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
+                                {t(language, 'openBtn')}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Карточка 3: Повербанк */}
+                    <div onClick={() => handleSelect('powerbank', {})} className="group relative flex flex-col items-center p-6 rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none cursor-pointer dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-all duration-500 overflow-hidden">
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-emerald-500/10 dark:bg-emerald-400/20 blur-[60px] group-hover:bg-emerald-500/20 dark:group-hover:bg-emerald-400/30 transition-colors duration-500"></div>
+                        <div className="h-56 w-full relative z-10">
+                            <PowerbankPreview />
+                        </div>
+                        <div className="text-center relative z-10 mt-2">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'powerbank')}</h3>
+                            <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-emerald-50 group-hover:text-emerald-700 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
                                 {t(language, 'openBtn')}
                             </button>
                         </div>

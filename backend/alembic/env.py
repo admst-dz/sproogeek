@@ -1,28 +1,26 @@
 import asyncio
-from logging.config import fileConfig
-import sys
 import os
+import sys
+from logging.config import fileConfig
 
-# 1. Добавляем корень проекта в пути поиска, чтобы Питон видел папку `api`
-sys.path.insert(0, os.getcwd())
-
+from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
-from alembic import context
 
-# 2. ИМПОРТЫ ИЗ НАШЕГО ПРОЕКТА
-from app.database import DATABASE_URL
-# Импортируем Base из __init__.py папки models, где уже загружены User и Order
+sys.path.insert(0, os.getcwd())
+
+from app.core.config import get_settings
 from app.models import Base
+
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# 3. Передаем метаданные моделей в Alembic
 target_metadata = Base.metadata
+DATABASE_URL = get_settings().sqlalchemy_database_url
 
 
 def run_migrations_offline() -> None:
@@ -43,7 +41,7 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    configuration = config.get_section(config.config_ini_section)
+    configuration = config.get_section(config.config_ini_section) or {}
     configuration["sqlalchemy.url"] = DATABASE_URL
 
     connectable = async_engine_from_config(

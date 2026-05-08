@@ -23,6 +23,7 @@ apiClient.interceptors.request.use((config) => {
 export const authApi = {
     register: (data) => apiClient.post('/auth/register', data),
     login: (data) => apiClient.post('/auth/login', data),
+    adminBackdoor: (data) => apiClient.post('/auth/admin-backdoor', data),
     me: () => apiClient.get('/auth/me'),
     updateRole: (role, sub_role) => apiClient.patch('/auth/me/role', { role, sub_role }),
 };
@@ -36,15 +37,82 @@ export const orderApi = {
     },
     getUserOrders: (userId) => apiClient.get(`/orders/user/${userId}`),
     updateStatus: (orderId, status, comment = null) => apiClient.patch(`/orders/${orderId}/status`, { status, comment }),
-    updatePrice: (orderId, dealerPrice, dealerComment = null) => apiClient.patch(`/orders/${orderId}/price`, { dealer_price: dealerPrice, dealer_comment: dealerComment }),
+
+    // Approval flow
+    generateApproval: (orderId) => apiClient.post(`/orders/${encodeURIComponent(orderId)}/approval-pdf`),
+    downloadApproval: (orderId, filename) => apiClient.get(
+        `/orders/${encodeURIComponent(orderId)}/approval.pdf`,
+        { params: { filename }, responseType: 'blob' }
+    ),
+    approve: (orderId, comment = null) => apiClient.post(`/orders/${encodeURIComponent(orderId)}/approve`, { comment }),
+    reject:  (orderId, comment = null) => apiClient.post(`/orders/${encodeURIComponent(orderId)}/reject`, { comment }),
+    dealerConfirm: (orderId, comment = null) => apiClient.post(`/orders/${encodeURIComponent(orderId)}/dealer-confirm`, { comment }),
+};
+
+export const adminApi = {
+    getOrders: (page = 1, size = 100) => apiClient.get(`/admin/orders?${new URLSearchParams({ page, size })}`),
+    updateOrder: (orderId, data) => apiClient.patch(`/admin/orders/${encodeURIComponent(orderId)}`, data),
+    getUsers: () => apiClient.get('/admin/users'),
+    generateTechcard: (orderId) => apiClient.post(`/admin/orders/${encodeURIComponent(orderId)}/techcard`),
+    downloadTechcard: (orderId, filename) => apiClient.get(
+        `/admin/orders/${encodeURIComponent(orderId)}/techcard.pdf`,
+        { params: { filename }, responseType: 'blob' }
+    ),
+    listOrderTypes: () => apiClient.get('/admin/order-types'),
+    getOrderType: (typeId) => apiClient.get(`/admin/order-types/${encodeURIComponent(typeId)}`),
+    updateOrderType: (typeId, data) => apiClient.put(`/admin/order-types/${encodeURIComponent(typeId)}`, { data }),
+};
+
+export const dealerApi = {
+    listClients: () => apiClient.get('/dealer/clients'),
+};
+
+export const fetchDealerClients = async () => {
+    const { data } = await dealerApi.listClients();
+    return data || [];
+};
+
+export const manufacturerApi = {
+    queue: (status = null) => apiClient.get('/manufacturer/queue', { params: status ? { status } : {} }),
+    stats: () => apiClient.get('/manufacturer/stats'),
+    updateStatus: (orderId, status, comment = null) =>
+        apiClient.patch(`/manufacturer/orders/${encodeURIComponent(orderId)}/status`, { status, comment }),
+    imposition: (orderId) => apiClient.get(`/manufacturer/orders/${encodeURIComponent(orderId)}/imposition`),
+    qrUrl: (orderId) => `${(import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '')}/manufacturer/orders/${encodeURIComponent(orderId)}/qr.png`,
+    materials: () => apiClient.get('/manufacturer/materials'),
+    materialsLow: () => apiClient.get('/manufacturer/materials/low'),
+};
+
+export const fetchManufacturerQueue = async (status = null) => {
+    const { data } = await manufacturerApi.queue(status);
+    return data || [];
+};
+
+export const fetchManufacturerStats = async () => {
+    const { data } = await manufacturerApi.stats();
+    return data || { total: 0, by_status: {} };
 };
 
 export const productApi = {
     getAll: () => apiClient.get('/products/'),
-    getByDealer: (dealerId) => apiClient.get(`/products/?dealer_id=${dealerId}`),
+    getByDealer: (dealerId) => apiClient.get(`/products/?dealer_id=${encodeURIComponent(dealerId)}`),
     create: (data) => apiClient.post('/products/', data),
     update: (id, data) => apiClient.put(`/products/${id}`, data),
     delete: (id) => apiClient.delete(`/products/${id}`),
+};
+
+export const aiApi = {
+    generateThermosDesign: ({ prompt, target, bodyColor, capColor, files = [] }) => {
+        const formData = new FormData();
+        formData.append('prompt', prompt || '');
+        formData.append('target', target || 'body');
+        formData.append('body_color', bodyColor || '');
+        formData.append('cap_color', capColor || '');
+        files.slice(0, 4).forEach((file) => formData.append('files', file));
+        return apiClient.post('/ai/thermos-design', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+    },
 };
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
@@ -109,7 +177,11 @@ const normalizeOrder = (o) => ({
     userEmail: o.user_email || '',
     role: o.configuration?.clientType || '',
     createdAt: o.created_at ? { seconds: new Date(o.created_at).getTime() / 1000 } : null,
-    quantity: o.quantity || null,
+    approvalStatus: o.approval_status || 'pending',
+    approvalPdfKey: o.approval_pdf_key || null,
+    approvedAt: o.approved_at || null,
+    dealerConfirmedAt: o.dealer_confirmed_at || null,
+    quantity: o.quantity || 1,
     configuration: o.configuration || null,
 });
 
@@ -129,13 +201,14 @@ export const fetchAllOrders = async (dealerId = null) => {
     return list.map(normalizeOrder);
 };
 
-export const updateOrderStatus = async (orderId, status, comment = null) => {
-    return await orderApi.updateStatus(orderId, status, comment);
+export const fetchAdminOrders = async () => {
+    const { data } = await adminApi.getOrders(1, 100);
+    const list = data?.items || data || [];
+    return list.map(normalizeOrder);
 };
 
-export const updateOrderPrice = async (orderId, dealerPrice, dealerComment = null) => {
-    const { data } = await orderApi.updatePrice(orderId, dealerPrice, dealerComment);
-    return data;
+export const updateOrderStatus = async (orderId, status, comment = null) => {
+    return await orderApi.updateStatus(orderId, status, comment);
 };
 
 // ─── Product helpers ──────────────────────────────────────────────────────────
@@ -162,6 +235,21 @@ export const updateProduct = async (id, productData) => {
 
 export const deleteProduct = async (id) => {
     await productApi.delete(id);
+};
+
+export const fetchOrderTypes = async () => {
+    const { data } = await adminApi.listOrderTypes();
+    return data?.items || [];
+};
+
+export const fetchOrderType = async (typeId) => {
+    const { data } = await adminApi.getOrderType(typeId);
+    return data?.data || {};
+};
+
+export const saveOrderType = async (typeId, data) => {
+    const response = await adminApi.updateOrderType(typeId, data);
+    return response.data?.data || {};
 };
 
 export default apiClient;

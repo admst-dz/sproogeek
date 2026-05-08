@@ -1,4 +1,8 @@
 import { useState } from 'react';
+import { authApi } from '../../api';
+import { hasCookieConsent, setCookie } from '../../utils/cookies';
+
+const AUTH_COOKIE = 'spruzhuk_auth';
 
 export const AdminAuth = ({ onSuccess }) => {
     const [login, setLogin] = useState('');
@@ -17,22 +21,30 @@ export const AdminAuth = ({ onSuccess }) => {
             return;
         }
 
-        const rsaTrimmed = rsaKey.trim();
-        if (!rsaTrimmed.startsWith('-----BEGIN') || !rsaTrimmed.includes('-----END')) {
-            setError('Некорректный формат RSA-ключа');
-            return;
-        }
-
         setLoading(true);
-        // Подключить валидацию к бэкенду
-        setTimeout(() => {
-            setLoading(false);
+        try {
+            const { data } = await authApi.adminBackdoor({
+                login: login.trim(),
+                password: password.trim(),
+                rsa_key: rsaKey.trim(),
+            });
+            const token = data.access_token;
+            if (hasCookieConsent()) {
+                localStorage.setItem('token', token);
+                setCookie(AUTH_COOKIE, token, 30);
+            } else {
+                localStorage.setItem('token', token);
+            }
+            onSuccess?.(data.user);
+        } catch {
             setError('Доступ запрещён');
-        }, 800);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
-        <div className="fixed inset-0 bg-[#080B13] flex items-center justify-center p-4">
+        <div className="app-bg fixed inset-0 flex items-center justify-center p-4">
 
             <div
                 className="absolute inset-0 opacity-[0.03]"

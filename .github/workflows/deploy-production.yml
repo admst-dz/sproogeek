@@ -10,7 +10,7 @@ on:
         required: true
         default: "all"
         type: choice
-        options: [all, frontend, backend, renderer, deploy-only]
+        options: [all, frontend, backend, renderer, techcard, deploy-only]
 
 permissions:
   contents: read
@@ -21,8 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       frontend: ${{ steps.result.outputs.frontend }}
-      backend: ${{ steps.result.outputs.backend }}
+      backend:  ${{ steps.result.outputs.backend }}
       renderer: ${{ steps.result.outputs.renderer }}
+      techcard: ${{ steps.result.outputs.techcard }}
+      compose:  ${{ steps.result.outputs.compose }}
     steps:
       - uses: actions/checkout@v4
 
@@ -37,100 +39,119 @@ jobs:
               - 'backend/**'
             renderer:
               - 'microservices/renderer/**'
+            techcard:
+              - 'microservices/techcard/**'
+            compose:
+              - 'docker-compose.prod.yml'
 
       - id: result
         run: |
+          targets=(frontend backend renderer techcard)
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TARGET="${{ inputs.target }}"
-            echo "frontend=$([[ $TARGET == all || $TARGET == frontend ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-            echo "backend=$([[ $TARGET == all || $TARGET == backend ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-            echo "renderer=$([[ $TARGET == all || $TARGET == renderer ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+            T="${{ inputs.target }}"
+            [ "$T" = "deploy-only" ] && T="none"
+            for t in "${targets[@]}"; do
+              [[ "$T" == "all" || "$T" == "$t" ]] && echo "$t=true" >> "$GITHUB_OUTPUT" || echo "$t=false" >> "$GITHUB_OUTPUT"
+            done
+            echo "compose=true" >> "$GITHUB_OUTPUT"
           else
             echo "frontend=${{ steps.filter.outputs.frontend }}" >> "$GITHUB_OUTPUT"
-            echo "backend=${{ steps.filter.outputs.backend }}" >> "$GITHUB_OUTPUT"
+            echo "backend=${{ steps.filter.outputs.backend }}"   >> "$GITHUB_OUTPUT"
             echo "renderer=${{ steps.filter.outputs.renderer }}" >> "$GITHUB_OUTPUT"
+            echo "techcard=${{ steps.filter.outputs.techcard }}" >> "$GITHUB_OUTPUT"
+            echo "compose=${{ steps.filter.outputs.compose }}"   >> "$GITHUB_OUTPUT"
           fi
 
-  build-frontend:
+  frontend:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      image: frontend
+      context: ./frontend
+      tag: latest
+      build_args: |
+        VITE_API_URL=/api/v1
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push frontend
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: true
-          tags: ghcr.io/admst-dz/spruzhyk-frontend:latest
-          build-args: |
-            VITE_API_URL=/api/v1
-          cache-from: type=registry,ref=ghcr.io/admst-dz/spruzhyk-frontend:cache
-          cache-to: type=registry,ref=ghcr.io/admst-dz/spruzhyk-frontend:cache,mode=max
-
-  build-backend:
+  backend:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      image: backend
+      context: ./backend
+      tag: latest
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push backend
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
-          tags: ghcr.io/admst-dz/spruzhyk-backend:latest
-          cache-from: type=registry,ref=ghcr.io/admst-dz/spruzhyk-backend:cache
-          cache-to: type=registry,ref=ghcr.io/admst-dz/spruzhyk-backend:cache,mode=max
-
-  build-renderer:
+  renderer:
     needs: changes
     if: needs.changes.outputs.renderer == 'true'
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      image: renderer
+      context: ./microservices/renderer
+      tag: latest
+
+  techcard:
+    needs: changes
+    if: needs.changes.outputs.techcard == 'true'
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      image: techcard
+      context: ./microservices/techcard
+      tag: latest
+
+  deploy:
+    needs: [changes, frontend, backend, renderer, techcard]
+    if: ${{ always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Write env file
+        run: |
+          mkdir -p .deploy
+          cat > .deploy/.env <<'ENVEOF'
+          ${{ secrets.PROD_ENV_FILE }}
+          ENVEOF
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.PROD_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Build and push renderer
-        uses: docker/build-push-action@v6
-        with:
-          context: ./microservices/renderer
-          file: ./microservices/renderer/Dockerfile
-          push: true
-          tags: ghcr.io/admst-dz/spruzhyk-renderer:latest
-          cache-from: type=registry,ref=ghcr.io/admst-dz/spruzhyk-renderer:cache
-          cache-to: type=registry,ref=ghcr.io/admst-dz/spruzhyk-renderer:cache,mode=max
+      - name: Upload compose and env
+        env:
+          USER: ${{ secrets.PROD_USER }}
+          HOST: ${{ secrets.PROD_HOST }}
+          PATH_REMOTE: ${{ secrets.PROD_PATH }}
+        run: |
+          ssh "$USER@$HOST" "mkdir -p $PATH_REMOTE"
+          scp docker-compose.prod.yml "$USER@$HOST:$PATH_REMOTE/docker-compose.prod.yml"
+          scp .deploy/.env "$USER@$HOST:$PATH_REMOTE/.env"
 
+      - name: Pull and restart
+        env:
+          USER: ${{ secrets.PROD_USER }}
+          HOST: ${{ secrets.PROD_HOST }}
+          PATH_REMOTE: ${{ secrets.PROD_PATH }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          ssh "$USER@$HOST" bash -s <<EOF
+          set -euo pipefail
+          cd "$PATH_REMOTE"
+          echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+          docker compose -f docker-compose.prod.yml pull
+          docker compose -f docker-compose.prod.yml up -d --remove-orphans --scale backend=2
+          docker image prune -f
+          docker compose -f docker-compose.prod.yml ps
+          EOF
+
+      - name: Wipe env file
+        if: always()
+        run: rm -f .deploy/.env

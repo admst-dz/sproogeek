@@ -1,18 +1,27 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Experience } from './components/configurator/Experience'
 import { Interface, ZoomControls } from './components/configurator/Interface'
 import { Home } from './components/home/Home'
 import { Order } from './components/order/Order'
 import { DealerDashboard } from './components/dashboard/DealerDashboard'
+import { ManufacturerDashboard } from './components/dashboard/ManufacturerDashboard'
 import { AuthModal } from './components/auth/AuthModal'
 import { ClientDashboard } from './components/dashboard/ClientDashboard'
 import { useConfigurator } from './store'
 import { restoreSession } from './api'
 import { SketchbookInterface } from './components/sketchbook/SketchbookInterface'
 import { ThermosInterface } from './components/thermos/ThermosInterface'
+import { PowerbankInterface } from './components/powerbank/PowerbankInterface'
 import { CookieBanner } from './components/shared/CookieBanner'
+import { FullPageVibeLoader, SceneLoadingOverlay } from './components/shared/VibeLoader'
 import { AdminAuth } from './components/auth/AdminAuth'
+import { AdminDashboard } from './components/admin/AdminDashboard'
+import { SceneHints } from './components/shared/SceneHints'
+import { ConfirmModal } from './components/shared/ConfirmModal'
+import { UndoRedoControls } from './components/shared/UndoRedoControls'
+import { useUndoRedoHotkeys, useTemporalConfigurator } from './hooks/useTemporalConfigurator'
+import { CommandPalette } from './components/shared/CommandPalette'
 
 const SCREEN_TO_PATH = {
     home: '/',
@@ -22,6 +31,7 @@ const SCREEN_TO_PATH = {
     client_dashboard: '/dashboard',
     sketchbook_configurator: '/sketchbook',
     admin_auth: '/borodazaebal',
+    admin_dashboard: '/admin',
 };
 
 const PATH_TO_SCREEN = Object.fromEntries(
@@ -72,7 +82,12 @@ function App() {
     if (isRenderMode) {
         return (
             <div className="w-[1024px] h-[1024px] bg-[#E5E5E5] flex items-center justify-center">
-                <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ preserveDrawingBuffer: true, antialias: true }}>
+                <Canvas
+                    shadows
+                    dpr={[1, 2]}
+                    camera={{ position: [0, 0, 4.5], fov: 45 }}
+                    gl={{ preserveDrawingBuffer: true, antialias: true, alpha: false, powerPreference: 'high-performance' }}
+                >
                     <Experience />
                 </Canvas>
             </div>
@@ -81,35 +96,12 @@ function App() {
 
 
     const [screen, setScreen] = useState(() => getInitialState().screen);
-    const [dashboardTab, setDashboardTab] = useState(() => getInitialState().tab);
     const [showAuth, setShowAuth] = useState(false);
-
-    const navigateTo = useCallback((newScreen) => {
-        window.history.pushState({ screen: newScreen }, '', SCREEN_TO_PATH[newScreen] ?? '/');
-        setScreen(newScreen);
-        setDashboardTab(null);
-    }, []);
-
-    const navigateToTab = useCallback((tab) => {
-        window.history.pushState({ screen: 'client_dashboard', tab }, '', TAB_TO_PATH[tab] ?? '/dashboard');
-        setDashboardTab(tab);
-    }, []);
-
-    useEffect(() => {
-        const handlePopState = (e) => {
-            const path = window.location.pathname;
-            if (path.startsWith('/dashboard/')) {
-                setScreen('client_dashboard');
-                setDashboardTab(PATH_TO_TAB[path] ?? null);
-            } else {
-                setScreen(e.state?.screen ?? PATH_TO_SCREEN[path] ?? 'home');
-                setDashboardTab(null);
-            }
-        };
-        window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
-    }, []);
     const [pendingSuccessToast, setPendingSuccessToast] = useState(false);
+    const [pendingNavigation, setPendingNavigation] = useState(null);
+
+    const configuratorCanvasRef = useRef(null);
+    const sketchbookCanvasRef = useRef(null);
 
     const {
         activeProduct,
@@ -127,24 +119,55 @@ function App() {
         cartItem,
         cartRestoredFromCookie,
         clearCart,
+        resetConfigurator,
     } = useConfigurator();
+
+    const isConfiguratorScreen = screen === 'configurator' || screen === 'sketchbook_configurator';
+    useUndoRedoHotkeys(isConfiguratorScreen);
+    const pastLen = useTemporalConfigurator((s) => s.pastStates.length);
+    const isDirty = isConfiguratorScreen && pastLen > 0;
+
+    const guardedNavigate = (target) => {
+        if (isDirty) {
+            setPendingNavigation(target);
+        } else {
+            setScreen(target);
+        }
+    };
+    const confirmDiscardAndNavigate = () => {
+        if (pendingNavigation) {
+            try { useConfigurator.temporal.getState().clear(); } catch { /* noop */ }
+            setScreen(pendingNavigation);
+            setPendingNavigation(null);
+        }
+    };
 
     useEffect(() => {
         if (theme === 'dark') document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
     }, [theme]);
 
+    useEffect(() => {
+        const path = SCREEN_TO_PATH[screen];
+        if (path && window.location.pathname !== path) {
+            window.history.pushState({}, '', path);
+        }
+    }, [screen]);
+
     // --- ЛОГИКА: ПРОВЕРКА РОЛИ И РОУТИНГ ---
     useEffect(() => {
-        if (screen === 'admin_auth') return;
-        if (userRole === 'dealer') {
-            navigateTo('dealer');
-        } else if (userRole === 'client' && screen !== 'configurator' && screen !== 'sketchbook_configurator') {
-            navigateTo('client_dashboard');
-        } else if (!userRole && (screen === 'dealer' || screen === 'client_dashboard')) {
-            navigateTo('home');
+        if (['admin', 'owner'].includes(userRole)) {
+            setScreen('admin_dashboard');
+        } else if (userRole === 'dealer') {
+            setScreen('dealer');
+        } else if (userRole === 'manufacturer') {
+            setScreen('manufacturer');
+        } else if (userRole === 'client') {
+            setScreen('client_dashboard');
+        } else if (!userRole && ['dealer', 'manufacturer', 'client_dashboard', 'admin_dashboard'].includes(screen)) {
+            setScreen('home');
         }
-    }, [userRole, screen, navigateTo]);
+    }, [userRole, screen]);
 
     // ... остальной код (без изменений с прошлого рабочего варианта)
 
@@ -161,16 +184,12 @@ function App() {
     }, [setCurrentUser, setUserRole, setClientSubRole, setAuthLoading]);
 
     if (authLoading) {
-        return (
-            <div className="fixed inset-0 bg-[#0B0F19] flex items-center justify-center">
-                <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-            </div>
-        );
+        return <FullPageVibeLoader label="Проверяем вход" />;
     }
 
     const handleContinueOrder = () => {
         if (currentUser) {
-            navigateTo('client_dashboard');
+            setScreen('client_dashboard');
         } else {
             setShowAuth(true);
         }
@@ -179,6 +198,22 @@ function App() {
     return (
         <>
             <CookieBanner />
+
+            <CommandPalette
+                navigate={guardedNavigate}
+                screen={screen}
+                openAuth={() => setShowAuth(true)}
+            />
+
+            <ConfirmModal
+                open={!!pendingNavigation}
+                title="Уйти из конструктора?"
+                message="Вы вносили изменения. Уверены, что хотите перейти на другой экран?"
+                confirmLabel="Перейти"
+                cancelLabel="Остаться"
+                onConfirm={confirmDiscardAndNavigate}
+                onCancel={() => setPendingNavigation(null)}
+            />
 
             {/* --- МОДАЛЬНОЕ ОКНО АВТОРИЗАЦИИ --- */}
             {showAuth && (
@@ -235,7 +270,7 @@ function App() {
             {/* --- ЭКРАН: ГЛАВНАЯ СТРАНИЦА --- */}
             {screen === 'home' && (
                 <Home
-                    onStart={() => navigateTo('configurator')}
+                    onStart={() => setScreen('configurator')}
                     onAuth={() => setShowAuth(true)}
                     user={currentUser}
                     logout={logout}
@@ -247,7 +282,7 @@ function App() {
             {/* Доступно только для незарегистрированных пользователей */}
             {screen === 'order' && (
                 <Order
-                    onBack={() => navigateTo('configurator')}
+                    onBack={() => setScreen('configurator')}
                     onSuccess={() => {
                         setPendingSuccessToast(true);
                         setShowAuth(true);
@@ -258,42 +293,45 @@ function App() {
 
             {/* --- ЭКРАН: КАБИНЕТ ДИЛЕРА --- */}
             {screen === 'dealer' && (
-                <DealerDashboard onBack={() => navigateTo('home')} />
+                <DealerDashboard onBack={() => setScreen('home')} />
+            )}
+
+
+            {/* --- ЭКРАН: КАБИНЕТ ПРОИЗВОДСТВА --- */}
+            {screen === 'manufacturer' && (
+                <ManufacturerDashboard onBack={() => setScreen('home')} />
             )}
 
 
             {/* --- ЭКРАН: УМНЫЙ ДАШБОРД КЛИЕНТА (ПЛ, ПКЛ, КЛ) --- */}
             {screen === 'client_dashboard' && (
                 <ClientDashboard
-                    onBack={() => navigateTo('home')}
-                    onEdit={() => navigateTo('configurator')}
+                    onBack={() => setScreen('home')}
+                    onEdit={() => setScreen('configurator')}
                     showSuccessToast={pendingSuccessToast}
                     onSuccessToastShown={() => setPendingSuccessToast(false)}
-                    initialTab={dashboardTab}
-                    onTabChange={navigateToTab}
                 />
-            )}
-
-
-            {/* --- ЭКРАН: АВТОРИЗАЦИЯ АДМИНКИ --- */}
-            {screen === 'admin_auth' && (
-                <AdminAuth onSuccess={() => {}} />
             )}
 
 
             {/* --- ЭКРАН: 3D КОНСТРУКТОР --- */}
             {screen === 'configurator' && (
-                <div className="fixed inset-0 w-full h-full bg-[#E5E5E5] dark:bg-[#080B13] overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
+                <div className="app-bg fixed inset-0 w-full h-full overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
 
                     <button
-                        onClick={() => navigateTo(currentUser ? (userRole === 'dealer' ? 'dealer' : 'client_dashboard') : 'home')}
+                        onClick={() => guardedNavigate(currentUser ? (userRole === 'dealer' ? 'dealer' : 'client_dashboard') : 'home')}
                         className="absolute top-6 left-6 z-50 px-6 py-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10"
                     >
                         ← {currentUser ? 'В Кабинет' : 'В Меню'}
                     </button>
 
+                    <ConfiguratorToolbar
+                        onReset={() => resetConfigurator(activeProduct)}
+                        productLabel={productLabel(activeProduct)}
+                    />
+
                     {activeProduct === 'calendar' ? (
-                        <div className="w-full h-full flex flex-col items-center justify-center font-zen bg-[#E5E5E5] dark:bg-[#080B13] select-none transition-colors duration-300">
+                        <div className="app-bg w-full h-full flex flex-col items-center justify-center font-zen select-none transition-colors duration-300">
                             <h1 className="text-4xl md:text-8xl font-black tracking-[0.1em] uppercase text-center px-4 text-[#cfcfcf] dark:text-white/10"
                                 style={{ textShadow: '2px 2px 0px rgba(255,255,255,0.5), -1px -1px 0px rgba(0,0,0,0.1)' }}
                             >
@@ -305,7 +343,7 @@ function App() {
                         </div>
                     ) : (
                         <>
-                            <div className="relative w-full h-[45%] md:absolute md:inset-0 md:w-[75%] md:h-full bg-[#dcdcdc] dark:bg-[#0A0E1A] md:bg-transparent dark:md:bg-transparent">
+                            <div ref={configuratorCanvasRef} className="app-bg relative w-full h-[45%] md:absolute md:inset-0 md:w-[75%] md:h-full md:bg-transparent dark:md:bg-transparent">
                                 <div className="absolute bottom-4 right-4 z-10 md:hidden">
                                     <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
                                 </div>
@@ -316,11 +354,15 @@ function App() {
                                     gl={{
                                         antialias: true,
                                         preserveDrawingBuffer: true,
+                                        alpha: true, // прозрачный canvas — палитра-градиент подложки видна
+                                        powerPreference: 'high-performance',
                                         logarithmicDepthBuffer: true // Важно для устранения z-fighting в Safari
                                     }}
                                 >
                                     <Experience />
                                 </Canvas>
+                                <SceneLoadingOverlay label="Собираем 3D" />
+                                <SceneHints containerRef={configuratorCanvasRef} />
                             </div>
 
                             <div className="relative h-[55%] w-full z-10 md:absolute md:top-0 md:right-0 md:h-full md:w-[30%] pointer-events-none md:p-4 md:flex md:flex-col md:justify-center">
@@ -328,7 +370,17 @@ function App() {
                                     <ThermosInterface
                                         onFinish={() => {
                                             if (currentUser) {
-                                                navigateTo('client_dashboard');
+                                                setScreen('client_dashboard');
+                                            } else {
+                                                setShowAuth(true);
+                                            }
+                                        }}
+                                    />
+                                ) : activeProduct === 'powerbank' ? (
+                                    <PowerbankInterface
+                                        onFinish={() => {
+                                            if (currentUser) {
+                                                setScreen('client_dashboard');
                                             } else {
                                                 setShowAuth(true);
                                             }
@@ -338,7 +390,7 @@ function App() {
                                     <Interface
                                         onFinish={() => {
                                             if (currentUser) {
-                                                navigateTo('client_dashboard');
+                                                setScreen('client_dashboard');
                                             } else {
                                                 setShowAuth(true);
                                             }
@@ -357,25 +409,31 @@ function App() {
 
             {/* --- ЭКРАН: КОНСТРУКТОР БЛОКНОТА --- */}
             {screen === 'sketchbook_configurator' && (
-                <div className="fixed inset-0 w-full h-full bg-[#E5E5E5] dark:bg-[#080B13] overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
-                    <button onClick={() => navigateTo('home')} className="absolute top-6 left-6 z-50 px-6 py-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10">
+                <div className="app-bg fixed inset-0 w-full h-full overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
+                    <button onClick={() => guardedNavigate('home')} className="absolute top-6 left-6 z-50 px-6 py-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10">
                         ← В Меню
                     </button>
+                    <ConfiguratorToolbar
+                        onReset={() => resetConfigurator('sketchbook')}
+                        productLabel="Скетчбук"
+                    />
                     <>
-                        <div className="relative w-full h-[45%] md:absolute md:inset-0 md:w-[75%] md:h-full bg-[#dcdcdc] dark:bg-[#0A0E1A] md:bg-transparent dark:md:bg-transparent">
-                            <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true }}>
+                        <div ref={sketchbookCanvasRef} className="app-bg relative w-full h-[45%] md:absolute md:inset-0 md:w-[75%] md:h-full md:bg-transparent dark:md:bg-transparent">
+                            <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true, preserveDrawingBuffer: true, alpha: true, logarithmicDepthBuffer: true }}>
                                 {/* Освещение и контролы */}
                                 <ambientLight intensity={0.6} />
                                 <directionalLight position={[10, 10, 5]} intensity={1.5} />
                                 <directionalLight position={[-10, 5, 2]} intensity={0.5} />
                                 <Experience /> {/* В Experience.jsx нужно добавить логику для Sketchbook */}
                             </Canvas>
+                            <SceneLoadingOverlay label="Собираем 3D" />
+                            <SceneHints containerRef={sketchbookCanvasRef} />
                         </div>
                         <div className="relative h-[55%] w-full z-10 md:absolute md:top-0 md:right-0 md:h-full md:w-[30%] pointer-events-none md:p-4 md:flex md:flex-col md:justify-center">
                             {/* НОВЫЙ ИНТЕРФЕЙС БЛОКНОТА */}
                             <SketchbookInterface onFinish={() => {
                                         if (currentUser) {
-                                            navigateTo('client_dashboard');
+                                            setScreen('client_dashboard');
                                         } else {
                                             setShowAuth(true);
                                         }
@@ -384,8 +442,63 @@ function App() {
                     </>
                 </div>
             )}
+
+            {screen === 'admin_auth' && (
+                <AdminAuth onSuccess={(user) => {
+                    setCurrentUser(user);
+                    setUserRole(user.role);
+                }} />
+            )}
+
+            {screen === 'admin_dashboard' && (
+                <AdminDashboard onLogout={() => {
+                    logout();
+                    setScreen('home');
+                }} />
+            )}
         </>
     )
 }
 
 export default App
+
+const PRODUCT_LABELS = {
+    notebook: 'Ежедневник',
+    sketchbook: 'Скетчбук',
+    thermos: 'Термос',
+    powerbank: 'Повербанк',
+    calendar: 'Календарь',
+};
+const productLabel = (p) => PRODUCT_LABELS[p] ?? 'продукт';
+
+function ConfiguratorToolbar({ onReset, productLabel }) {
+    const [confirmReset, setConfirmReset] = useState(false);
+    return (
+        <>
+            <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
+                <UndoRedoControls />
+                <button
+                    onClick={() => setConfirmReset(true)}
+                    title="Сбросить конфигурацию"
+                    className="h-[42px] px-4 flex items-center gap-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-[9px] border border-black/10 dark:border-white/10 shadow-xl text-[#1a1a1a] dark:text-white text-xs font-bold uppercase tracking-widest hover:bg-white dark:hover:bg-white/10 active:scale-95 transition-all"
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 12a9 9 0 1 0 3-6.7" />
+                        <polyline points="3 4 3 9 8 9" />
+                    </svg>
+                    <span className="hidden sm:inline">Сбросить</span>
+                </button>
+            </div>
+            <ConfirmModal
+                open={confirmReset}
+                title={`Сбросить «${productLabel}»?`}
+                message="Все настройки этого продукта вернутся к исходным. Действие нельзя отменить."
+                confirmLabel="Сбросить"
+                cancelLabel="Оставить"
+                danger
+                onConfirm={() => { onReset(); setConfirmReset(false); }}
+                onCancel={() => setConfirmReset(false)}
+            />
+        </>
+    );
+}

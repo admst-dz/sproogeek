@@ -1,0 +1,95 @@
+name: Build Dev Images
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "What to build"
+        required: true
+        default: "all"
+        type: choice
+        options: [all, frontend, backend, renderer, techcard]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.result.outputs.frontend }}
+      backend:  ${{ steps.result.outputs.backend }}
+      renderer: ${{ steps.result.outputs.renderer }}
+      techcard: ${{ steps.result.outputs.techcard }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name == 'push'
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+            backend:
+              - 'backend/**'
+            renderer:
+              - 'microservices/renderer/**'
+            techcard:
+              - 'microservices/techcard/**'
+
+      - id: result
+        run: |
+          targets=(frontend backend renderer techcard)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            T="${{ inputs.target }}"
+            for t in "${targets[@]}"; do
+              [[ "$T" == "all" || "$T" == "$t" ]] && echo "$t=true" >> "$GITHUB_OUTPUT" || echo "$t=false" >> "$GITHUB_OUTPUT"
+            done
+          else
+            echo "frontend=${{ steps.filter.outputs.frontend }}" >> "$GITHUB_OUTPUT"
+            echo "backend=${{ steps.filter.outputs.backend }}"   >> "$GITHUB_OUTPUT"
+            echo "renderer=${{ steps.filter.outputs.renderer }}" >> "$GITHUB_OUTPUT"
+            echo "techcard=${{ steps.filter.outputs.techcard }}" >> "$GITHUB_OUTPUT"
+          fi
+
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      image: frontend
+      context: ./frontend
+      tag: dev
+      build_args: |
+        VITE_API_URL=/api/v1
+
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      image: backend
+      context: ./backend
+      tag: dev
+
+  renderer:
+    needs: changes
+    if: needs.changes.outputs.renderer == 'true'
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      image: renderer
+      context: ./microservices/renderer
+      tag: dev
+
+  techcard:
+    needs: changes
+    if: needs.changes.outputs.techcard == 'true'
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      image: techcard
+      context: ./microservices/techcard
+      tag: dev

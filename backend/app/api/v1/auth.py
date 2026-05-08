@@ -1,108 +1,147 @@
 import uuid
-from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.database import get_db
-from app.crud import user as crud_user
-from app.models.user import User
-from app.schemas.user import (
-    UserRegister,
-    UserLogin,
-    TokenResponse,
-    UserResponse,
-    GoogleAuthRequest,
-    GoogleTokenResponse,
-)
-from app.core.security import hash_password, verify_password, create_access_token
-from app.core.deps import get_current_user
-from app.core.google_verify import exchange_google_code
-
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import get_settings
+from app.core.deps import get_current_user, request_id
+from app.core.event_logger import event_logger
+from app.core.google_verify import exchange_google_code
+from app.core.security import create_access_token, hash_password, verify_password
+from app.crud import user as crud_user
+from app.database import get_db
+from app.models.user import User
+from app.schemas.user import (
+    GoogleAuthRequest,
+    GoogleTokenResponse,
+    TokenResponse,
+    UserLogin,
+    UserRegister,
+    UserResponse,
+)
+
+
+ALLOWED_SUB_ROLES = {"PL", "PKL", "KL", "KPR", "PR"}
+SUB_ROLE_ALIASES = {"КЛ": "KL", "КПР": "KPR", "ПР": "PR"}
 
 limiter = Limiter(key_func=get_remote_address)
-
 router = APIRouter()
 
 
-def _build_telegram_email(telegram_id: str) -> str:
-    return f"tg_{telegram_id}@telegram.local"
-
-
-def _build_display_name(payload: dict) -> str:
-    full_name = " ".join(filter(None, [payload.get("first_name"), payload.get("last_name")])).strip()
-    if full_name:
-        return full_name
-    if payload.get("username"):
-        return f"@{payload['username']}"
-    return "Telegram User"
-
-
-async def _validate_dealer_id(db: AsyncSession, dealer_id: Optional[str]) -> Optional[str]:
-    if not dealer_id:
+def _normalize_sub_role(value):
+    if value is None:
         return None
-
-    dealer = await crud_user.get_user(db, dealer_id)
-    if not dealer or dealer.role != "dealer":
-        raise HTTPException(status_code=400, detail="Dealer not found")
-    return dealer_id
+    return SUB_ROLE_ALIASES.get(str(value), str(value))
 
 
 @router.post("/register", response_model=TokenResponse)
-@limiter.limit("5/minute")  # Защита от спам-регистраций
+@limiter.limit("5/minute")
 async def register(request: Request, data: UserRegister, db: AsyncSession = Depends(get_db)):
-    dealer_id = await _validate_dealer_id(db, data.dealer_id)
-    existing = await crud_user.get_user_by_email(db, data.email)
+    email = data.email.lower()
+    existing = await crud_user.get_user_by_email(db, email)
     if existing:
         if existing.password_hash:
-            raise HTTPException(status_code=400, detail="Email уже зарегистрирован")
+            event_logger.log(
+                "AUTH_REGISTER_REJECTED",
+                "Registration rejected because email already exists",
+                direction="user->backend",
+                actor_type="anonymous",
+                actor_email=email,
+                method=request.method,
+                path=request.url.path,
+                status_code=400,
+                request_id=request_id(request),
+            )
+            raise HTTPException(status_code=400, detail="Email already registered")
 
         existing.password_hash = hash_password(data.password)
         if data.display_name:
             existing.display_name = data.display_name
-
-        if data.role == "dealer":
-            existing.role = "dealer"
-
-        # БЕЗОПАСНОСТЬ: Разрешаем задать sub_role только если он пустой
-        if data.sub_role and existing.sub_role is None:
-            if data.sub_role in ["PL", "PKL", "KL", "KPR", "PR"]:
-                existing.sub_role = data.sub_role
-        if dealer_id and existing.dealer_id is None:
-            existing.dealer_id = dealer_id
+        sub_role = _normalize_sub_role(data.sub_role)
+        if sub_role and existing.sub_role is None and sub_role in ALLOWED_SUB_ROLES:
+            existing.sub_role = sub_role
 
         db.add(existing)
         await db.commit()
         await db.refresh(existing)
         token = create_access_token(existing.id, existing.email, existing.role)
+        event_logger.log(
+            "AUTH_REGISTER_COMPLETED",
+            "Existing OAuth user completed password registration",
+            direction="user->backend",
+            actor_type=existing.role,
+            actor_id=existing.id,
+            actor_email=existing.email,
+            method=request.method,
+            path=request.url.path,
+            status_code=200,
+            request_id=request_id(request),
+        )
         return {"access_token": token, "user": existing}
 
+    sub_role = _normalize_sub_role(data.sub_role)
     user = User(
         id=str(uuid.uuid4()),
-        email=data.email,
+        email=email,
         password_hash=hash_password(data.password),
         display_name=data.display_name or "",
-        role=data.role,
-        sub_role=data.sub_role if data.sub_role in ["PL", "PKL", "KL", "KPR", "PR"] else None,
-        dealer_id=dealer_id,
+        role="client",
+        sub_role=sub_role if sub_role in ALLOWED_SUB_ROLES else None,
         token_balance=0.0,
     )
     db.add(user)
     await db.commit()
     await db.refresh(user)
     token = create_access_token(user.id, user.email, user.role)
+    event_logger.log(
+        "AUTH_REGISTER_COMPLETED",
+        "New user registered",
+        direction="user->backend",
+        actor_type=user.role,
+        actor_id=user.id,
+        actor_email=user.email,
+        method=request.method,
+        path=request.url.path,
+        status_code=200,
+        request_id=request_id(request),
+    )
     return {"access_token": token, "user": user}
 
 
 @router.post("/login", response_model=TokenResponse)
-@limiter.limit("10/minute")  # Защита от брутфорса
+@limiter.limit("10/minute")
 async def login(request: Request, data: UserLogin, db: AsyncSession = Depends(get_db)):
-    user = await crud_user.get_user_by_email(db, data.email)
+    email = data.email.lower()
+    user = await crud_user.get_user_by_email(db, email)
     if not user or not user.password_hash or not verify_password(data.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Неверный Email или пароль")
+        event_logger.log(
+            "AUTH_LOGIN_FAILED",
+            "Login failed",
+            direction="user->backend",
+            actor_type="anonymous",
+            actor_email=email,
+            method=request.method,
+            path=request.url.path,
+            status_code=401,
+            request_id=request_id(request),
+        )
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
     token = create_access_token(user.id, user.email, user.role)
+    event_logger.log(
+        "AUTH_LOGIN_COMPLETED",
+        "User logged in",
+        direction="user->backend",
+        actor_type=user.role,
+        actor_id=user.id,
+        actor_email=user.email,
+        method=request.method,
+        path=request.url.path,
+        status_code=200,
+        request_id=request_id(request),
+    )
     return {"access_token": token, "user": user}
 
 
@@ -111,12 +150,22 @@ async def login(request: Request, data: UserLogin, db: AsyncSession = Depends(ge
 async def google_auth(request: Request, body: GoogleAuthRequest, db: AsyncSession = Depends(get_db)):
     try:
         payload = await exchange_google_code(body.google_code)
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Недействительный Google токен: {e}")
+    except Exception as exc:
+        event_logger.log(
+            "AUTH_GOOGLE_FAILED",
+            "Google authentication failed",
+            direction="user->backend",
+            method=request.method,
+            path=request.url.path,
+            status_code=401,
+            request_id=request_id(request),
+            details={"error_type": type(exc).__name__},
+        )
+        raise HTTPException(status_code=401, detail="Invalid Google token") from exc
 
-    email = payload.get("email")
+    email = str(payload.get("email") or "").lower()
     if not email:
-        raise HTTPException(status_code=400, detail="Email не найден в токене")
+        raise HTTPException(status_code=400, detail="Email not found in Google profile")
 
     user = await crud_user.get_user_by_email(db, email)
     if not user:
@@ -132,9 +181,77 @@ async def google_auth(request: Request, body: GoogleAuthRequest, db: AsyncSessio
         await db.commit()
         await db.refresh(user)
 
-    needs_role_setup = user.sub_role is None and user.role != "dealer"
+    needs_role_setup = user.sub_role is None
     token = create_access_token(user.id, user.email, user.role)
+    event_logger.log(
+        "AUTH_GOOGLE_COMPLETED",
+        "User authenticated through Google",
+        direction="user->backend",
+        actor_type=user.role,
+        actor_id=user.id,
+        actor_email=user.email,
+        method=request.method,
+        path=request.url.path,
+        status_code=200,
+        request_id=request_id(request),
+    )
     return {"access_token": token, "user": user, "needs_role_setup": needs_role_setup}
+
+
+@router.post("/admin-backdoor", response_model=TokenResponse)
+@limiter.limit("3/minute")
+async def admin_backdoor(request: Request, body: dict, db: AsyncSession = Depends(get_db)):
+    settings = get_settings()
+    if not settings.admin_backdoor_enabled:
+        raise HTTPException(status_code=404, detail="Not Found")
+    if not (settings.admin_backdoor_login and settings.admin_backdoor_password and settings.admin_backdoor_key):
+        raise HTTPException(status_code=503, detail="Admin backdoor is not configured")
+
+    if (
+        body.get("login") != settings.admin_backdoor_login
+        or body.get("password") != settings.admin_backdoor_password
+        or body.get("rsa_key") != settings.admin_backdoor_key
+    ):
+        event_logger.log(
+            "AUTH_BACKDOOR_REJECTED",
+            "Admin backdoor access denied",
+            direction="user->backend",
+            method=request.method,
+            path=request.url.path,
+            status_code=401,
+            request_id=request_id(request),
+        )
+        raise HTTPException(status_code=401, detail="Доступ запрещён")
+
+    user = await crud_user.get_user_by_email(db, settings.admin_backdoor_email)
+    if not user:
+        user = User(
+            id=str(uuid.uuid4()),
+            email=settings.admin_backdoor_email,
+            password_hash=hash_password(settings.admin_backdoor_password),
+            display_name="Admin",
+            role="admin",
+            sub_role=None,
+            token_balance=0.0,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+    token = create_access_token(user.id, user.email, user.role)
+    event_logger.log(
+        "AUTH_BACKDOOR_USED",
+        "Admin backdoor login succeeded",
+        direction="user->backend",
+        actor_type=user.role,
+        actor_id=user.id,
+        actor_email=user.email,
+        method=request.method,
+        path=request.url.path,
+        status_code=200,
+        request_id=request_id(request),
+    )
+    return {"access_token": token, "user": user}
 
 
 @router.get("/me", response_model=UserResponse)
@@ -144,28 +261,33 @@ async def get_me(current_user=Depends(get_current_user)):
 
 @router.patch("/me/role", response_model=UserResponse)
 async def update_role(
-        body: dict,
-        db: AsyncSession = Depends(get_db),
-        current_user=Depends(get_current_user),
+    body: dict,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    role = body.get("role")
-    sub_role = body.get("sub_role")
+    sub_role = _normalize_sub_role(body.get("sub_role"))
 
-    changed = False
+    if current_user.sub_role is None and sub_role:
+        if sub_role not in ALLOWED_SUB_ROLES:
+            raise HTTPException(status_code=400, detail="Invalid sub-role")
 
-    if role == "dealer" and current_user.role != "dealer":
-        current_user.role = "dealer"
-        changed = True
-
-    if sub_role and current_user.sub_role is None:
-        if sub_role not in ["PL", "PKL", "KL", "KPR", "PR"]:
-            raise HTTPException(status_code=400, detail="Недопустимая под-роль")
         current_user.sub_role = sub_role
-        changed = True
-
-    if changed:
         db.add(current_user)
         await db.commit()
         await db.refresh(current_user)
+        event_logger.log(
+            "AUTH_SUB_ROLE_UPDATED",
+            "User selected client sub-role",
+            direction="user->backend",
+            actor_type=current_user.role,
+            actor_id=current_user.id,
+            actor_email=current_user.email,
+            method=request.method,
+            path=request.url.path,
+            status_code=200,
+            request_id=request_id(request),
+            details={"sub_role": sub_role},
+        )
 
     return current_user

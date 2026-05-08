@@ -1,5 +1,19 @@
 import { useState, useRef } from 'react';
 import { useConfigurator, captureRender } from "../../store"
+import { BlockPDFPreview } from '../configurator/BlockPDFPreview';
+import patternBlank  from '../../assets/icons/pattern-blank.svg';
+import patternLined  from '../../assets/icons/pattern-lined.svg';
+import patternTlined from '../../assets/icons/pattern-tlined.svg';
+import patternGrid   from '../../assets/icons/pattern-grid.svg';
+import patternDotted from '../../assets/icons/pattern-dotted.svg';
+
+const PATTERNS = [
+    { id: 'blank',  label: 'Пустой',      icon: patternBlank },
+    { id: 'lined',  label: 'Линейка',     icon: patternLined },
+    { id: 'tlined', label: 'Т. линейка',  icon: patternTlined },
+    { id: 'grid',   label: 'Клетка',      icon: patternGrid },
+    { id: 'dotted', label: 'Точка',       icon: patternDotted },
+];
 
 const palette = [
     { name: 'Kraft', bg: '#D2B48C' }, // Крафт
@@ -75,21 +89,32 @@ export const SketchbookInterface = ({ onFinish }) => {
                 )}
 
                 {tab === 'block' && (
-                    <div className="animate-fade-in flex flex-col h-full pb-40">
-                        <div className="glass-panel rounded-[11px] p-4 mb-4 text-center opacity-80 text-sm border-white/10">Выберите разлиновку страниц</div>
-                        <div className="grid grid-cols-2 gap-3 h-full content-start">
-                            {['blank', 'lined', 'grid', 'dotted'].map((pt) => (
-                                <button key={pt} onClick={() => setPaperPattern(pt)} className={`glass-panel rounded-[11px] aspect-square flex flex-col items-center justify-center gap-3 transition-all group hover:bg-white/20 ${paperPattern === pt ? 'bg-white/30 border-white/50 shadow-lg scale-[1.02]' : ''}`}>
-                                    <div className={`w-14 h-14 rounded-[11px] border-2 p-2 ${paperPattern === pt ? 'border-white bg-white/20' : 'border-white/20 bg-transparent'}`}><BlockIcon type={pt} /></div>
-                                    <span className="text-lg font-bold tracking-wide">{pt === 'blank' && 'Пустой'}{pt === 'lined' && 'Линейка'}{pt === 'grid' && 'Клетка'}{pt === 'dotted' && 'Точка'}</span>
+                    <div className="animate-fade-in flex flex-col gap-4 pb-40">
+                        <div className="grid grid-cols-5 gap-2">
+                            {PATTERNS.map(({ id, label, icon }) => (
+                                <button
+                                    key={id}
+                                    onClick={() => setPaperPattern(id)}
+                                    className={`glass-panel rounded-[11px] flex flex-col items-center justify-center gap-1.5 py-3 px-1 transition-all hover:bg-white/20 ${paperPattern === id ? 'bg-white/30 border-white/50 shadow-lg scale-[1.02]' : ''}`}
+                                >
+                                    <div className={`w-10 h-10 rounded-[8px] border p-1.5 flex items-center justify-center ${paperPattern === id ? 'border-white bg-white/20' : 'border-white/20'}`}>
+                                        <img src={icon} alt={label} className="w-full h-full object-contain" />
+                                    </div>
+                                    <span className="text-[10px] font-bold tracking-wide text-center leading-tight opacity-90">{label}</span>
                                 </button>
                             ))}
                         </div>
+                        <BlockPDFPreview pattern={paperPattern} />
+                        {paperPattern === 'blank' && (
+                            <div className="glass-panel rounded-[11px] p-6 flex items-center justify-center opacity-60 text-sm text-center">
+                                Чистые страницы без разлиновки
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
 
-            <div className="absolute bottom-0 left-0 w-full px-4 md:px-6 pt-3 pb-4 md:pb-6 z-20 border-t border-white/10 bg-[#A4B0C9]/95 dark:bg-[#060911]/95 backdrop-blur-xl flex flex-col gap-3">
+            <div className="absolute bottom-0 left-0 w-full px-4 md:px-6 pt-3 pb-4 md:pb-6 z-20 border-t border-white/10 bg-[#0E2235]/85 dark:bg-[#0E2235]/85 backdrop-blur-xl flex flex-col gap-3">
                 <div className="flex items-center justify-between gap-4">
                     <div className="flex flex-col gap-1">
                         <span className="text-[10px] opacity-50 font-bold uppercase tracking-widest">Тираж (шт.)</span>
