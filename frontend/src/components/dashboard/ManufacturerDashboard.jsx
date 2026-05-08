@@ -164,7 +164,7 @@ export const ManufacturerDashboard = ({ onBack }) => {
     }), [stats]);
 
     return (
-        <div className="app-bg flex h-screen font-sans text-gray-900 dark:text-white overflow-hidden">
+        <div className="app-bg flex h-[100dvh] font-sans text-gray-900 dark:text-white overflow-hidden">
 
             <LiveOrderToasts onEvent={onLiveEvent} />
 
@@ -254,7 +254,7 @@ export const ManufacturerDashboard = ({ onBack }) => {
                 </div>
 
                 {activeTab === 'materials' && (
-                    <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[24px] overflow-hidden">
+                    <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[20px] md:rounded-[24px] overflow-hidden">
                         {materials.length === 0 ? (
                             <div className="py-20 flex flex-col items-center gap-4">
                                 <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10 text-2xl">📦</div>
@@ -262,7 +262,8 @@ export const ManufacturerDashboard = ({ onBack }) => {
                                 <p className="text-gray-600 text-[11px] max-w-md text-center">{t(language, 'materialsEmptyHint')}</p>
                             </div>
                         ) : (
-                            <table className="w-full text-sm">
+                            <div className="touch-scroll-x">
+                            <table className="w-full min-w-[680px] text-sm">
                                 <thead className="bg-white/5 text-[10px] uppercase tracking-widest text-gray-500">
                                     <tr>
                                         <th className="text-left px-5 py-3 font-bold">SKU</th>
@@ -287,6 +288,7 @@ export const ManufacturerDashboard = ({ onBack }) => {
                                     })}
                                 </tbody>
                             </table>
+                            </div>
                         )}
                     </div>
                 )}
@@ -311,7 +313,7 @@ export const ManufacturerDashboard = ({ onBack }) => {
                 </div>
 
                 {/* ORDERS LIST */}
-                <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[24px] overflow-hidden">
+                <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[20px] md:rounded-[24px] overflow-hidden">
                     {loading ? (
                         <div className="py-20 flex flex-col items-center gap-3">
                             <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
@@ -333,10 +335,10 @@ export const ManufacturerDashboard = ({ onBack }) => {
                                 <div key={orderId} className={i !== orders.length - 1 ? 'border-b border-white/5' : ''}>
                                     {/* Summary row */}
                                     <div
-                                        className="px-4 md:px-6 py-4 md:py-5 flex items-center gap-3 md:gap-4 hover:bg-white/[0.03] transition-colors cursor-pointer"
+                                        className="px-4 md:px-6 py-4 md:py-5 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 md:gap-4 hover:bg-white/[0.03] transition-colors cursor-pointer"
                                         onClick={() => toggleExpand(orderId)}
                                     >
-                                        <div className="flex flex-col min-w-[88px]">
+                                        <div className="flex items-center justify-between sm:block sm:min-w-[88px]">
                                             <span className="font-bold text-sm text-white">#{orderId.substring(0, 6).toUpperCase()}</span>
                                             <span className="text-[10px] text-gray-500 mt-0.5">
                                                 {order.created_at ? new Date(order.created_at).toLocaleDateString() : ''}
@@ -346,7 +348,7 @@ export const ManufacturerDashboard = ({ onBack }) => {
                                             <span className="font-bold text-sm text-white truncate block">{order.product_name || t(language, 'toastOrderFallback')}</span>
                                             <span className="text-xs text-gray-500 truncate block">{order.user_email || '—'} · {order.quantity || 1} {t(language, 'pcsUnit')}</span>
                                         </div>
-                                        <div className="flex items-center gap-3 shrink-0">
+                                        <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
                                             <StatusBadge status={order.status} language={language} />
                                             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className={`text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
                                                 <path d="M2 5l5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -356,7 +358,11 @@ export const ManufacturerDashboard = ({ onBack }) => {
 
                                     {isExpanded && (
                                         <div className="px-4 md:px-6 pb-6 border-t border-white/5 bg-white/[0.02]">
-                                            <ProgressTrack status={order.status} stageHistory={order.stage_history} language={language} />
+                                            <div className="touch-scroll-x pb-2">
+                                                <div className="min-w-[520px]">
+                                                    <ProgressTrack status={order.status} stageHistory={order.stage_history} language={language} />
+                                                </div>
+                                            </div>
 
                                             <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
                                                 <div className="md:col-span-2 space-y-3">

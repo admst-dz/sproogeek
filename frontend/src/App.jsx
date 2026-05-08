@@ -311,11 +311,11 @@ function App() {
 
             {/* --- ЭКРАН: 3D КОНСТРУКТОР --- */}
             {screen === 'configurator' && (
-                <div className="app-bg fixed inset-0 w-full h-full overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
+                <div className="app-bg fixed inset-0 w-full h-[100dvh] overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
 
                     <button
                         onClick={() => guardedNavigate(currentUser ? (userRole === 'dealer' ? 'dealer' : 'client_dashboard') : 'home')}
-                        className="absolute top-6 left-6 z-50 px-6 py-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10"
+                        className="absolute top-3 left-3 md:top-6 md:left-6 z-50 px-4 md:px-6 py-2 bg-white/85 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-xs md:text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10 max-w-[42vw] md:max-w-none truncate"
                     >
                         {currentUser ? t(language, 'backToCabinet') : t(language, 'backToMenu')}
                     </button>
@@ -339,8 +339,8 @@ function App() {
                         </div>
                     ) : (
                         <>
-                            <div ref={configuratorCanvasRef} className="app-bg relative w-full h-[45%] md:absolute md:top-0 md:left-0 md:bottom-0 md:w-[70%] md:h-full md:bg-transparent dark:md:bg-transparent">
-                                <div className="absolute bottom-4 right-4 z-10 md:hidden">
+                            <div ref={configuratorCanvasRef} className="app-bg relative w-full h-[40svh] min-h-[270px] max-h-[46svh] shrink-0 md:absolute md:top-0 md:left-0 md:bottom-0 md:w-[64%] lg:w-[70%] md:h-full md:max-h-none md:bg-transparent dark:md:bg-transparent">
+                                <div className="absolute bottom-3 right-3 z-10 md:hidden">
                                     <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
                                 </div>
                                 <Canvas
@@ -361,7 +361,7 @@ function App() {
                                 <SceneHints containerRef={configuratorCanvasRef} />
                             </div>
 
-                            <div className="relative h-[55%] w-full z-10 md:absolute md:top-0 md:right-0 md:h-full md:w-[30%] pointer-events-none md:p-4 md:flex md:flex-col md:justify-center">
+                            <div className="relative flex-1 min-h-0 w-full z-10 md:absolute md:top-0 md:right-0 md:h-full md:w-[36%] lg:w-[30%] pointer-events-none md:p-4 md:flex md:flex-col md:justify-center">
                                 {activeProduct === 'thermos' ? (
                                     <ThermosInterface
                                         onFinish={() => {
@@ -426,7 +426,7 @@ function ConfiguratorToolbar({ onReset, productLabel, language = 'ru' }) {
     const [confirmReset, setConfirmReset] = useState(false);
     return (
         <>
-            <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
+            <div className="absolute top-3 right-3 md:top-6 md:left-1/2 md:right-auto md:-translate-x-1/2 z-50 flex items-center gap-2">
                 <UndoRedoControls />
                 <button
                     onClick={() => setConfirmReset(true)}

@@ -511,10 +511,10 @@ function CreateUserDialog({ initialRole = 'dealer', onClose, onCreated }) {
     };
 
     return (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
             <form
                 onSubmit={submit}
-                className="w-full max-w-lg bg-[#0F1422] border border-white/10 rounded-[18px] p-6 shadow-[0_32px_80px_rgba(0,0,0,0.8)] space-y-4"
+                className="w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-[#0F1422] border border-white/10 rounded-t-[24px] sm:rounded-[18px] p-5 sm:p-6 shadow-[0_32px_80px_rgba(0,0,0,0.8)] space-y-4"
             >
                 <div className="flex items-center justify-between">
                     <h2 className="text-lg font-bold">Новый пользователь</h2>
@@ -556,18 +556,18 @@ function CreateUserDialog({ initialRole = 'dealer', onClose, onCreated }) {
                     <label className="block text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1.5">
                         Пароль (запишите — после закрытия скрытого окна вернуть его нельзя)
                     </label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         <input
                             type={showPassword ? 'text' : 'password'}
                             value={form.password}
                             onChange={e => update('password', e.target.value)}
                             className="flex-1 bg-black/30 border border-white/10 rounded-[8px] px-3 py-2 text-sm font-mono text-emerald-300 outline-none focus:border-white/30"
                         />
-                        <button type="button" onClick={() => setShowPassword(v => !v)} className="px-3 rounded-[8px] bg-white/5 hover:bg-white/10 text-xs">
+                        <button type="button" onClick={() => setShowPassword(v => !v)} className="px-3 py-2 rounded-[8px] bg-white/5 hover:bg-white/10 text-xs">
                             {showPassword ? 'Скрыть' : 'Показать'}
                         </button>
-                        <button type="button" onClick={regenerate} className="px-3 rounded-[8px] bg-white/5 hover:bg-white/10 text-xs">↻</button>
-                        <button type="button" onClick={copyPassword} className="px-3 rounded-[8px] bg-white/5 hover:bg-white/10 text-xs">📋</button>
+                        <button type="button" onClick={regenerate} className="px-3 py-2 rounded-[8px] bg-white/5 hover:bg-white/10 text-xs">↻</button>
+                        <button type="button" onClick={copyPassword} className="px-3 py-2 rounded-[8px] bg-white/5 hover:bg-white/10 text-xs">📋</button>
                     </div>
                 </div>
 
@@ -616,10 +616,10 @@ function ResetPasswordDialog({ user, onClose, onDone }) {
     };
 
     return (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
             <form
                 onSubmit={submit}
-                className="w-full max-w-md bg-[#0F1422] border border-white/10 rounded-[18px] p-6 shadow-[0_32px_80px_rgba(0,0,0,0.8)] space-y-4"
+                className="w-full max-w-md max-h-[92dvh] overflow-y-auto bg-[#0F1422] border border-white/10 rounded-t-[24px] sm:rounded-[18px] p-5 sm:p-6 shadow-[0_32px_80px_rgba(0,0,0,0.8)] space-y-4"
             >
                 <div className="flex items-center justify-between">
                     <h2 className="text-lg font-bold">Сбросить пароль</h2>
@@ -629,17 +629,17 @@ function ResetPasswordDialog({ user, onClose, onDone }) {
                     Пароль для <span className="font-bold text-white/70">{user.email}</span>. После сохранения старый
                     пароль перестанет работать. Запишите новый — поднять прежний нельзя.
                 </p>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <input
                         type={show ? 'text' : 'password'}
                         value={pw}
                         onChange={e => setPw(e.target.value)}
                         className="flex-1 bg-black/30 border border-white/10 rounded-[8px] px-3 py-2 text-sm font-mono text-emerald-300 outline-none focus:border-white/30"
                     />
-                    <button type="button" onClick={() => setShow(v => !v)} className="px-3 rounded-[8px] bg-white/5 hover:bg-white/10 text-xs">
+                    <button type="button" onClick={() => setShow(v => !v)} className="px-3 py-2 rounded-[8px] bg-white/5 hover:bg-white/10 text-xs">
                         {show ? 'Скрыть' : 'Показать'}
                     </button>
-                    <button type="button" onClick={() => setPw(suggestPassword())} className="px-3 rounded-[8px] bg-white/5 hover:bg-white/10 text-xs">↻</button>
+                    <button type="button" onClick={() => setPw(suggestPassword())} className="px-3 py-2 rounded-[8px] bg-white/5 hover:bg-white/10 text-xs">↻</button>
                 </div>
                 {msg && <div className="text-xs font-bold text-red-400">{msg}</div>}
                 <div className="flex gap-2 pt-2">
@@ -750,12 +750,12 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
     return (
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-5">
             <div className="space-y-3">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Профиль</p>
                     {msg && <span className={`text-xs font-bold ${msg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{msg}</span>}
                     <button
                         onClick={() => onResetRequested(user)}
-                        className="ml-auto px-3 py-1.5 rounded-[8px] bg-orange-500/15 hover:bg-orange-500/25 text-orange-300 text-xs font-bold transition"
+                        className="sm:ml-auto px-3 py-1.5 rounded-[8px] bg-orange-500/15 hover:bg-orange-500/25 text-orange-300 text-xs font-bold transition"
                     >
                         🔑 Сбросить пароль
                     </button>
@@ -910,7 +910,7 @@ function UsersTab({ initialFilter = null }) {
                     onChange={e => setFilter({ ...filter, search: e.target.value })}
                     onKeyDown={e => { if (e.key === 'Enter') reload({ ...filter }); }}
                     placeholder="Поиск email / имя / компания"
-                    className="bg-black/30 border border-white/10 rounded-[10px] px-3 py-1.5 text-sm w-64 outline-none focus:border-white/30"
+                    className="bg-black/30 border border-white/10 rounded-[10px] px-3 py-2 sm:py-1.5 text-sm w-full sm:w-64 outline-none focus:border-white/30"
                 />
                 {!initialFilter && (
                     <select
@@ -933,7 +933,7 @@ function UsersTab({ initialFilter = null }) {
                 </button>
                 <button
                     onClick={() => setCreateOpen(true)}
-                    className="ml-auto px-4 py-1.5 rounded-[10px] bg-white text-[#080B13] hover:bg-gray-100 text-sm font-black"
+                    className="sm:ml-auto px-4 py-2 sm:py-1.5 rounded-[10px] bg-white text-[#080B13] hover:bg-gray-100 text-sm font-black"
                 >
                     + Добавить
                 </button>
@@ -1023,9 +1023,9 @@ function StatCard({ label, value, hint }) {
     );
 }
 
-function DashboardTab({ onJumpToUsers }) {
-    const { data, loading, error } = useData(() => adminApi.getStats());
-    if (loading) return <Loader />;
+function DashboardTab({ onJumpToUsers, language }) {
+    const { data, loading, error } = useData(() => adminApi.getStats(), language);
+    if (loading) return <Loader language={language} />;
     if (error) return <ErrBox msg={error} />;
     const s = data || {};
     const usersByRole = s.users_by_role || [];
@@ -1034,7 +1034,7 @@ function DashboardTab({ onJumpToUsers }) {
     return (
         <>
             <SectionHeader title="Сводка" />
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <StatCard label="Пользователей" value={s.users_total ?? 0} hint={`+${s.new_users_last_30d ?? 0} за 30 дней`} />
                 <StatCard label="Заказов" value={s.orders_total ?? 0} hint={`+${s.new_orders_last_30d ?? 0} за 30 дней`} />
                 <StatCard label="Выручка (всего)" value={`${(s.revenue_total ?? 0).toLocaleString('ru')} ${s.revenue_currency || 'BYN'}`} />
@@ -1070,7 +1070,7 @@ function DashboardTab({ onJumpToUsers }) {
                                 className="flex items-center justify-between bg-white/[0.03] border border-white/8 rounded-[10px] px-3 py-2"
                             >
                                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${STATUS_CLS[status] ?? 'text-white/40 bg-white/5 border-white/10'}`}>
-                                    {STATUS_LABEL[status] ?? status}
+                                    {getStatusLabel(status, language)}
                                 </span>
                                 <span className="font-mono text-sm text-white/70">{count}</span>
                             </div>
@@ -1118,14 +1118,14 @@ function JsonTab({ language }) {
     const items = data?.items ?? [];
 
     return (
-        <div className="flex gap-5 h-[calc(100vh-9rem)]">
-            <div className="w-52 shrink-0 flex flex-col gap-1">
+        <div className="flex flex-col md:flex-row gap-5 h-[calc(100dvh-9rem)] min-h-0">
+            <div className="w-full md:w-52 md:shrink-0 flex md:flex-col gap-1 touch-scroll-x md:overflow-visible pb-2 md:pb-0">
                 <h2 className="text-xl font-bold mb-3">{t(language, 'adminJsonHeader')}</h2>
                 {items.map(item => (
                     <button
                         key={item.id}
                         onClick={() => loadFile(item.id)}
-                        className={`text-left px-3 py-2.5 rounded-[10px] transition-all ${
+                        className={`text-left px-3 py-2.5 rounded-[10px] transition-all shrink-0 md:shrink ${
                             selected === item.id
                                 ? 'bg-white text-[#080B13]'
                                 : 'text-white/55 hover:bg-white/5 hover:text-white/90'
@@ -1143,7 +1143,7 @@ function JsonTab({ language }) {
                 {items.length === 0 && <p className="text-white/20 text-xs px-3">{t(language, 'adminJsonEmpty')}</p>}
             </div>
 
-            <div className="flex-1 flex flex-col min-w-0">
+            <div className="flex-1 flex flex-col min-w-0 min-h-0">
                 {selected ? (
                     <>
                         <div className="flex items-center gap-3 mb-3 shrink-0">
@@ -1244,16 +1244,16 @@ export const AdminDashboard = ({ onLogout }) => {
     return (
         <div className="app-bg fixed inset-0 text-gray-900 dark:text-white flex flex-col font-sans overflow-hidden">
             <LiveOrderToasts />
-            <header className="flex items-center gap-2 px-6 py-3 border-b border-white/8 bg-[#0A0E1A] shrink-0">
-                <span className="text-[11px] font-black tracking-[0.25em] uppercase text-white/20">SPRUZHYK</span>
+            <header className="flex flex-wrap items-center gap-2 px-4 sm:px-6 py-3 border-b border-white/8 bg-[#0A0E1A] shrink-0">
+                <span className="text-[11px] font-black tracking-[0.18em] sm:tracking-[0.25em] uppercase text-white/20">SPRUZHYK</span>
                 <span className="text-white/12 mx-2 select-none">|</span>
                 <span className="text-sm font-bold text-white/60">{t(language, 'adminPanelLabel')}</span>
-                <nav className="flex gap-1 ml-6 flex-wrap">
+                <nav className="order-3 w-full lg:order-none lg:w-auto flex gap-1 lg:ml-6 touch-scroll-x pb-1 lg:pb-0">
                     {TABS.map(([id, labelKey]) => (
                         <button
                             key={id}
                             onClick={() => setTab(id)}
-                            className={`px-4 py-1.5 rounded-[8px] text-xs font-bold transition-all ${
+                            className={`px-3 sm:px-4 py-1.5 rounded-[8px] text-xs font-bold transition-all whitespace-nowrap ${
                                 tab === id
                                     ? 'bg-white text-[#080B13]'
                                     : 'text-white/35 hover:text-white/70 hover:bg-white/5'
@@ -1271,8 +1271,8 @@ export const AdminDashboard = ({ onLogout }) => {
                 </button>
             </header>
 
-            <div className="flex-1 overflow-auto p-6">
-                {tab === 'dashboard' && <DashboardTab onJumpToUsers={(role) => setTab(role === 'dealer' ? 'dealers' : role === 'manufacturer' ? 'manufacturers' : role === 'admin' ? 'admins' : 'users')} />}
+            <div className="flex-1 overflow-auto p-4 sm:p-6">
+                {tab === 'dashboard' && <DashboardTab language={language} onJumpToUsers={(role) => setTab(role === 'dealer' ? 'dealers' : role === 'manufacturer' ? 'manufacturers' : role === 'admin' ? 'admins' : 'users')} />}
                 {tab === 'orders' && <OrdersTab language={language} />}
                 {tab === 'users' && <UsersTab key="all" initialFilter={null} />}
                 {tab === 'dealers' && <UsersTab key="dealers" initialFilter="dealer" />}

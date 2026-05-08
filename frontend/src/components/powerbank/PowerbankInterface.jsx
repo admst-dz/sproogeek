@@ -14,7 +14,6 @@ export const PowerbankInterface = ({ onFinish }) => {
         addPowerbankLogo, selectPowerbankLogo, removePowerbankLogo,
         resetPowerbankLogoTransform,
         setPowerbankLogoPosition, setPowerbankLogoRotation, setPowerbankLogoScale, setPowerbankLogoSide,
-        zoomLevel, setZoom,
         addToCart, setRenderSnapshot, language,
     } = useConfigurator();
 
@@ -38,8 +37,8 @@ export const PowerbankInterface = ({ onFinish }) => {
     return (
         <div className="pointer-events-auto w-full h-full md:h-[95%] custom-gradient backdrop-blur-xl rounded-t-[30px] md:rounded-[9px] shadow-2xl flex flex-col overflow-hidden font-zen border-t md:border border-white/20 relative">
 
-            <div className="flex items-end gap-4 px-8 py-6 shrink-0 z-10 bg-white/5 backdrop-blur-sm">
-                <span className="text-2xl md:text-3xl font-bold leading-none opacity-100">{t(language, 'powerbankTitle')}</span>
+            <div className="flex items-end gap-4 px-5 md:px-8 py-4 md:py-6 shrink-0 z-10 bg-white/5 backdrop-blur-sm">
+                <span className="text-xl sm:text-2xl md:text-3xl font-bold leading-tight opacity-100">{t(language, 'powerbankTitle')}</span>
             </div>
 
             <div className="px-4 md:px-6 pt-3 pb-3 shrink-0">
@@ -77,7 +76,7 @@ export const PowerbankInterface = ({ onFinish }) => {
             <div className="absolute bottom-0 left-0 w-full p-4 md:p-6 z-20 border-t border-white/10 bg-[#0E2235]/85 dark:bg-[#0E2235]/85 backdrop-blur-xl">
                 <button
                     onClick={handleAddToCart}
-                    className="w-full py-4 bg-white text-[#1a1a1a] rounded-[11px] text-xl font-black tracking-[0.2em] uppercase hover:bg-gray-100 transition-all shadow-lg active:scale-[0.98]"
+                    className="w-full py-3.5 md:py-4 bg-white text-[#1a1a1a] rounded-[11px] text-base sm:text-lg md:text-xl font-black tracking-[0.08em] sm:tracking-[0.14em] md:tracking-[0.2em] uppercase hover:bg-gray-100 transition-all shadow-lg active:scale-[0.98]"
                 >
                     {t(language, 'placeOrder')}
                 </button>
@@ -103,7 +102,7 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
 
     return (
         <div className="glass-panel rounded-[11px] p-5">
-            <h3 className="text-xl font-bold tracking-wide mb-4">{t(language, 'logoLabel')}</h3>
+            <h3 className="text-lg md:text-xl font-bold tracking-wide mb-4">{t(language, 'logoLabel')}</h3>
 
             <label className="block w-full py-3 bg-white/10 rounded-[6px] text-center cursor-pointer border border-white/20 text-sm font-bold mb-4 hover:bg-white/20 transition-colors">
                 {t(language, 'addLogo')}

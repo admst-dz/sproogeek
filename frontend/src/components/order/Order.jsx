@@ -81,21 +81,21 @@ export const Order = ({ onBack, onSuccess }) => {
         <div className="app-bg fixed inset-0 w-full h-full font-zen overflow-y-auto z-50 transition-colors duration-300">
 
             {/* Sticky header */}
-            <div className="p-6 md:p-8 flex items-center sticky top-0 bg-[#E5E5E5]/90 dark:bg-[#080B13]/90 backdrop-blur-md z-30 border-b border-transparent dark:border-white/5">
-                <button onClick={onBack} className="flex items-center gap-2 px-6 py-2 bg-white dark:bg-white/5 rounded-full shadow-md dark:shadow-none text-sm font-bold text-[#1a1a1a] dark:text-white hover:scale-105 transition-all border border-black/5 dark:border-white/10">
+            <div className="p-4 md:p-8 flex items-center sticky top-0 bg-[#E5E5E5]/90 dark:bg-[#080B13]/90 backdrop-blur-md z-30 border-b border-transparent dark:border-white/5">
+                <button onClick={onBack} className="flex items-center gap-2 px-4 md:px-6 py-2 bg-white dark:bg-white/5 rounded-full shadow-md dark:shadow-none text-xs md:text-sm font-bold text-[#1a1a1a] dark:text-white hover:scale-105 transition-all border border-black/5 dark:border-white/10 max-w-full">
                     {t(language, 'orderBackEditor')}
                 </button>
             </div>
 
-            <div className="flex flex-col lg:flex-row max-w-7xl mx-auto w-full px-4 md:px-8 gap-8 md:gap-16 pb-32 mt-4">
+            <div className="flex flex-col lg:flex-row max-w-7xl mx-auto w-full px-4 md:px-8 gap-8 md:gap-16 pb-20 md:pb-32 mt-4">
 
                 {/* ЛЕВАЯ КОЛОНКА */}
                 <div className="w-full lg:w-1/3 flex flex-col gap-6">
                     <h2 className="text-2xl md:text-3xl font-black text-[#1a1a1a] dark:text-white tracking-wide uppercase">{t(language, 'orderYourLayout')}</h2>
 
-                    <div className="bg-white dark:bg-white/5 rounded-[20px] shadow-xl dark:shadow-none flex flex-col border border-white/50 dark:border-white/8 backdrop-blur-sm overflow-hidden">
+                    <div className="bg-white dark:bg-white/5 rounded-[18px] md:rounded-[20px] shadow-xl dark:shadow-none flex flex-col border border-white/50 dark:border-white/8 backdrop-blur-sm overflow-hidden">
                         {activeProduct !== 'calendar' ? (
-                            <div className="relative bg-[#dcdcdc] dark:bg-[#0A0E1A]" style={{ height: 280 }}>
+                            <div className="relative bg-[#dcdcdc] dark:bg-[#0A0E1A] h-[220px] sm:h-[280px]">
                                 <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true }}>
                                     <Environment preset="city" />
                                     <ambientLight intensity={0.6} />
@@ -144,10 +144,10 @@ export const Order = ({ onBack, onSuccess }) => {
                 <div className="w-full lg:w-2/3 flex flex-col gap-6">
                     <h2 className="text-2xl md:text-3xl font-black text-[#1a1a1a] dark:text-white tracking-wide uppercase">{t(language, 'orderCheckout')}</h2>
 
-                    <div className="bg-white dark:bg-white/5 p-6 md:p-10 rounded-[20px] shadow-xl dark:shadow-none flex flex-col gap-8 border border-white/50 dark:border-white/8 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-white/5 p-4 sm:p-6 md:p-10 rounded-[18px] md:rounded-[20px] shadow-xl dark:shadow-none flex flex-col gap-6 md:gap-8 border border-white/50 dark:border-white/8 backdrop-blur-sm">
 
                         {/* Переключатель физ/юр */}
-                        <div className="bg-gray-100 dark:bg-white/5 p-1.5 rounded-[14px] flex shadow-inner dark:shadow-none border dark:border-white/8">
+                        <div className="bg-gray-100 dark:bg-white/5 p-1.5 rounded-[14px] flex shadow-inner dark:shadow-none border dark:border-white/8 min-w-0">
                             <button
                                 onClick={() => setClientType('phys')}
                                 className={`flex-1 py-3 text-xs md:text-sm font-bold uppercase tracking-widest rounded-[12px] transition-all duration-300 ${clientType === 'phys' ? 'bg-white dark:bg-white/15 shadow text-black dark:text-white' : 'text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60'}`}
@@ -179,7 +179,7 @@ export const Order = ({ onBack, onSuccess }) => {
                             </div>
                         </div>
 
-                        <div className="flex flex-col md:flex-row gap-8 md:items-end justify-between border-t border-gray-100 dark:border-white/8 pt-8 mt-2">
+                        <div className="flex flex-col md:flex-row gap-6 md:gap-8 md:items-end justify-between border-t border-gray-100 dark:border-white/8 pt-6 md:pt-8 mt-2">
                             <div className="flex flex-col gap-3">
                                 <span className="text-xs font-bold text-gray-400 dark:text-white/40 uppercase tracking-widest ml-1">{t(language, 'quantityLabel')}</span>
                                 <div className="flex items-center gap-2 bg-[#F5F5F5] dark:bg-white/5 rounded-[14px] p-2 border border-gray-200 dark:border-white/10 w-max shadow-sm dark:shadow-none">
@@ -190,7 +190,7 @@ export const Order = ({ onBack, onSuccess }) => {
                             </div>
 
                             {clientType === 'jur' && (
-                                <label className="flex items-center gap-4 cursor-pointer group bg-[#EAF4FF] dark:bg-blue-500/8 px-5 py-4 rounded-[16px] border border-blue-100 dark:border-blue-500/20 hover:border-blue-300 dark:hover:border-blue-500/40 transition-all w-full md:w-auto">
+                                <label className="flex items-center gap-4 cursor-pointer group bg-[#EAF4FF] dark:bg-blue-500/8 px-4 sm:px-5 py-4 rounded-[16px] border border-blue-100 dark:border-blue-500/20 hover:border-blue-300 dark:hover:border-blue-500/40 transition-all w-full md:w-auto">
                                     <div className="relative flex items-center justify-center">
                                         <input type="checkbox" checked={isSample} onChange={(e) => setIsSample(e.target.checked)} className="peer appearance-none w-6 h-6 border-2 border-blue-300 dark:border-blue-500/40 rounded bg-white dark:bg-white/5 checked:bg-blue-600 checked:border-blue-600 cursor-pointer transition-colors" />
                                         <svg className="absolute w-4 h-4 text-white opacity-0 peer-checked:opacity-100 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -204,13 +204,13 @@ export const Order = ({ onBack, onSuccess }) => {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                            <button className="py-5 rounded-[14px] border-2 border-gray-200 dark:border-white/10 text-gray-500 dark:text-white/40 font-bold uppercase tracking-widest hover:border-gray-400 dark:hover:border-white/30 hover:text-black dark:hover:text-white transition flex items-center justify-center gap-2">
+                            <button className="py-4 md:py-5 rounded-[14px] border-2 border-gray-200 dark:border-white/10 text-gray-500 dark:text-white/40 font-bold uppercase tracking-[0.08em] sm:tracking-widest hover:border-gray-400 dark:hover:border-white/30 hover:text-black dark:hover:text-white transition flex items-center justify-center gap-2 text-sm md:text-base">
                                 {t(language, 'orderConsult')}
                             </button>
                             <button
                                 onClick={handleSubmit}
                                 disabled={loading}
-                                className={`py-5 rounded-[14px] bg-[#1a1a1a] dark:bg-white/10 dark:border dark:border-white/15 text-white font-bold uppercase tracking-widest hover:bg-black dark:hover:bg-white/20 transition shadow-xl dark:shadow-none flex items-center justify-center gap-3 ${loading ? 'opacity-50 cursor-wait' : 'active:scale-[0.98]'}`}
+                                className={`py-4 md:py-5 rounded-[14px] bg-[#1a1a1a] dark:bg-white/10 dark:border dark:border-white/15 text-white font-bold uppercase tracking-[0.08em] sm:tracking-widest hover:bg-black dark:hover:bg-white/20 transition shadow-xl dark:shadow-none flex items-center justify-center gap-3 text-sm md:text-base ${loading ? 'opacity-50 cursor-wait' : 'active:scale-[0.98]'}`}
                             >
                                 <span>{loading ? t(language, 'sending') : t(language, 'orderSubmit')}</span>
                                 {!loading && <span className="text-xl">→</span>}
@@ -224,9 +224,9 @@ export const Order = ({ onBack, onSuccess }) => {
 }
 
 const Row = ({ label, value }) => (
-    <div className="flex justify-between items-center py-1">
-        <span className="text-gray-400 dark:text-white/35 font-bold text-xs uppercase tracking-wider">{label}</span>
-        <span className="font-bold text-[#1a1a1a] dark:text-white text-right">{value}</span>
+    <div className="flex justify-between items-center gap-3 py-1">
+        <span className="text-gray-400 dark:text-white/35 font-bold text-xs uppercase tracking-wider min-w-0 break-words">{label}</span>
+        <span className="font-bold text-[#1a1a1a] dark:text-white text-right min-w-0 break-words">{value}</span>
     </div>
 )
 

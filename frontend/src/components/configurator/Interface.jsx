@@ -79,9 +79,9 @@ export const Interface = ({ onFinish }) => {
     return (
         <div className="pointer-events-auto w-full h-full md:h-[95%] custom-gradient backdrop-blur-xl rounded-t-[30px] md:rounded-[9px] shadow-2xl flex flex-col overflow-hidden font-zen border-t md:border border-white/20 relative">
 
-            <div className="flex items-end gap-8 px-8 py-6 shrink-0 z-10 bg-white/5 backdrop-blur-sm">
-                <button onClick={() => { setTab('cover'); setNotebookOpen(false); }} className={`text-2xl md:text-3xl transition-all leading-none ${tab === 'cover' ? 'opacity-100 scale-105 border-b-2 border-white pb-1' : 'opacity-50 hover:opacity-80'}`}>{t(language, 'tabCover')}</button>
-                <button onClick={() => { setTab('block'); setNotebookOpen(true); }} className={`text-2xl md:text-3xl transition-all leading-none ${tab === 'block' ? 'opacity-100 scale-105 border-b-2 border-white pb-1' : 'opacity-50 hover:opacity-80'}`}>{t(language, 'tabBlock')}</button>
+            <div className="flex items-end gap-5 md:gap-8 px-5 md:px-8 py-4 md:py-6 shrink-0 z-10 bg-white/5 backdrop-blur-sm touch-scroll-x">
+                <button onClick={() => { setTab('cover'); setNotebookOpen(false); }} className={`text-xl sm:text-2xl md:text-3xl transition-all leading-none whitespace-nowrap ${tab === 'cover' ? 'opacity-100 scale-105 border-b-2 border-white pb-1' : 'opacity-50 hover:opacity-80'}`}>{t(language, 'tabCover')}</button>
+                <button onClick={() => { setTab('block'); setNotebookOpen(true); }} className={`text-xl sm:text-2xl md:text-3xl transition-all leading-none whitespace-nowrap ${tab === 'block' ? 'opacity-100 scale-105 border-b-2 border-white pb-1' : 'opacity-50 hover:opacity-80'}`}>{t(language, 'tabBlock')}</button>
             </div>
 
             <div className="flex-1 px-4 md:px-6 pt-4 overflow-y-auto custom-scrollbar flex flex-col gap-3 relative z-0">
@@ -124,7 +124,7 @@ export const Interface = ({ onFinish }) => {
 
                 {tab === 'block' && (
                     <div className="animate-fade-in flex flex-col gap-4 pb-40">
-                        <div className="grid grid-cols-5 gap-2">
+                        <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-5 md:grid-cols-3 xl:grid-cols-5 gap-2">
                             {PATTERN_IDS.map((id) => (
                                 <button
                                     key={id}
@@ -171,7 +171,7 @@ export const Interface = ({ onFinish }) => {
                 </div>
                 <button
                     onClick={handleAddToCart}
-                    className="w-full py-4 bg-white text-[#1a1a1a] rounded-[11px] text-xl font-black tracking-[0.2em] uppercase hover:bg-gray-100 transition-all shadow-lg active:scale-[0.98]"
+                    className="w-full py-3.5 md:py-4 bg-white text-[#1a1a1a] rounded-[11px] text-base sm:text-lg md:text-xl font-black tracking-[0.08em] sm:tracking-[0.14em] md:tracking-[0.2em] uppercase hover:bg-gray-100 transition-all shadow-lg active:scale-[0.98]"
                 >
                     {t(language, 'placeOrder')}
                 </button>
@@ -202,7 +202,7 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
 
     return (
         <div className="glass-panel rounded-[11px] p-5">
-            <h3 className="text-xl font-bold tracking-wide mb-4">{t(language, 'embossing')}</h3>
+            <h3 className="text-lg md:text-xl font-bold tracking-wide mb-4">{t(language, 'embossing')}</h3>
             <div className="grid grid-cols-2 gap-2 mb-4">
                 {[
                     ['front', t(language, 'sideFront')],
@@ -314,9 +314,9 @@ const GlassDropdown = ({ label, currentValue, children, isColor = false, colorVa
     const [isOpen, setIsOpen] = useState(false);
     return (
         <div className="glass-panel rounded-[11px] transition-all overflow-hidden shadow-sm">
-            <button onClick={() => setIsOpen(!isOpen)} className="w-full p-5 flex items-center justify-between hover:bg-white/10 transition">
-                <span className="text-xl font-bold tracking-wide">{label}</span>
-                <div className="flex items-center gap-3">
+            <button onClick={() => setIsOpen(!isOpen)} className="w-full p-4 md:p-5 flex items-center justify-between gap-3 hover:bg-white/10 transition">
+                <span className="text-lg md:text-xl font-bold tracking-wide text-left leading-tight">{label}</span>
+                <div className="flex items-center gap-2 md:gap-3 shrink-0">
                     {isColor ? (<div className="w-6 h-6 rounded-full border border-white/30 shadow-sm" style={{backgroundColor: colorValue}} />) : (<span className="font-bold opacity-80 text-sm bg-white/10 px-2 py-1 rounded-[6px]">{currentValue}</span>)}
                     <span className={`transform transition-transform duration-300 text-xl opacity-70 ${isOpen ? 'rotate-180' : ''}`}>⌄</span>
                 </div>

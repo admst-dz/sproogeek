@@ -261,8 +261,8 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
             }} />
 
             {/* HEADER */}
-            <header className="sticky top-0 z-30 px-6 py-4 border-b border-white/5 bg-[#0B0F19]/80 backdrop-blur-xl">
-                <div className="max-w-6xl mx-auto flex justify-between items-center">
+            <header className="sticky top-0 z-30 px-4 sm:px-6 py-3 sm:py-4 border-b border-white/5 bg-[#0B0F19]/90 backdrop-blur-xl">
+                <div className="max-w-6xl mx-auto flex justify-between items-center gap-3">
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-2 rounded-full backdrop-blur-md">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
@@ -276,14 +276,14 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
 
                     <button
                         onClick={() => { logout(); onBack(); }}
-                        className="flex items-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 transition-colors px-4 py-2 rounded-full text-xs font-bold text-gray-300 uppercase tracking-widest"
+                        className="flex items-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 transition-colors px-3 sm:px-4 py-2 rounded-full text-[10px] sm:text-xs font-bold text-gray-300 uppercase tracking-widest shrink-0"
                     >
                         {t(language, 'logout')}
                     </button>
                 </div>
 
                 {/* TABS */}
-                <div className="max-w-6xl mx-auto flex gap-8 mt-1">
+                <div className="max-w-6xl mx-auto flex gap-5 sm:gap-8 mt-1 touch-scroll-x">
                     <TabBtn active={activeTab === 'catalog'} onClick={() => changeTab('catalog')}>{t(language, 'tabCatalog')}</TabBtn>
                     <TabBtn active={activeTab === 'cart'} onClick={() => changeTab('cart')}>
                         {t(language, 'tabCart')} {cartItem && <span className="ml-1 w-1.5 h-1.5 bg-emerald-400 rounded-full inline-block shadow-[0_0_6px_rgba(52,211,153,0.8)]"></span>}
@@ -293,7 +293,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
             </header>
 
             {/* MAIN */}
-            <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-8">
+            <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-8">
 
                 {/* CATALOG TAB */}
                 {activeTab === 'catalog' && (
@@ -308,7 +308,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                 <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">{t(language, 'catalogEmpty')}</p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                                 {products.map(prod => (
                                     <div key={prod.id} className="group relative flex flex-col rounded-[24px] bg-white/[0.03] border border-white/10 backdrop-blur-xl overflow-hidden hover:bg-white/[0.06] hover:border-white/20 transition-all duration-500 p-6">
                                         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 blur-[70px] rounded-full bg-blue-500/20 group-hover:bg-blue-500/30 transition-colors duration-500"></div>
@@ -335,7 +335,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                 {activeTab === 'cart' && (
                     <div>
                         {!cartItem ? (
-                            <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[24px] p-16 flex flex-col items-center gap-4">
+                            <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[20px] md:rounded-[24px] p-8 sm:p-12 md:p-16 flex flex-col items-center gap-4 text-center">
                                 <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10 text-2xl">🛒</div>
                                 <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">{t(language, 'cartEmpty')}</p>
                             </div>
@@ -394,11 +394,11 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
 
                                 {/* ПРАВАЯ — контактные данные */}
                                 <div className="w-full lg:w-3/5 flex flex-col gap-4">
-                                    <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[24px] p-6 md:p-8 flex flex-col gap-6">
+                                    <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[20px] md:rounded-[24px] p-4 sm:p-6 md:p-8 flex flex-col gap-6">
                                         <h3 className="font-bold text-lg uppercase tracking-widest text-white">{t(language, 'contactsTitle')}</h3>
 
                                         {/* Физ/Юр переключатель */}
-                                        <div className="bg-white/5 p-1.5 rounded-[14px] flex border border-white/8">
+                                        <div className="bg-white/5 p-1.5 rounded-[14px] flex border border-white/8 min-w-0">
                                             <button
                                                 onClick={() => setClientType('phys')}
                                                 className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-widest rounded-[12px] transition-all ${clientType === 'phys' ? 'bg-white/15 text-white' : 'text-gray-500 hover:text-gray-300'}`}
@@ -430,7 +430,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                         </div>
 
                                         {/* Тираж и тиражный образец */}
-                                        <div className="flex flex-col sm:flex-row gap-4 sm:items-end pt-2 border-t border-white/8">
+                                        <div className="flex flex-col sm:flex-row gap-4 sm:items-end sm:justify-between pt-2 border-t border-white/8">
                                             <div className="flex flex-col gap-1.5">
                                                 <span className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">{t(language, 'quantityLabel')}</span>
                                                 <div className="flex items-center gap-2 bg-white/5 rounded-[12px] p-1.5 border border-white/10 w-max">
@@ -477,7 +477,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                 {activeTab === 'orders' && (
                     <div>
                         <h2 className="text-xl font-bold uppercase tracking-widest mb-6 text-white">{t(language, 'myOrders')}</h2>
-                        <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[24px] overflow-hidden">
+                        <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[20px] md:rounded-[24px] overflow-hidden">
                             {ordersLoading ? (
                                 <div className="py-16 flex flex-col items-center gap-3">
                                     <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
@@ -518,7 +518,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                         {order.configuration?.productConfig?.format || ''}
                                                     </p>
                                                 </div>
-                                                <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 shrink-0">
+                                                    <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 sm:gap-4 shrink-0">
                                                     <span className="font-bold text-white text-sm">{order.price ? `${order.price} BYN` : ''}</span>
                                                     <OrderStatus status={order.status} language={language} />
                                                     <svg
@@ -538,7 +538,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                         {/* 3D preview */}
                                                         <div className="w-full lg:w-64 shrink-0">
                                                             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">{t(language, 'view3d')}</p>
-                                                            <ClientOrder3DPreview configuration={order.configuration} productName={order.product} />
+                                                            <ClientOrder3DPreview configuration={order.configuration} productName={order.product} language={language} />
                                                         </div>
 
                                                         {/* Details */}
@@ -546,7 +546,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                             {/* Order params */}
                                                             <div>
                                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">{t(language, 'orderParams')}</p>
-                                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                                <div className="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 gap-2">
                                                                     {order.quantity && (
                                                                         <ClientDetailRow label={t(language, 'circulationLabel')} value={`${order.quantity} ${t(language, 'pcsUnit')}`} accent />
                                                                     )}
@@ -580,7 +580,11 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                             {/* Progress */}
                                                             <div>
                                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">{t(language, 'orderStatusLabel')}</p>
-                                                                <OrderProgressBar status={order.status} stageHistory={order.stageHistory} language={language} />
+                                                                <div className="touch-scroll-x pb-2">
+                                                                    <div className="min-w-[520px]">
+                                                                        <OrderProgressBar status={order.status} stageHistory={order.stageHistory} language={language} />
+                                                                    </div>
+                                                                </div>
                                                             </div>
 
                                                             {/* Approval flow */}
@@ -607,7 +611,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
             {/* SUCCESS TOAST */}
             {orderSuccess && (
                 <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-                    <div className="bg-[#1A1F2E]/90 backdrop-blur-2xl border border-white/10 rounded-[24px] px-10 py-8 shadow-[0_20px_60px_rgba(0,0,0,0.5)] text-center pointer-events-auto animate-fade-in">
+                    <div className="bg-[#1A1F2E]/90 backdrop-blur-2xl border border-white/10 rounded-[20px] md:rounded-[24px] px-6 sm:px-10 py-6 sm:py-8 shadow-[0_20px_60px_rgba(0,0,0,0.5)] text-center pointer-events-auto animate-fade-in max-w-[calc(100vw-2rem)]">
                         <div className="w-14 h-14 bg-emerald-500/20 border border-emerald-500/30 rounded-full flex items-center justify-center mx-auto mb-4">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                         </div>
@@ -622,8 +626,8 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
 
 const CartRow = ({ label, value }) => (
     <div className="flex justify-between items-center py-1">
-        <span className="text-gray-500 font-bold text-xs uppercase tracking-wider">{label}</span>
-        <span className="font-bold text-white text-sm text-right">{value}</span>
+        <span className="text-gray-500 font-bold text-xs uppercase tracking-wider min-w-0 break-words">{label}</span>
+        <span className="font-bold text-white text-sm text-right min-w-0 break-words">{value}</span>
     </div>
 );
 
@@ -665,7 +669,7 @@ const ClientColorDot = ({ color }) => (
     </div>
 );
 
-const ClientOrder3DPreview = ({ configuration, productName }) => {
+const ClientOrder3DPreview = ({ configuration, productName, language = 'ru' }) => {
     const cfg = configuration?.productConfig || configuration || {};
     const isNote = productName?.toLowerCase().includes('ежедневник') || productName?.toLowerCase().includes('блокнот') || cfg.type === 'notebook';
     const isThermos = productName?.toLowerCase().includes('термос') || cfg.activeProduct === 'thermos' || cfg.type === 'thermos';
