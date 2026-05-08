@@ -147,7 +147,7 @@ jobs:
           cd "$PATH_REMOTE"
           echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
           docker compose -f docker-compose.prod.yml pull
-          docker compose -f docker-compose.prod.yml up -d --remove-orphans
+          docker compose -f docker-compose.prod.yml up -d --remove-orphans --scale backend=2
           docker image prune -f
           docker compose -f docker-compose.prod.yml ps
           EOF

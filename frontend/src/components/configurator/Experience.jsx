@@ -7,7 +7,9 @@ import { useConfigurator, registerWebGLCanvas } from '../../store'
 import { useEffect, useRef, useState } from 'react'
 import { useThree, useFrame } from '@react-three/fiber'
 import { easing } from 'maath'
-import { Sketchbook } from '../sketchbook/Sketchbook'
+
+const PINCH_ZOOM_PRODUCTS = new Set(['thermos', 'powerbank'])
+const clampZoom = (value) => Math.min(Math.max(value, 0.5), 2.5)
 
 function CanvasRegistrar() {
     const { gl } = useThree()
@@ -34,66 +36,168 @@ function CameraReset({ activeProduct }) {
     return null
 }
 
-function WheelZoom() {
-    const { gl } = useThree()
+function WheelZoom({ controlsRef }) {
+    const { camera, gl } = useThree()
     const { setZoom, activeProduct } = useConfigurator()
     const activeProductRef = useRef(activeProduct)
     const lastPinchDistRef = useRef(null)
+    const pinchPointersRef = useRef(new Map())
+    const isPinchingRef = useRef(false)
+    const lockedCameraPoseRef = useRef(null)
+    const enableControlsFrameRef = useRef(null)
 
     useEffect(() => { activeProductRef.current = activeProduct }, [activeProduct])
 
     useEffect(() => {
         const canvas = gl.domElement
+        const previousTouchAction = canvas.style.touchAction
+        canvas.style.touchAction = 'none'
+
+        const isPinchProduct = () => PINCH_ZOOM_PRODUCTS.has(activeProductRef.current)
+
+        const stopGesture = (e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            e.stopImmediatePropagation()
+        }
+
+        const getPinchDistance = () => {
+            const points = Array.from(pinchPointersRef.current.values())
+            if (points.length < 2) return null
+            const dx = points[0].x - points[1].x
+            const dy = points[0].y - points[1].y
+            return Math.sqrt(dx * dx + dy * dy)
+        }
+
+        const setControlsEnabled = (enabled) => {
+            if (controlsRef?.current) controlsRef.current.enabled = enabled
+        }
+
+        const cancelDeferredControlsEnable = () => {
+            if (enableControlsFrameRef.current === null) return
+            window.cancelAnimationFrame(enableControlsFrameRef.current)
+            enableControlsFrameRef.current = null
+        }
+
+        const deferControlsEnable = () => {
+            cancelDeferredControlsEnable()
+            enableControlsFrameRef.current = window.requestAnimationFrame(() => {
+                enableControlsFrameRef.current = null
+                restoreCameraPose()
+                setControlsEnabled(true)
+                lockedCameraPoseRef.current = null
+            })
+        }
+
+        const lockCameraPose = () => {
+            if (lockedCameraPoseRef.current) return
+            lockedCameraPoseRef.current = {
+                position: camera.position.clone(),
+                quaternion: camera.quaternion.clone(),
+                target: controlsRef?.current?.target?.clone() ?? null,
+            }
+        }
+
+        const restoreCameraPose = () => {
+            const pose = lockedCameraPoseRef.current
+            if (!pose) return
+            camera.position.copy(pose.position)
+            camera.quaternion.copy(pose.quaternion)
+            if (pose.target && controlsRef?.current?.target) {
+                controlsRef.current.target.copy(pose.target)
+                controlsRef.current.update()
+            }
+            camera.updateProjectionMatrix()
+        }
+
+        const finishPinch = () => {
+            restoreCameraPose()
+            lastPinchDistRef.current = null
+            isPinchingRef.current = false
+            deferControlsEnable()
+        }
 
         const handleWheel = (e) => {
+            if (!isPinchProduct()) return
             e.preventDefault()
             // ctrlKey=true — тачпад pinch (браузер маскирует под ctrl+wheel)
             const sensitivity = e.ctrlKey ? 0.008 : 0.001
             // Читаем актуальный zoom напрямую из store — без stale closure
             const current = useConfigurator.getState().zoomLevel
-            const next = Math.min(Math.max(current - e.deltaY * sensitivity, 0.5), 2.5)
+            const next = clampZoom(current - e.deltaY * sensitivity)
             setZoom(next)
         }
 
-        // Для термоса: OrbitControls с enableZoom=false + enablePan=false
-        // интерпретирует два пальца как ROTATE, а не zoom → камера "телепортируется"
-        // при отпускании. Перехватываем 2-finger touch сами.
-        const handleTouchStart = (e) => {
-            if (e.touches.length < 2 || activeProductRef.current !== 'thermos') return
-            e.stopImmediatePropagation()
-            const dx = e.touches[0].clientX - e.touches[1].clientX
-            const dy = e.touches[0].clientY - e.touches[1].clientY
-            lastPinchDistRef.current = Math.sqrt(dx * dx + dy * dy)
+        const handlePointerDown = (e) => {
+            if (!isPinchProduct() || e.pointerType !== 'touch') return
+            pinchPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+            if (pinchPointersRef.current.size >= 2) {
+                stopGesture(e)
+                if (!isPinchingRef.current) {
+                    cancelDeferredControlsEnable()
+                    lockedCameraPoseRef.current = null
+                }
+                isPinchingRef.current = true
+                lockCameraPose()
+                restoreCameraPose()
+                setControlsEnabled(false)
+                lastPinchDistRef.current = getPinchDistance()
+            }
         }
 
-        const handleTouchMove = (e) => {
-            if (e.touches.length < 2 || lastPinchDistRef.current === null || activeProductRef.current !== 'thermos') return
-            e.stopImmediatePropagation()
-            e.preventDefault()
-            const dx = e.touches[0].clientX - e.touches[1].clientX
-            const dy = e.touches[0].clientY - e.touches[1].clientY
-            const dist = Math.sqrt(dx * dx + dy * dy)
+        const handlePointerMove = (e) => {
+            if (!isPinchProduct() || e.pointerType !== 'touch') return
+            if (!pinchPointersRef.current.has(e.pointerId)) return
+            pinchPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+            if (pinchPointersRef.current.size < 2) return
+
+            stopGesture(e)
+            isPinchingRef.current = true
+            lockCameraPose()
+            restoreCameraPose()
+            setControlsEnabled(false)
+
+            const dist = getPinchDistance()
+            if (!dist || lastPinchDistRef.current === null) {
+                lastPinchDistRef.current = dist
+                return
+            }
             const ratio = dist / lastPinchDistRef.current
             lastPinchDistRef.current = dist
             const current = useConfigurator.getState().zoomLevel
-            const next = Math.min(Math.max(current * ratio, 0.5), 2.5)
+            const next = clampZoom(current * ratio)
             setZoom(next)
+            restoreCameraPose()
         }
 
-        const handleTouchEnd = () => { lastPinchDistRef.current = null }
+        const handlePointerEnd = (e) => {
+            if (e.pointerType === 'touch') pinchPointersRef.current.delete(e.pointerId)
+            if (isPinchingRef.current) stopGesture(e)
+            if (pinchPointersRef.current.size < 2) finishPinch()
+        }
 
         canvas.addEventListener('wheel', handleWheel, { passive: false })
-        canvas.addEventListener('touchstart', handleTouchStart, { capture: true, passive: false })
-        canvas.addEventListener('touchmove', handleTouchMove, { capture: true, passive: false })
-        canvas.addEventListener('touchend', handleTouchEnd, { capture: true })
+        canvas.addEventListener('pointerdown', handlePointerDown, { capture: true, passive: false })
+        canvas.addEventListener('pointermove', handlePointerMove, { capture: true, passive: false })
+        canvas.addEventListener('pointerup', handlePointerEnd, { capture: true, passive: false })
+        canvas.addEventListener('pointercancel', handlePointerEnd, { capture: true, passive: false })
 
         return () => {
+            canvas.style.touchAction = previousTouchAction
+            cancelDeferredControlsEnable()
+            restoreCameraPose()
+            lastPinchDistRef.current = null
+            isPinchingRef.current = false
+            lockedCameraPoseRef.current = null
+            setControlsEnabled(true)
+            pinchPointersRef.current.clear()
             canvas.removeEventListener('wheel', handleWheel)
-            canvas.removeEventListener('touchstart', handleTouchStart, { capture: true })
-            canvas.removeEventListener('touchmove', handleTouchMove, { capture: true })
-            canvas.removeEventListener('touchend', handleTouchEnd, { capture: true })
+            canvas.removeEventListener('pointerdown', handlePointerDown, { capture: true })
+            canvas.removeEventListener('pointermove', handlePointerMove, { capture: true })
+            canvas.removeEventListener('pointerup', handlePointerEnd, { capture: true })
+            canvas.removeEventListener('pointercancel', handlePointerEnd, { capture: true })
         }
-    }, [gl.domElement, setZoom])
+    }, [camera, controlsRef, gl.domElement, setZoom])
 
     return null
 }
@@ -117,6 +221,7 @@ export const Experience = () => {
     const { activeProduct, zoomLevel } = useConfigurator()
     const { active: assetsLoading, progress } = useProgress()
     const readyFrames = useRef(0)
+    const orbitControlsRef = useRef(null)
     const isRenderMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('render_mode') === 'true'
     const requiredReadyFrames = isRenderMode ? 90 : 12
 
@@ -159,7 +264,7 @@ export const Experience = () => {
             <CanvasRegistrar />
             <CameraReset activeProduct={activeProduct} />
             <CameraUpdater targetZoom={finalZoom} />
-            <WheelZoom />
+            <WheelZoom controlsRef={orbitControlsRef} />
 
             <Environment preset="city" />
 
@@ -170,8 +275,11 @@ export const Experience = () => {
             {(activeProduct === 'thermos' || activeProduct === 'powerbank') ? (
                 <>
                     <OrbitControls
+                        ref={orbitControlsRef}
                         enablePan={false}
                         enableZoom={false}
+                        enableDamping
+                        dampingFactor={0.08}
                         minPolarAngle={Math.PI / 2 - Math.PI / 3}
                         maxPolarAngle={Math.PI / 2 + Math.PI / 3}
                         rotateSpeed={isMobile ? 1.5 : 1.0}
@@ -191,7 +299,6 @@ export const Experience = () => {
                     <Stage environment={null} intensity={0} contactShadow={false}>
                         {activeProduct === 'notebook' && <Notebook />}
                         {activeProduct === 'calendar' && <Calendar />}
-                        {activeProduct === 'sketchbook' && <Sketchbook />}
                     </Stage>
                 </PresentationControls>
             )}

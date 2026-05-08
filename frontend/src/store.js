@@ -64,8 +64,12 @@ export const getDefaultsForProduct = (product) => {
     return NOTEBOOK_DEFAULTS;
 };
 
+const normalizeProduct = (type) => (
+    ['notebook', 'calendar', 'thermos', 'powerbank'].includes(type) ? type : 'notebook'
+);
+
 export const useConfigurator = create(temporal((set, get) => ({
-    activeProduct: 'notebook', // 'notebook' | 'calendar' | 'sketchbook' | 'thermos'
+    activeProduct: 'notebook', // 'notebook' | 'calendar' | 'thermos' | 'powerbank'
     applyRenderConfig: (config) => set((state) => ({ ...state, ...config })),
 
     // --- Параметры 3D модели ---
@@ -73,10 +77,10 @@ export const useConfigurator = create(temporal((set, get) => ({
     format: 'A5',
     isNotebookOpen: false,
     paperPattern: 'blank',
-    coverColor: '#D2B48C', // Крафтовый по умолчанию для скетчбука
+    coverColor: '#D2B48C',
     hasElastic: true,
     elasticColor: '#1a1a1a',
-    spiralColor: '#1a1a1a', // Черная пружина по умолчанию для скетчбука
+    spiralColor: '#1a1a1a',
     logos: [],
     selectedLogoId: null,
     zoomLevel: 1,
@@ -140,7 +144,7 @@ export const useConfigurator = create(temporal((set, get) => ({
     },
     setRenderSnapshot: (url) => set({ renderSnapshot: url }),
 
-    setProduct: (type) => set({ activeProduct: type }),
+    setProduct: (type) => set({ activeProduct: normalizeProduct(type) }),
     setBindingType: (type) => set((state) => ({
         bindingType: type,
         hasElastic: type === 'hard' ? false : state.hasElastic,

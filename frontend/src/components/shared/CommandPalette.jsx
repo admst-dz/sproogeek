@@ -27,6 +27,12 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth }) => {
     }, [open]);
 
     useEffect(() => {
+        const openPalette = () => setOpen(true);
+        window.addEventListener('spruzhuk:open-command-palette', openPalette);
+        return () => window.removeEventListener('spruzhuk:open-command-palette', openPalette);
+    }, []);
+
+    useEffect(() => {
         if (!open) setQuery('');
     }, [open]);
 
@@ -39,11 +45,7 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth }) => {
 
     const goConfigurator = (product) => {
         setProduct(product);
-        if (product === 'sketchbook') {
-            navigate?.('sketchbook_configurator');
-        } else {
-            navigate?.('configurator');
-        }
+        navigate?.('configurator');
         close();
     };
 
@@ -67,7 +69,6 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth }) => {
         }
         // Конструктор
         list.push({ group: 'Конструктор', id: 'cfg-notebook', label: 'Ежедневник', onSelect: () => goConfigurator('notebook') });
-        list.push({ group: 'Конструктор', id: 'cfg-sketchbook', label: 'Скетчбук', onSelect: () => goConfigurator('sketchbook') });
         list.push({ group: 'Конструктор', id: 'cfg-thermos', label: 'Термос', onSelect: () => goConfigurator('thermos') });
         list.push({ group: 'Конструктор', id: 'cfg-powerbank', label: 'Повербанк', onSelect: () => goConfigurator('powerbank') });
         // Действия
@@ -77,7 +78,7 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth }) => {
             label: theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему',
             onSelect: () => { toggleTheme(); close(); },
         });
-        if (screen === 'configurator' || screen === 'sketchbook_configurator') {
+        if (screen === 'configurator') {
             list.push({
                 group: 'Действия',
                 id: 'act-reset',

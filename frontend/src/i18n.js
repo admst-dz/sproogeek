@@ -8,7 +8,6 @@ export const translations = {
         title2: "идеальный ежедневник",
         subtitle: "Цвета, переплёт, тиснение — собери в три клика и получи готовый макет.",
         notebook: "Ежедневник",
-        sketchbook: "Блокнот",
         thermos: "Термос",
         powerbank: "Повербанк",
         openBtn: "Открыть конструктор →",

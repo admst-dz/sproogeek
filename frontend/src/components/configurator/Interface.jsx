@@ -151,7 +151,7 @@ export const Interface = ({ onFinish }) => {
             </div>
 
             {/* КНОПКА ОФОРМЛЕНИЯ */}
-            <div className="absolute bottom-0 left-0 w-full px-4 md:px-6 pt-3 pb-4 md:pb-6 z-20 border-t border-white/10 bg-[#A4B0C9]/95 dark:bg-[#060911]/95 backdrop-blur-xl flex flex-col gap-3">
+            <div className="absolute bottom-0 left-0 w-full px-4 md:px-6 pt-3 pb-4 md:pb-6 z-20 border-t border-white/10 bg-[#0E2235]/85 dark:bg-[#0E2235]/85 backdrop-blur-xl flex flex-col gap-3">
                 <div className="flex items-center justify-between gap-4">
                     <div className="flex flex-col gap-1">
                         <span className="text-[10px] opacity-50 font-bold uppercase tracking-widest">Тираж (шт.)</span>

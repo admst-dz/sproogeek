@@ -42,7 +42,12 @@ SECRET_KEY=<random 32+ bytes>
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=<strong>
 POSTGRES_DB=spruzhuk
-DATABASE_URL=postgresql+asyncpg://postgres:<strong>@db:5432/spruzhuk
+DATABASE_USER=postgres
+DATABASE_PASSWORD=<strong>
+DATABASE_HOST=pgbouncer
+DATABASE_PORT=5432
+DATABASE_NAME=spruzhuk
+DATABASE_URL=
 
 KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 
@@ -78,9 +83,19 @@ MANUFACTURER_NAME=ООО «Спружык»
 MANUFACTURER_ID=SPRUZHYK-001
 ```
 
-`S3_ACCESS_KEY` / `S3_SECRET_KEY` should match `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` (or use a dedicated MinIO user with `mc admin user add`).
+Prefer the `DATABASE_*` fields over a hand-written `DATABASE_URL`. The backend builds the SQLAlchemy
+URL itself, so production passwords may safely contain URL-reserved characters like `#`, `?`, `/`,
+`@`, and `:`. If backend containers restart during `alembic upgrade head` with
+`asyncpg.exceptions.ProtocolViolationError: SASL authentication failed`, check that
+`POSTGRES_PASSWORD` and `DATABASE_PASSWORD` match the password that initialized the existing
+Postgres volume. Only set `DATABASE_URL` as a legacy override when the password is percent-encoded.
 
-## First-time bootstrap on the server
+Large configurator orders can include uploaded design textures. The frontend nginx config allows
+requests up to `12m`, matching the backend upload guard.
+
+## First server bootstrap
+
+`S3_ACCESS_KEY` / `S3_SECRET_KEY` should match `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` (or use a dedicated MinIO user with `mc admin user add`).
 
 Once, manually on `root@217.25.93.108`:
 

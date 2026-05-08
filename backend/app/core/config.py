@@ -3,6 +3,7 @@ from typing import Annotated, List
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from sqlalchemy.engine import URL
 
 
 class Settings(BaseSettings):
@@ -17,7 +18,12 @@ class Settings(BaseSettings):
     app_title: str = "Spruzhyk API"
     app_version: str = "1.4.0"
 
-    database_url: str = Field(..., alias="DATABASE_URL")
+    database_url: str = Field("", alias="DATABASE_URL")
+    database_user: str = Field("postgres", alias="DATABASE_USER")
+    database_password: str = Field("", alias="DATABASE_PASSWORD")
+    database_host: str = Field("db", alias="DATABASE_HOST")
+    database_port: int = Field(5432, alias="DATABASE_PORT")
+    database_name: str = Field("spruzhuk", alias="DATABASE_NAME")
 
     secret_key: str = Field("dev-only-secret-change-before-production", alias="SECRET_KEY")
     access_token_expire_minutes: int = Field(43200, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
@@ -67,6 +73,9 @@ class Settings(BaseSettings):
     admin_backdoor_key: str = Field("", alias="ADMIN_BACKDOOR_KEY")
     admin_backdoor_email: str = Field("admin@spruzhyk.internal", alias="ADMIN_BACKDOOR_EMAIL")
 
+    redis_url: str = Field("redis://redis:6379/0", alias="REDIS_URL")
+    cache_default_ttl: int = Field(300, alias="CACHE_DEFAULT_TTL")
+
     @field_validator("allowed_hosts", "allowed_origins", mode="before")
     @classmethod
     def split_csv(cls, value):
@@ -84,6 +93,19 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env in {"prod", "production"}
+
+    @property
+    def sqlalchemy_database_url(self) -> str:
+        if self.database_url:
+            return self.database_url
+        return URL.create(
+            "postgresql+asyncpg",
+            username=self.database_user,
+            password=self.database_password,
+            host=self.database_host,
+            port=self.database_port,
+            database=self.database_name,
+        ).render_as_string(hide_password=False)
 
 
 @lru_cache

@@ -20,7 +20,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
-DATABASE_URL = get_settings().database_url
+DATABASE_URL = get_settings().sqlalchemy_database_url
 
 
 def run_migrations_offline() -> None:

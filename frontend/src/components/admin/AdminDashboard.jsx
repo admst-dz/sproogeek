@@ -1,12 +1,12 @@
 import { Fragment, useState, useEffect } from 'react';
 import { adminApi, productApi } from '../../api';
-import { VibeLoader } from '../shared/VibeLoader';
+import { VibeLoader, useLoaderCompletionGate } from '../shared/VibeLoader';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 
 const STATUS_LABEL = { new: 'Новый', processing: 'В работе', production: 'Производство', in_delivery: 'Доставка', done: 'Готов' };
 const BINDING_LABEL = { hard: 'Твёрдый', spiral: 'На пружине', soft: 'Мягкий' };
 const PATTERN_LABEL = { blank: 'Пустой', lined: 'Линейка', tlined: 'Т. линейка', grid: 'Клетка', dotted: 'Точка' };
-const PRODUCT_LABEL = { notebook: 'Ежедневник', sketchbook: 'Скетчбук', thermos: 'Термос', powerbank: 'Повербанк' };
+const PRODUCT_LABEL = { notebook: 'Ежедневник', thermos: 'Термос', powerbank: 'Повербанк' };
 const STATUS_CLS = {
     new: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
     processing: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
@@ -46,13 +46,14 @@ function useData(fetcher) {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const gatedLoading = useLoaderCompletionGate(loading);
     useEffect(() => {
         fetcher()
             .then(r => { setData(r.data); setLoading(false); })
             .catch(e => { setError(formatApiError(e)); setLoading(false); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-    return { data, setData, loading, error };
+    return { data, setData, loading: gatedLoading, error };
 }
 
 const Loader = () => (

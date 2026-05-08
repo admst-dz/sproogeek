@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { useConfigurator } from "../../store";
@@ -6,7 +6,6 @@ import { fetchUserOrders, fetchAllProducts, createOrderInDB } from '../../api';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 import { ApprovalPanel } from '../shared/ApprovalPanel';
 import { Notebook } from '../shared/Notebook';
-import { Sketchbook } from '../sketchbook/Sketchbook';
 import { Thermos } from '../thermos/Thermos';
 import { getUserDisplayName, getUserSecondaryLabel } from '../../utils/user';
 import { SceneLoadingOverlay } from '../shared/VibeLoader';
@@ -113,14 +112,13 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
         activeProduct, coverColor, elasticColor, hasElastic,
         paperPattern, bindingType, spiralColor, format,
         thermosBodyColor, thermosCapColor,
-        renderSnapshot,
     } = useConfigurator();
     const [activeTab, setActiveTab] = useState(initialTab ?? (cartItem ? 'cart' : 'orders'));
 
-    const changeTab = (tab) => {
+    const changeTab = useCallback((tab) => {
         setActiveTab(tab);
         onTabChange?.(tab);
-    };
+    }, [onTabChange]);
 
     const [orders, setOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(false);
@@ -155,7 +153,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
             setOrderSuccess(true);
             onSuccessToastShown?.();
         }
-    }, [showSuccessToast]);
+    }, [changeTab, onSuccessToastShown, showSuccessToast]);
 
     useEffect(() => {
         if (orderSuccess) {
@@ -208,7 +206,6 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                     clientType,
                     contact: { ...formData },
                     isSample,
-                    renderSnapshot: renderSnapshot || null,
                 },
                 quantity,
                 total_price: null,
@@ -355,7 +352,6 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                 <PresentationControls speed={1.5} global polar={[-0.1, Math.PI / 4]}>
                                                     <Stage environment={null} intensity={0} contactShadow={false}>
                                                         {activeProduct === 'notebook' && <Notebook />}
-                                                        {activeProduct === 'sketchbook' && <Sketchbook />}
                                                         {activeProduct === 'thermos' && <Thermos />}
                                                     </Stage>
                                                 </PresentationControls>
@@ -651,3 +647,48 @@ const CartInput = ({ label, name, placeholder, type = 'text', value, onChange, i
         )}
     </div>
 );
+
+const ClientDetailRow = ({ label, value, accent }) => (
+    <div className={`flex flex-col gap-1 rounded-[10px] px-3 py-2.5 border ${accent ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-white/[0.03] border-white/8'}`}>
+        <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">{label}</span>
+        <span className="font-bold text-sm text-white">{value}</span>
+    </div>
+);
+
+const ClientColorDot = ({ color }) => (
+    <div className="flex items-center gap-1.5">
+        <div className="w-3 h-3 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: color }} />
+        <span className="uppercase text-xs font-black text-white">{color}</span>
+    </div>
+);
+
+const ClientOrder3DPreview = ({ configuration, productName }) => {
+    const cfg = configuration?.productConfig || configuration || {};
+    const isNote = productName?.toLowerCase().includes('ежедневник') || productName?.toLowerCase().includes('блокнот') || cfg.type === 'notebook';
+    const isThermos = productName?.toLowerCase().includes('термос') || cfg.activeProduct === 'thermos' || cfg.type === 'thermos';
+
+    if (!isNote && !isThermos) {
+        return (
+            <div className="w-full h-40 rounded-[14px] bg-white/[0.03] border border-white/8 flex items-center justify-center">
+                <span className="text-gray-600 text-xs font-bold uppercase tracking-widest">Нет макета</span>
+            </div>
+        );
+    }
+
+    return (
+        <div className="relative w-full h-40 rounded-[14px] bg-[#0A0E1A] border border-white/8 overflow-hidden">
+            <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true }}>
+                <Environment preset="city" />
+                <ambientLight intensity={0.6} />
+                <directionalLight position={[10, 10, 5]} intensity={1.5} />
+                <PresentationControls speed={1.5} global polar={[-0.1, Math.PI / 4]}>
+                    <Stage environment={null} intensity={0} contactShadow={false}>
+                        {isNote && <Notebook config={cfg} />}
+                        {isThermos && <Thermos />}
+                    </Stage>
+                </PresentationControls>
+            </Canvas>
+            <SceneLoadingOverlay compact label="3D" />
+        </div>
+    );
+};

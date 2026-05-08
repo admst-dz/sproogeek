@@ -172,6 +172,10 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
         else setLanguage('ru');
     };
 
+    const openCommandPalette = () => {
+        window.dispatchEvent(new Event('spruzhuk:open-command-palette'));
+    };
+
     return (
         <div className="app-bg min-h-screen w-full flex flex-col font-sans transition-colors duration-500 text-gray-900 dark:text-white overflow-x-hidden selection:bg-blue-500/30 md:h-screen">
 
@@ -181,11 +185,16 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
                     <span className="font-bold text-sm tracking-wide">Spruzhuk</span>
                 </div>
 
-                <div className="hidden md:flex items-center gap-3 bg-white border border-gray-200 dark:bg-white/5 dark:border-white/10 px-4 py-2 rounded-full backdrop-blur-md w-96 max-w-full text-sm text-gray-400 shadow-sm dark:shadow-none transition-colors">
+                <button
+                    type="button"
+                    onClick={openCommandPalette}
+                    className="hidden md:flex items-center gap-3 bg-white border border-gray-200 dark:bg-white/5 dark:border-white/10 px-4 py-2 rounded-full backdrop-blur-md w-96 max-w-full text-sm text-gray-400 shadow-sm dark:shadow-none transition-colors hover:bg-gray-50 dark:hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/40 text-left"
+                    aria-label={t(language, 'search')}
+                >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                     <span className="flex-1">{t(language, 'search')}</span>
                     <span className="bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-widest">⌘K</span>
-                </div>
+                </button>
 
                 <div className="flex items-center gap-3">
                     <button onClick={cycleLanguage} className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 text-gray-600 dark:bg-white/5 dark:border-white/10 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors rounded-full backdrop-blur-md text-xs font-bold uppercase">

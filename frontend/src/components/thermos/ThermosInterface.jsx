@@ -120,7 +120,7 @@ export const ThermosInterface = ({ onFinish }) => {
                 />
             </div>
 
-            <div className="absolute bottom-0 left-0 w-full p-4 md:p-6 z-20 border-t border-white/10 bg-[#A4B0C9]/95 dark:bg-[#060911]/95 backdrop-blur-xl">
+            <div className="absolute bottom-0 left-0 w-full p-4 md:p-6 z-20 border-t border-white/10 bg-[#0E2235]/85 dark:bg-[#0E2235]/85 backdrop-blur-xl">
                 <button
                     onClick={handleAddToCart}
                     className="w-full py-4 bg-white text-[#1a1a1a] rounded-[11px] text-xl font-black tracking-[0.2em] uppercase hover:bg-gray-100 transition-all shadow-lg active:scale-[0.98]"
@@ -220,7 +220,11 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLog
                 <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) { addLogo(e.target.files[0], activeLogoTarget); e.target.value = ''; } }} className="hidden" />
             </label>
 
-            <div className="rounded-[10px] border border-white/15 bg-white/10 p-3 mb-4">
+            <div className="relative rounded-[10px] border border-white/15 bg-white/10 p-3 mb-4 overflow-hidden">
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 backdrop-blur-[3px] bg-black/40 rounded-[10px] cursor-not-allowed pointer-events-auto">
+                    <span className="text-base font-black uppercase tracking-[0.25em]">Скоро добавим...</span>
+                    <span className="text-[11px] font-bold uppercase tracking-widest opacity-40">Уже работаем над этим</span>
+                </div>
                 <div className="flex items-center justify-between gap-3 mb-2">
                     <span className="text-[11px] font-bold uppercase tracking-widest opacity-50">{activeLogoTarget === 'body' ? 'AI обертка' : 'AI дизайн'}</span>
                     {aiFiles.length > 0 && (

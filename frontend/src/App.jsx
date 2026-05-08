@@ -10,11 +10,10 @@ import { AuthModal } from './components/auth/AuthModal'
 import { ClientDashboard } from './components/dashboard/ClientDashboard'
 import { useConfigurator } from './store'
 import { restoreSession } from './api'
-import { SketchbookInterface } from './components/sketchbook/SketchbookInterface'
 import { ThermosInterface } from './components/thermos/ThermosInterface'
 import { PowerbankInterface } from './components/powerbank/PowerbankInterface'
 import { CookieBanner } from './components/shared/CookieBanner'
-import { FullPageVibeLoader, SceneLoadingOverlay } from './components/shared/VibeLoader'
+import { SceneLoadingOverlay } from './components/shared/VibeLoader'
 import { AdminAuth } from './components/auth/AdminAuth'
 import { AdminDashboard } from './components/admin/AdminDashboard'
 import { SceneHints } from './components/shared/SceneHints'
@@ -29,7 +28,6 @@ const SCREEN_TO_PATH = {
     order: '/order',
     dealer: '/dealer',
     client_dashboard: '/dashboard',
-    sketchbook_configurator: '/sketchbook',
     admin_auth: '/borodazaebal',
     admin_dashboard: '/admin',
 };
@@ -101,7 +99,6 @@ function App() {
     const [pendingNavigation, setPendingNavigation] = useState(null);
 
     const configuratorCanvasRef = useRef(null);
-    const sketchbookCanvasRef = useRef(null);
 
     const {
         activeProduct,
@@ -122,7 +119,7 @@ function App() {
         resetConfigurator,
     } = useConfigurator();
 
-    const isConfiguratorScreen = screen === 'configurator' || screen === 'sketchbook_configurator';
+    const isConfiguratorScreen = screen === 'configurator';
     useUndoRedoHotkeys(isConfiguratorScreen);
     const pastLen = useTemporalConfigurator((s) => s.pastStates.length);
     const isDirty = isConfiguratorScreen && pastLen > 0;
@@ -183,10 +180,6 @@ function App() {
         }).finally(() => setAuthLoading(false));
     }, [setCurrentUser, setUserRole, setClientSubRole, setAuthLoading]);
 
-    if (authLoading) {
-        return <FullPageVibeLoader label="Проверяем вход" />;
-    }
-
     const handleContinueOrder = () => {
         if (currentUser) {
             setScreen('client_dashboard');
@@ -208,9 +201,9 @@ function App() {
             <ConfirmModal
                 open={!!pendingNavigation}
                 title="Уйти из конструктора?"
-                message="Вы вносили изменения. Уверены, что хотите перейти на другой экран?"
-                confirmLabel="Перейти"
-                cancelLabel="Остаться"
+                message="Вы вносили изменения. Уверены, что хотите выйти на другой экран?"
+                confirmLabel="Выйти"
+                cancelLabel="Остаться и продолжить"
                 onConfirm={confirmDiscardAndNavigate}
                 onCancel={() => setPendingNavigation(null)}
             />
@@ -343,7 +336,7 @@ function App() {
                         </div>
                     ) : (
                         <>
-                            <div ref={configuratorCanvasRef} className="relative w-full h-[45%] md:absolute md:inset-0 md:w-[75%] md:h-full bg-[#dcdcdc] dark:bg-[#0A0E1A] md:bg-transparent dark:md:bg-transparent">
+                            <div ref={configuratorCanvasRef} className="app-bg relative w-full h-[45%] md:absolute md:top-0 md:left-0 md:bottom-0 md:w-[70%] md:h-full md:bg-transparent dark:md:bg-transparent">
                                 <div className="absolute bottom-4 right-4 z-10 md:hidden">
                                     <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
                                 </div>
@@ -354,7 +347,7 @@ function App() {
                                     gl={{
                                         antialias: true,
                                         preserveDrawingBuffer: true,
-                                        alpha: false,
+                                        alpha: true, // прозрачный canvas — палитра-градиент подложки видна
                                         powerPreference: 'high-performance',
                                         logarithmicDepthBuffer: true // Важно для устранения z-fighting в Safari
                                     }}
@@ -407,42 +400,6 @@ function App() {
                 </div>
             )}
 
-            {/* --- ЭКРАН: КОНСТРУКТОР БЛОКНОТА --- */}
-            {screen === 'sketchbook_configurator' && (
-                <div className="app-bg fixed inset-0 w-full h-full overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
-                    <button onClick={() => guardedNavigate('home')} className="absolute top-6 left-6 z-50 px-6 py-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10">
-                        ← В Меню
-                    </button>
-                    <ConfiguratorToolbar
-                        onReset={() => resetConfigurator('sketchbook')}
-                        productLabel="Скетчбук"
-                    />
-                    <>
-                        <div ref={sketchbookCanvasRef} className="relative w-full h-[45%] md:absolute md:inset-0 md:w-[75%] md:h-full bg-[#dcdcdc] dark:bg-[#0A0E1A] md:bg-transparent dark:md:bg-transparent">
-                            <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true }}>
-                                {/* Освещение и контролы */}
-                                <ambientLight intensity={0.6} />
-                                <directionalLight position={[10, 10, 5]} intensity={1.5} />
-                                <directionalLight position={[-10, 5, 2]} intensity={0.5} />
-                                <Experience /> {/* В Experience.jsx нужно добавить логику для Sketchbook */}
-                            </Canvas>
-                            <SceneLoadingOverlay label="Собираем 3D" />
-                            <SceneHints containerRef={sketchbookCanvasRef} />
-                        </div>
-                        <div className="relative h-[55%] w-full z-10 md:absolute md:top-0 md:right-0 md:h-full md:w-[30%] pointer-events-none md:p-4 md:flex md:flex-col md:justify-center">
-                            {/* НОВЫЙ ИНТЕРФЕЙС БЛОКНОТА */}
-                            <SketchbookInterface onFinish={() => {
-                                        if (currentUser) {
-                                            setScreen('client_dashboard');
-                                        } else {
-                                            setShowAuth(true);
-                                        }
-                                    }} />
-                        </div>
-                    </>
-                </div>
-            )}
-
             {screen === 'admin_auth' && (
                 <AdminAuth onSuccess={(user) => {
                     setCurrentUser(user);
@@ -464,7 +421,6 @@ export default App
 
 const PRODUCT_LABELS = {
     notebook: 'Ежедневник',
-    sketchbook: 'Скетчбук',
     thermos: 'Термос',
     powerbank: 'Повербанк',
     calendar: 'Календарь',

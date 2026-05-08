@@ -102,10 +102,10 @@ ul.files li { margin-bottom: 1mm; font-size: 9pt; }
 </div>
 
 {# ============ PAGES 3-5 — NOTEBOOK DETAILS ============ #}
-{% for it in req.items if it.product_kind in ('notebook', 'sketchbook') %}
+{% for it in req.items if it.product_kind == 'notebook' %}
 {% set c = it.config %}
 <div class="page-break">
-<h2>Тех. карта товара №{{ it.index }} — {{ it.name }} (Ежедневник / Скетчбук)</h2>
+<h2>Тех. карта товара №{{ it.index }} — {{ it.name }} (Ежедневник)</h2>
 
 <h3>Обложка</h3>
 <table class="kv">
