@@ -48,6 +48,15 @@ KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 SENTRY_DSN=
 ```
 
+`DATABASE_URL` must match the actual Postgres credentials. If backend containers restart during
+`alembic upgrade head` with `asyncpg.exceptions.ProtocolViolationError: SASL authentication failed`,
+the app is reaching Postgres/PgBouncer but the username/password pair is rejected. For a direct
+Postgres connection use the `db:5432` URL shown above. Only point `DATABASE_URL` at `pgbouncer:5432`
+after PgBouncer is configured with the same database user and password.
+
+Large configurator orders can include uploaded design textures. The frontend nginx config allows
+requests up to `12m`, matching the backend upload guard.
+
 ## First server bootstrap
 
 Run once on the server:

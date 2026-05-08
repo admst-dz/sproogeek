@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { useConfigurator } from "../../store";
@@ -110,14 +110,13 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
         activeProduct, coverColor, elasticColor, hasElastic,
         paperPattern, bindingType, spiralColor, format,
         thermosBodyColor, thermosCapColor,
-        renderSnapshot,
     } = useConfigurator();
     const [activeTab, setActiveTab] = useState(initialTab ?? (cartItem ? 'cart' : 'orders'));
 
-    const changeTab = (tab) => {
+    const changeTab = useCallback((tab) => {
         setActiveTab(tab);
         onTabChange?.(tab);
-    };
+    }, [onTabChange]);
 
     const [orders, setOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(false);
@@ -152,7 +151,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
             setOrderSuccess(true);
             onSuccessToastShown?.();
         }
-    }, [showSuccessToast]);
+    }, [changeTab, onSuccessToastShown, showSuccessToast]);
 
     useEffect(() => {
         if (orderSuccess) {
@@ -205,7 +204,6 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                     clientType,
                     contact: { ...formData },
                     isSample,
-                    renderSnapshot: renderSnapshot || null,
                 },
                 quantity,
                 total_price: null,
