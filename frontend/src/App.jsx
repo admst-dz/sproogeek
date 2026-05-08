@@ -13,7 +13,7 @@ import { restoreSession } from './api'
 import { ThermosInterface } from './components/thermos/ThermosInterface'
 import { PowerbankInterface } from './components/powerbank/PowerbankInterface'
 import { CookieBanner } from './components/shared/CookieBanner'
-import { FullPageVibeLoader, SceneLoadingOverlay, useLoaderCompletionGate } from './components/shared/VibeLoader'
+import { SceneLoadingOverlay } from './components/shared/VibeLoader'
 import { AdminAuth } from './components/auth/AdminAuth'
 import { AdminDashboard } from './components/admin/AdminDashboard'
 import { SceneHints } from './components/shared/SceneHints'
@@ -118,7 +118,6 @@ function App() {
         clearCart,
         resetConfigurator,
     } = useConfigurator();
-    const showAuthLoader = useLoaderCompletionGate(authLoading);
 
     const isConfiguratorScreen = screen === 'configurator';
     useUndoRedoHotkeys(isConfiguratorScreen);
@@ -180,10 +179,6 @@ function App() {
             }
         }).finally(() => setAuthLoading(false));
     }, [setCurrentUser, setUserRole, setClientSubRole, setAuthLoading]);
-
-    if (showAuthLoader) {
-        return <FullPageVibeLoader label="Проверяем вход" />;
-    }
 
     const handleContinueOrder = () => {
         if (currentUser) {

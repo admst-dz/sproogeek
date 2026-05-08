@@ -1,19 +1,26 @@
 import { useEffect, useState } from 'react';
 import { useProgress } from '@react-three/drei';
-import loaderFrame1 from '../../assets/loader/figma-loader-frame-1.svg';
-import loaderFrame2 from '../../assets/loader/figma-loader-frame-2.svg';
-import loaderFrame3 from '../../assets/loader/figma-loader-frame-3.svg';
-import loaderFrame4 from '../../assets/loader/figma-loader-frame-4.svg';
+import loaderFrame01 from '../../assets/loader/logo-loader-01.svg';
+import loaderFrame02 from '../../assets/loader/logo-loader-02.svg';
+import loaderFrame03 from '../../assets/loader/logo-loader-03.svg';
+import loaderFrame04 from '../../assets/loader/logo-loader-04.svg';
+import loaderFrame05 from '../../assets/loader/logo-loader-05.svg';
+import loaderFrame06 from '../../assets/loader/logo-loader-06.svg';
+import loaderFrame07 from '../../assets/loader/logo-loader-07.svg';
+import loaderFrame08 from '../../assets/loader/logo-loader-08.svg';
 
 const clampProgress = (value) => Math.max(0, Math.min(100, Math.round(value || 0)));
 const LOGO_ANIMATION_MS = 1760;
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
-
 const loaderFrames = [
-    { src: loaderFrame1, className: 'vibe-loader__logo-frame vibe-loader__logo-frame--one' },
-    { src: loaderFrame2, className: 'vibe-loader__logo-frame vibe-loader__logo-frame--two' },
-    { src: loaderFrame3, className: 'vibe-loader__logo-frame vibe-loader__logo-frame--three' },
-    { src: loaderFrame4, className: 'vibe-loader__logo-frame vibe-loader__logo-frame--four' },
+    loaderFrame01,
+    loaderFrame02,
+    loaderFrame03,
+    loaderFrame04,
+    loaderFrame05,
+    loaderFrame06,
+    loaderFrame07,
+    loaderFrame08,
 ];
 
 export function useLoaderCompletionGate(loading, duration = LOGO_ANIMATION_MS) {
@@ -45,8 +52,14 @@ export function VibeLoader({ progress = 0, label = 'Собираем сцену'
     return (
         <div className={`vibe-loader ${compact ? 'vibe-loader--compact' : ''} ${className}`}>
             <div className="vibe-loader__logo" aria-hidden="true">
-                {loaderFrames.map((frame) => (
-                    <img key={frame.src} src={frame.src} alt="" className={frame.className} />
+                {loaderFrames.map((frame, index) => (
+                    <img
+                        key={frame}
+                        src={frame}
+                        alt=""
+                        className="vibe-loader__logo-frame"
+                        style={{ '--frame-index': String(index) }}
+                    />
                 ))}
             </div>
             {!compact && (
