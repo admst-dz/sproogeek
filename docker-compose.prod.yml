@@ -160,25 +160,6 @@ services:
       retries: 5
       start_period: 10s
 
-  minio:
-    image: quay.io/minio/minio:latest
-    container_name: spruzhuk_minio
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    volumes:
-      - minio_data:/data
-    networks:
-      - spruzhuk_net
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
   techcard:
     image: ghcr.io/admst-dz/spruzhyk-techcard:latest
     pull_policy: always
