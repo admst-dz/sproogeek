@@ -316,7 +316,7 @@ function App() {
 
             {/* --- ЭКРАН: 3D КОНСТРУКТОР --- */}
             {screen === 'configurator' && (
-                <div className="fixed inset-0 w-full h-full bg-[#E5E5E5] dark:bg-[#080B13] overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
+                <div className="app-bg fixed inset-0 w-full h-full overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
 
                     <button
                         onClick={() => guardedNavigate(currentUser ? (userRole === 'dealer' ? 'dealer' : 'client_dashboard') : 'home')}
@@ -331,7 +331,7 @@ function App() {
                     />
 
                     {activeProduct === 'calendar' ? (
-                        <div className="w-full h-full flex flex-col items-center justify-center font-zen bg-[#E5E5E5] dark:bg-[#080B13] select-none transition-colors duration-300">
+                        <div className="app-bg w-full h-full flex flex-col items-center justify-center font-zen select-none transition-colors duration-300">
                             <h1 className="text-4xl md:text-8xl font-black tracking-[0.1em] uppercase text-center px-4 text-[#cfcfcf] dark:text-white/10"
                                 style={{ textShadow: '2px 2px 0px rgba(255,255,255,0.5), -1px -1px 0px rgba(0,0,0,0.1)' }}
                             >
@@ -409,7 +409,7 @@ function App() {
 
             {/* --- ЭКРАН: КОНСТРУКТОР БЛОКНОТА --- */}
             {screen === 'sketchbook_configurator' && (
-                <div className="fixed inset-0 w-full h-full bg-[#E5E5E5] dark:bg-[#080B13] overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
+                <div className="app-bg fixed inset-0 w-full h-full overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
                     <button onClick={() => guardedNavigate('home')} className="absolute top-6 left-6 z-50 px-6 py-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10">
                         ← В Меню
                     </button>

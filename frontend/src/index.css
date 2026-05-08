@@ -27,6 +27,14 @@ html.dark, html.dark body, html.dark #root {
   background-attachment: fixed;
 }
 
+/* Палитра-градиент для произвольных экранов поверх body. */
+.app-bg {
+  background: linear-gradient(180deg, #EBE5CD 0%, #DEF0F3 100%);
+}
+.dark .app-bg {
+  background: linear-gradient(180deg, #132B3F 0%, #4A3839 100%);
+}
+
 /* === ВАШИ НОВЫЕ СТИЛИ === */
 
 /* 1. Шрифт и Текстовые эффекты */

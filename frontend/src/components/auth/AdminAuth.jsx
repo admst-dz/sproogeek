@@ -44,7 +44,7 @@ export const AdminAuth = ({ onSuccess }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-[#080B13] flex items-center justify-center p-4">
+        <div className="app-bg fixed inset-0 flex items-center justify-center p-4">
 
             <div
                 className="absolute inset-0 opacity-[0.03]"

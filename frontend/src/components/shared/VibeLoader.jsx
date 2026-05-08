@@ -62,7 +62,7 @@ export function SceneLoadingOverlay({ label, compact = false }) {
 
 export function FullPageVibeLoader({ label = 'Загружаем' }) {
     return (
-        <div className="fixed inset-0 bg-[#080B13] flex items-center justify-center">
+        <div className="app-bg fixed inset-0 flex items-center justify-center">
             <VibeLoader progress={72} label={label} />
         </div>
     );

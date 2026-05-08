@@ -78,7 +78,7 @@ export const Order = ({ onBack, onSuccess }) => {
     const bindingNames = { hard: 'Твердый', spiral: 'На пружине' };
 
     return (
-        <div className="fixed inset-0 w-full h-full bg-[#E5E5E5] dark:bg-[#080B13] font-zen overflow-y-auto z-50 transition-colors duration-300">
+        <div className="app-bg fixed inset-0 w-full h-full font-zen overflow-y-auto z-50 transition-colors duration-300">
 
             {/* Sticky header */}
             <div className="p-6 md:p-8 flex items-center sticky top-0 bg-[#E5E5E5]/90 dark:bg-[#080B13]/90 backdrop-blur-md z-30 border-b border-transparent dark:border-white/5">
