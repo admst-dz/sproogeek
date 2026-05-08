@@ -1,4 +1,5 @@
 import base64
+import json
 from typing import Any
 
 import httpx
@@ -89,6 +90,35 @@ def _build_prompt(
     )
 
 
+def _is_nano_banana(model: str) -> bool:
+    normalized = (model or "").lower().replace("-", "_")
+    return normalized in {"nano_banana", "nano_banana2", "nano_banana_pro"}
+
+
+def _build_image_config(
+    *,
+    model: str,
+    target: str,
+    generated_prompt: str,
+    reference_images: list[dict[str, str]],
+) -> dict[str, Any]:
+    aspect_ratio = TARGET_ASPECT_RATIOS.get(target, "1:1")
+
+    if _is_nano_banana(model):
+        image_config: dict[str, Any] = {"aspect_ratio": aspect_ratio}
+    else:
+        image_config = {
+            "prompt": generated_prompt,
+            "num_images": 1,
+            "aspect_ratio": aspect_ratio,
+        }
+
+    if reference_images:
+        image_config["image_prompt"] = [item["data_uri"] for item in reference_images]
+
+    return image_config
+
+
 def _extract_image_urls(payload: dict[str, Any]) -> list[str]:
     urls: list[str] = []
 
@@ -109,6 +139,32 @@ def _extract_image_urls(payload: dict[str, Any]) -> list[str]:
                         urls.append(url)
 
     return urls
+
+
+def _abacus_error_detail(response: httpx.Response) -> str:
+    fallback = "Abacus image generation failed"
+    try:
+        payload = response.json()
+    except ValueError:
+        text = response.text.strip()
+        return text[:1200] if text else fallback
+
+    if isinstance(payload, dict):
+        error = payload.get("error")
+        if isinstance(error, dict):
+            message = error.get("message") or error.get("detail")
+            if message:
+                return str(message)[:1200]
+        if isinstance(error, str):
+            return error[:1200]
+        message = payload.get("message") or payload.get("detail")
+        if message:
+            return str(message)[:1200]
+
+    if isinstance(payload, str):
+        return payload[:1200]
+
+    return json.dumps(payload, ensure_ascii=False, default=str)[:1200]
 
 
 async def _download_as_data_uri(client: httpx.AsyncClient, image_url: str) -> str:
@@ -150,13 +206,12 @@ async def generate_thermos_design(
         cap_color=cap_color,
         reference_count=len(reference_images),
     )
-    image_config: dict[str, Any] = {
-        "prompt": generated_prompt,
-        "num_images": 1,
-        "aspect_ratio": TARGET_ASPECT_RATIOS.get(target, "1:1"),
-    }
-    if reference_images:
-        image_config["image_prompt"] = [item["data_uri"] for item in reference_images]
+    image_config = _build_image_config(
+        model=settings.abacus_image_model,
+        target=target,
+        generated_prompt=generated_prompt,
+        reference_images=reference_images,
+    )
 
     abacus_payload = {
         "model": settings.abacus_image_model,
@@ -185,11 +240,23 @@ async def generate_thermos_design(
     except HTTPException:
         raise
     except httpx.HTTPStatusError as exc:
-        detail = "Abacus image generation failed"
-        try:
-            detail = exc.response.json().get("error", {}).get("message") or detail
-        except ValueError:
-            pass
+        detail = _abacus_error_detail(exc.response)
+        event_logger.log(
+            "AI_THERMOS_DESIGN_FAILED",
+            "Abacus RouteLLM returned an error",
+            direction="backend->external",
+            method=request.method,
+            path=request.url.path,
+            status_code=exc.response.status_code,
+            request_id=request_id(request),
+            entity_type="ai_thermos_design",
+            details={
+                "target": target,
+                "model": settings.abacus_image_model,
+                "abacus_status": exc.response.status_code,
+                "abacus_detail": detail,
+            },
+        )
         raise HTTPException(status_code=502, detail=detail) from exc
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail="Could not reach Abacus image API") from exc
