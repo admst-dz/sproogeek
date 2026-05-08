@@ -26,7 +26,7 @@ TARGET_LABELS = {
 }
 
 TARGET_ASPECT_RATIOS = {
-    "body": "3:4",
+    "body": "4:3",
     "capTop": "1:1",
     "capSide": "4:3",
 }
@@ -77,6 +77,24 @@ def _build_prompt(
     reference_count: int,
 ) -> str:
     target_label = TARGET_LABELS.get(target, TARGET_LABELS["body"])
+    if target == "body":
+        reference_note = (
+            "Use the uploaded logo/reference image as a brand element inside the full wrap. "
+            "Preserve the logo identity, but integrate it into the overall composition instead of placing it as one small square sticker."
+            if reference_count
+            else "Create the full wrap from the text brief."
+        )
+        return (
+            "Create one edge-to-edge production-ready full wrap artwork for the cylindrical body of a thermos. "
+            "The output must be a wide rectangular print texture that can wrap around the entire body surface. "
+            f"The artwork will be placed on: {target_label}. Thermos body color: {body_color}. Cap color: {cap_color}. "
+            f"{reference_note} "
+            "Design across the whole printable area, use modern composition, background graphics, patterns, gradients or brand accents as appropriate. "
+            "Do not create a tiny centered sticker, do not create a mockup, do not draw a bottle, no perspective, no shadows, no extra UI. "
+            "Keep the design cleanly printable with sharp edges and high contrast. "
+            f"User brief: {user_prompt.strip()}"
+        )
+
     reference_note = (
         "Use the uploaded logo/reference image as the main brand element. "
         "Preserve the logo identity and make it cleanly printable."
@@ -110,7 +128,7 @@ def _build_image_config(
     aspect_ratio = TARGET_ASPECT_RATIOS.get(target, "1:1")
 
     if _is_nano_banana(model):
-        image_config: dict[str, Any] = {"num_images": 1, "aspect_ratio": aspect_ratio}
+        image_config: dict[str, Any] = {"aspect_ratio": aspect_ratio}
     else:
         image_config = {
             "prompt": generated_prompt,
