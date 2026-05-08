@@ -103,7 +103,7 @@ function PowerbankPreviewScene() {
     });
 
     return (
-        <group ref={groupRef}>
+        <group ref={groupRef} scale={0.75}>
             {meshes.map(({ name, geo }) => (
                 <mesh key={name} geometry={geo} castShadow receiveShadow>
                     <meshStandardMaterial color="#6b6f73" metalness={0.02} roughness={0.92} />

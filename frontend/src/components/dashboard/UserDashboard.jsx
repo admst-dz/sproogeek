@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useConfigurator } from "../../store";
+import { t } from '../../i18n';
 
 export const UserDashboard = ({ onOpenConfigurator }) => {
-    const { currentUser, logout } = useConfigurator();
+    const { currentUser, logout, language } = useConfigurator();
     const [activeTab, setActiveTab] = useState('catalog'); // catalog, cart, orders
 
     // --- МОК-ДАННЫЕ БИЗНЕС-ЛОГИКИ ---
@@ -47,13 +48,13 @@ export const UserDashboard = ({ onOpenConfigurator }) => {
 
     const handleApproveAndOrder = () => {
         if (companyInfo.tokenBalance < cartItem.price) {
-            alert("Недостаточно ТК (Токенов) для оформления заказа!");
+            alert(t(language, 'notEnoughTokens'));
             return;
         }
         // Перенос из корзины в заказы
         setOrders(prev => [{ id: `ORD-${Math.floor(Math.random()*1000)}`, date: new Date().toLocaleDateString(), product: cartItem.product, status: 'processing', price: cartItem.price }, ...prev]);
         setCartItem(null);
-        alert("Дизайн согласован! Заказ отправлен в производство.");
+        alert(t(language, 'designApproved'));
         setActiveTab('orders');
     };
 
@@ -64,9 +65,9 @@ export const UserDashboard = ({ onOpenConfigurator }) => {
             <header className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
                 <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
                     <div>
-                        <h1 className="text-2xl font-black uppercase tracking-widest text-[#1a1a1a]">Кабинет Сотрудника</h1>
+                        <h1 className="text-2xl font-black uppercase tracking-widest text-[#1a1a1a]">{t(language, 'userDashTitle')}</h1>
                         <p className="text-xs font-bold text-gray-500 mt-1 uppercase flex items-center gap-2">
-                            <span>{currentUser?.displayName || 'Иван Иванов'}</span>
+                            <span>{currentUser?.displayName || t(language, 'userDefaultName')}</span>
                             <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
                             <span className="text-blue-600">{companyInfo.name}</span>
                         </p>
@@ -74,21 +75,21 @@ export const UserDashboard = ({ onOpenConfigurator }) => {
                     <div className="flex items-center gap-6">
                         {/* Баланс ТОКЕНОВ (ТК) */}
                         <div className="flex flex-col items-end">
-                            <span className="text-[10px] font-bold uppercase text-gray-400 tracking-widest">Ваш баланс</span>
+                            <span className="text-[10px] font-bold uppercase text-gray-400 tracking-widest">{t(language, 'userBalance')}</span>
                             <div className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-[8px] border border-blue-100">
                                 <div className="w-3 h-3 bg-blue-600 rounded-full shadow-[0_0_8px_rgba(37,99,235,0.6)]"></div>
-                                <span className="font-black text-xl text-blue-800">{companyInfo.tokenBalance} <span className="text-sm">ТК</span></span>
+                                <span className="font-black text-xl text-blue-800">{companyInfo.tokenBalance} <span className="text-sm">{t(language, 'tokenUnit')}</span></span>
                             </div>
                         </div>
-                        <button onClick={logout} className="text-xs font-bold text-gray-400 hover:text-red-500 transition-colors uppercase tracking-widest">Выйти</button>
+                        <button onClick={logout} className="text-xs font-bold text-gray-400 hover:text-red-500 transition-colors uppercase tracking-widest">{t(language, 'logout')}</button>
                     </div>
                 </div>
 
                 {/* НАВИГАЦИЯ */}
                 <div className="max-w-6xl mx-auto px-6 flex gap-8">
-                    <TabBtn active={activeTab === 'catalog'} onClick={() => setActiveTab('catalog')}>Корпоративный Каталог</TabBtn>
-                    <TabBtn active={activeTab === 'cart'} onClick={() => setActiveTab('cart')}>Согласование {cartItem && <span className="ml-2 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">1</span>}</TabBtn>
-                    <TabBtn active={activeTab === 'orders'} onClick={() => setActiveTab('orders')}>Мои заказы</TabBtn>
+                    <TabBtn active={activeTab === 'catalog'} onClick={() => setActiveTab('catalog')}>{t(language, 'tabCatalog')}</TabBtn>
+                    <TabBtn active={activeTab === 'cart'} onClick={() => setActiveTab('cart')}>{t(language, 'tabApproval')} {cartItem && <span className="ml-2 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">1</span>}</TabBtn>
+                    <TabBtn active={activeTab === 'orders'} onClick={() => setActiveTab('orders')}>{t(language, 'tabMyOrders')}</TabBtn>
                 </div>
             </header>
 
@@ -99,8 +100,8 @@ export const UserDashboard = ({ onOpenConfigurator }) => {
                 {activeTab === 'catalog' && (
                     <div className="animate-fade-in">
                         <div className="mb-6">
-                            <h2 className="text-2xl font-black uppercase">Доступная продукция</h2>
-                            <p className="text-sm text-gray-500 font-bold">Эти изделия одобрены вашей компанией ({companyInfo.name}). Вы можете кастомизировать блоки и детали.</p>
+                            <h2 className="text-2xl font-black uppercase">{t(language, 'availableProducts')}</h2>
+                            <p className="text-sm text-gray-500 font-bold">{t(language, 'corporateCatalogDesc')} ({companyInfo.name})</p>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -113,17 +114,17 @@ export const UserDashboard = ({ onOpenConfigurator }) => {
                                     <p className="text-xs text-gray-500 font-bold mb-4 flex-1">{prod.desc}</p>
 
                                     <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-100">
-                                        <span className="font-black text-blue-600">{prod.price} ТК</span>
+                                        <span className="font-black text-blue-600">{prod.price} {t(language, 'tokenUnit')}</span>
                                         {prod.has3D ? (
                                             <button
                                                 onClick={onOpenConfigurator} // Переход в 3D
                                                 className="px-4 py-2 bg-[#1a1a1a] text-white text-xs font-bold uppercase rounded-[8px] hover:bg-blue-600 transition-colors"
                                             >
-                                                Настроить в 3D
+                                                {t(language, 'configure3D')}
                                             </button>
                                         ) : (
                                             <button className="px-4 py-2 border border-gray-200 text-gray-500 text-xs font-bold uppercase rounded-[8px]">
-                                                Заказать
+                                                {t(language, 'orderBtn')}
                                             </button>
                                         )}
                                     </div>
@@ -136,11 +137,11 @@ export const UserDashboard = ({ onOpenConfigurator }) => {
                 {/* ВКЛАДКА: СОГЛАСОВАНИЕ (КОРЗИНА) */}
                 {activeTab === 'cart' && (
                     <div className="animate-fade-in max-w-3xl">
-                        <h2 className="text-2xl font-black uppercase mb-6">Онлайн Согласование</h2>
+                        <h2 className="text-2xl font-black uppercase mb-6">{t(language, 'onlineApproval')}</h2>
 
                         {!cartItem ? (
                             <div className="bg-white p-10 rounded-[24px] text-center border border-gray-200">
-                                <p className="text-gray-400 font-bold uppercase tracking-widest">Ожидание макета</p>
+                                <p className="text-gray-400 font-bold uppercase tracking-widest">{t(language, 'awaitingLayout')}</p>
                             </div>
                         ) : (
                             <div className="bg-white rounded-[24px] p-8 border border-gray-200 shadow-lg">
@@ -149,12 +150,12 @@ export const UserDashboard = ({ onOpenConfigurator }) => {
                                         <h3 className="font-black text-xl">{cartItem.product}</h3>
                                         <p className="text-sm text-gray-500 font-bold mt-1">{cartItem.design}</p>
                                     </div>
-                                    <span className="font-black text-2xl text-blue-600">{cartItem.price} ТК</span>
+                                    <span className="font-black text-2xl text-blue-600">{cartItem.price} {t(language, 'tokenUnit')}</span>
                                 </div>
 
                                 {/* Блок генерации рендеров */}
                                 <div className="bg-gray-50 p-6 rounded-[16px] mb-8 border border-gray-100">
-                                    <h4 className="text-xs font-bold uppercase text-gray-400 tracking-widest mb-4">Визуализация для утверждения</h4>
+                                    <h4 className="text-xs font-bold uppercase text-gray-400 tracking-widest mb-4">{t(language, 'visualizationTitle')}</h4>
 
                                     {cartItem.status === 'draft' ? (
                                         <button
@@ -162,7 +163,7 @@ export const UserDashboard = ({ onOpenConfigurator }) => {
                                             disabled={isGenerating}
                                             className="w-full py-4 border-2 border-dashed border-blue-300 text-blue-600 font-bold uppercase rounded-[12px] hover:bg-blue-50 transition flex justify-center items-center gap-2"
                                         >
-                                            {isGenerating ? 'Генерация файлов на сервере...' : 'Сгенерировать 5 реалистичных изображений (Рендеров)'}
+                                            {isGenerating ? t(language, 'generatingFiles') : t(language, 'generateRenders')}
                                         </button>
                                     ) : (
                                         <div className="space-y-4">
@@ -170,11 +171,11 @@ export const UserDashboard = ({ onOpenConfigurator }) => {
                                                 {/* Имитация сгенерированных картинок */}
                                                 {[1,2,3,4,5].map(i => (
                                                     <div key={i} className="aspect-square bg-gray-200 rounded-[8px] flex items-center justify-center text-[10px] text-gray-400 font-bold">
-                                                        Рендер {i}
+                                                        {t(language, 'renderLabel')} {i}
                                                     </div>
                                                 ))}
                                             </div>
-                                            <p className="text-xs text-green-600 font-bold bg-green-50 px-3 py-2 rounded-[8px]">✅ Файлы успешно сгенерированы. Проверьте дизайн перед отправкой.</p>
+                                            <p className="text-xs text-green-600 font-bold bg-green-50 px-3 py-2 rounded-[8px]">{t(language, 'filesGenerated')}</p>
                                         </div>
                                     )}
                                 </div>
@@ -182,7 +183,7 @@ export const UserDashboard = ({ onOpenConfigurator }) => {
                                 {/* Финальное согласование */}
                                 <div className="flex gap-4">
                                     <button onClick={() => setCartItem(null)} className="px-6 py-4 border border-gray-200 text-gray-500 font-bold uppercase rounded-[12px] hover:bg-gray-50">
-                                        Отменить
+                                        {t(language, 'cancelBtn')}
                                     </button>
                                     <button
                                         onClick={handleApproveAndOrder}
@@ -191,7 +192,7 @@ export const UserDashboard = ({ onOpenConfigurator }) => {
                                             cartItem.status === 'draft' ? 'bg-gray-300 cursor-not-allowed' : 'bg-black hover:bg-blue-600'
                                         }`}
                                     >
-                                        Согласовать дизайн и Оформить
+                                        {t(language, 'approveAndOrder')}
                                     </button>
                                 </div>
                             </div>
@@ -202,7 +203,7 @@ export const UserDashboard = ({ onOpenConfigurator }) => {
                 {/* ВКЛАДКА: МОИ ЗАКАЗЫ */}
                 {activeTab === 'orders' && (
                     <div className="animate-fade-in">
-                        <h2 className="text-2xl font-black uppercase mb-6">История заявок (ПРОД)</h2>
+                        <h2 className="text-2xl font-black uppercase mb-6">{t(language, 'ordersHistoryTitle')}</h2>
                         <div className="bg-white rounded-[20px] shadow-sm border border-gray-200 overflow-hidden">
                             {orders.map(order => (
                                 <div key={order.id} className="p-6 border-b border-gray-50 flex items-center justify-between hover:bg-gray-50 transition">
@@ -212,8 +213,8 @@ export const UserDashboard = ({ onOpenConfigurator }) => {
                                     </div>
                                     <div className="flex-1 px-8 font-bold text-gray-700">{order.product}</div>
                                     <div className="flex items-center gap-6">
-                                        <span className="font-black text-blue-600">{order.price} ТК</span>
-                                        <OrderStatus status={order.status} />
+                                        <span className="font-black text-blue-600">{order.price} {t(language, 'tokenUnit')}</span>
+                                        <OrderStatus status={order.status} language={language} />
                                     </div>
                                 </div>
                             ))}
@@ -237,12 +238,12 @@ const TabBtn = ({ active, children, onClick }) => (
     </button>
 )
 
-const OrderStatus = ({ status }) => {
+const OrderStatus = ({ status, language = 'ru' }) => {
     const s = {
-        processing: { text: 'В обработке', color: 'bg-gray-100 text-gray-600' },
-        production: { text: 'В производстве', color: 'bg-blue-100 text-blue-700' },
-        in_delivery: { text: 'Доставляется', color: 'bg-yellow-100 text-yellow-700' },
-        done: { text: 'Получено', color: 'bg-green-100 text-green-700' }
+        processing: { text: t(language, 'userStatusProcessing'), color: 'bg-gray-100 text-gray-600' },
+        production: { text: t(language, 'userStatusProduction'), color: 'bg-blue-100 text-blue-700' },
+        in_delivery: { text: t(language, 'userStatusDelivery'), color: 'bg-yellow-100 text-yellow-700' },
+        done: { text: t(language, 'userStatusDone'), color: 'bg-green-100 text-green-700' }
     }[status] || { text: status, color: 'bg-gray-100 text-gray-600' };
 
     return <span className={`px-3 py-1.5 rounded-[8px] text-[10px] font-bold uppercase tracking-wider ${s.color}`}>{s.text}</span>

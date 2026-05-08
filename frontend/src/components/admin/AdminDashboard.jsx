@@ -2,11 +2,33 @@ import { Fragment, useState, useEffect } from 'react';
 import { adminApi, productApi } from '../../api';
 import { VibeLoader, useLoaderCompletionGate } from '../shared/VibeLoader';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
+import { useConfigurator } from '../../store';
+import { t } from '../../i18n';
 
-const STATUS_LABEL = { new: 'Новый', processing: 'В работе', production: 'Производство', in_delivery: 'Доставка', done: 'Готов' };
-const BINDING_LABEL = { hard: 'Твёрдый', spiral: 'На пружине', soft: 'Мягкий' };
-const PATTERN_LABEL = { blank: 'Пустой', lined: 'Линейка', tlined: 'Т. линейка', grid: 'Клетка', dotted: 'Точка' };
-const PRODUCT_LABEL = { notebook: 'Ежедневник', thermos: 'Термос', powerbank: 'Повербанк' };
+const STATUS_KEYS = {
+    new: 'adminStatusNew',
+    processing: 'adminStatusProcessing',
+    production: 'adminStatusProduction',
+    in_delivery: 'adminStatusDelivery',
+    done: 'adminStatusDone',
+};
+const BINDING_KEYS = { hard: 'bindingHardShort', spiral: 'bindingSpiralShort', soft: 'bindingSoft' };
+const PATTERN_KEYS = { blank: 'patternBlank', lined: 'patternLined', tlined: 'patternTLined', grid: 'patternGrid', dotted: 'patternDotted' };
+const PRODUCT_KEYS = { notebook: 'notebook', thermos: 'thermos', powerbank: 'powerbank' };
+
+function getStatusLabel(status, language) {
+    const key = STATUS_KEYS[status];
+    return key ? t(language, key) : status;
+}
+function getBindingLabel(binding, language) {
+    const key = BINDING_KEYS[binding];
+    return key ? t(language, key) : binding;
+}
+function getPatternLabel(pattern, language) {
+    const key = PATTERN_KEYS[pattern];
+    return key ? t(language, key) : pattern;
+}
+
 const STATUS_CLS = {
     new: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
     processing: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
@@ -31,9 +53,9 @@ const ROLE_LABEL = {
 const ADMIN_MANAGED_ROLES = ['client', 'dealer', 'manufacturer', 'admin'];
 const ADMIN_MANAGED_SUB_ROLES = ['', 'PL', 'PKL', 'KL', 'KPR', 'PR', 'TP'];
 
-function formatApiError(error) {
+function formatApiError(error, lang = 'ru') {
     const detail = error?.response?.data?.detail;
-    const fallback = error?.message || 'Ошибка загрузки данных';
+    const fallback = error?.message || t(lang, 'adminErrLoading');
 
     if (Array.isArray(detail)) {
         return detail
@@ -52,7 +74,7 @@ function formatApiError(error) {
     return fallback;
 }
 
-function useData(fetcher) {
+function useData(fetcher, lang = 'ru') {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -60,15 +82,15 @@ function useData(fetcher) {
     useEffect(() => {
         fetcher()
             .then(r => { setData(r.data); setLoading(false); })
-            .catch(e => { setError(formatApiError(e)); setLoading(false); });
+            .catch(e => { setError(formatApiError(e, lang)); setLoading(false); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     return { data, setData, loading: gatedLoading, error };
 }
 
-const Loader = () => (
+const Loader = ({ language = 'ru' }) => (
     <div className="flex items-center justify-center py-20">
-        <VibeLoader progress={64} label="Загружаем" compact />
+        <VibeLoader progress={64} label={t(language, 'adminLoadingLabel')} compact />
     </div>
 );
 
@@ -128,34 +150,34 @@ const ColorValue = ({ color }) => (
     </span>
 );
 
-function orderSummaryRows(order) {
+function orderSummaryRows(order, language) {
     const config = order.configuration || {};
     const productConfig = config.productConfig || {};
     const contact = config.contact || {};
     const rows = [
-        ['Клиент', contact.name || contact.contactPerson],
-        ['Телефон', contact.phone],
+        [t(language, 'adminClientLabel'), contact.name || contact.contactPerson],
+        [t(language, 'adminPhoneLabel'), contact.phone],
         ['Email', order.user_email || contact.email],
-        ['Адрес', contact.address],
-        ['Компания / ИНН', [contact.name, contact.inn].filter(Boolean).join(' / ')],
-        ['Тип клиента', config.clientType === 'jur' ? 'Юр. лицо' : config.clientType === 'phys' ? 'Физ. лицо' : config.clientType],
-        ['Тиражный образец', config.isSample || productConfig.isSample ? 'Да' : null],
-        ['Тип товара', PRODUCT_LABEL[productConfig.activeProduct || productConfig.type] || productConfig.activeProduct || productConfig.type],
-        ['Формат', productConfig.format],
-        ['Переплёт', BINDING_LABEL[productConfig.bindingType] || productConfig.bindingType],
-        ['Разлиновка', PATTERN_LABEL[productConfig.paperPattern] || productConfig.paperPattern],
-        ['Цвет обложки', productConfig.coverColor ? <ColorValue color={productConfig.coverColor} /> : null],
-        ['Цвет корпуса', productConfig.powerbankBodyColor || productConfig.thermosBodyColor ? <ColorValue color={productConfig.powerbankBodyColor || productConfig.thermosBodyColor} /> : null],
-        ['Резинка', productConfig.hasElastic ? <ColorValue color={productConfig.elasticColor} /> : null],
-        ['Пружина', productConfig.spiralColor ? <ColorValue color={productConfig.spiralColor} /> : null],
-        ['Уголки', productConfig.hasCorners === undefined ? null : (productConfig.hasCorners ? 'Да' : 'Нет')],
-        ['Логотипы', [productConfig.logos, productConfig.thermosLogos, productConfig.powerbankLogos].find(Array.isArray)?.length],
-        ['Комментарий', contact.comment],
+        [t(language, 'adminAddressLabel'), contact.address],
+        [t(language, 'adminCompanyInn'), [contact.name, contact.inn].filter(Boolean).join(' / ')],
+        [t(language, 'adminClientType'), config.clientType === 'jur' ? t(language, 'adminJurLabel') : config.clientType === 'phys' ? t(language, 'adminPhysLabel') : config.clientType],
+        [t(language, 'adminSampleOrder'), config.isSample || productConfig.isSample ? t(language, 'adminYes') : null],
+        [t(language, 'adminProductType'), (() => { const k = PRODUCT_KEYS[productConfig.activeProduct || productConfig.type]; return k ? t(language, k) : (productConfig.activeProduct || productConfig.type); })()],
+        [t(language, 'adminFormatLabel'), productConfig.format],
+        [t(language, 'adminBindingLabel'), getBindingLabel(productConfig.bindingType, language) || productConfig.bindingType],
+        [t(language, 'adminPatternLabel'), getPatternLabel(productConfig.paperPattern, language) || productConfig.paperPattern],
+        [t(language, 'adminCoverColorLabel'), productConfig.coverColor ? <ColorValue color={productConfig.coverColor} /> : null],
+        [t(language, 'bodyLabel'), productConfig.powerbankBodyColor || productConfig.thermosBodyColor ? <ColorValue color={productConfig.powerbankBodyColor || productConfig.thermosBodyColor} /> : null],
+        [t(language, 'adminElasticLabel'), productConfig.hasElastic ? <ColorValue color={productConfig.elasticColor} /> : null],
+        [t(language, 'adminSpiralLabel'), productConfig.spiralColor ? <ColorValue color={productConfig.spiralColor} /> : null],
+        [t(language, 'adminCornersLabel'), productConfig.hasCorners === undefined ? null : (productConfig.hasCorners ? t(language, 'adminYes') : t(language, 'adminNo'))],
+        [t(language, 'adminLogosLabel'), [productConfig.logos, productConfig.thermosLogos, productConfig.powerbankLogos].find(Array.isArray)?.length],
+        [t(language, 'adminCommentLabel'), contact.comment],
     ];
     return rows.filter(([, value]) => value !== undefined && value !== null && value !== '');
 }
 
-function OrderDetails({ order, onSaved }) {
+function OrderDetails({ order, onSaved, language }) {
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState('');
@@ -173,9 +195,9 @@ function OrderDetails({ order, onSaved }) {
             a.href = url; a.download = filename;
             document.body.appendChild(a); a.click(); a.remove();
             window.URL.revokeObjectURL(url);
-            setMsg('✓ Техкарта скачана');
+            setMsg(t(language, 'adminTechcardDownloaded'));
         } catch (e) {
-            setMsg('✗ ' + formatApiError(e));
+            setMsg('✗ ' + formatApiError(e, language));
         } finally {
             setTcBusy(false);
         }
@@ -223,37 +245,37 @@ function OrderDetails({ order, onSaved }) {
             const { data } = await adminApi.updateOrder(order.id, payload);
             onSaved(data);
             setEditing(false);
-            setMsg('✓ Сохранено');
+            setMsg(t(language, 'adminSaved'));
         } catch (e) {
-            setMsg('✗ ' + (e instanceof SyntaxError ? 'JSON заполнен с ошибкой' : formatApiError(e)));
+            setMsg('✗ ' + (e instanceof SyntaxError ? t(language, 'adminJsonSyntaxErr') : formatApiError(e, language)));
         } finally {
             setSaving(false);
         }
     };
 
-    const rows = orderSummaryRows(order);
+    const rows = orderSummaryRows(order, language);
 
     return (
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-5">
             <div className="space-y-4">
                 <div className="flex items-center gap-3">
                     <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest">
-                        Данные заказа
+                        {t(language, 'adminOrderData')}
                     </p>
                     {msg && <span className={`text-xs font-bold ${msg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{msg}</span>}
                     <button
                         onClick={downloadTechcard}
                         disabled={tcBusy}
                         className="ml-auto px-3 py-1.5 rounded-[8px] bg-white/10 hover:bg-white/15 text-xs font-bold transition disabled:opacity-50"
-                        title="Сформировать и скачать техкарту в PDF"
+                        title={t(language, 'adminTechcardTitle')}
                     >
-                        {tcBusy ? 'Генерация…' : '⬇ Техкарта PDF'}
+                        {tcBusy ? t(language, 'adminTechcardGenerating') : t(language, 'adminTechcardBtn')}
                     </button>
                     <button
                         onClick={() => setEditing(v => !v)}
                         className="px-3 py-1.5 rounded-[8px] bg-white/10 hover:bg-white/15 text-xs font-bold transition"
                     >
-                        {editing ? 'Просмотр' : 'Редактировать'}
+                        {editing ? t(language, 'adminViewBtn') : t(language, 'adminEditBtn')}
                     </button>
                     {editing && (
                         <button
@@ -261,7 +283,7 @@ function OrderDetails({ order, onSaved }) {
                             disabled={saving}
                             className="px-3 py-1.5 rounded-[8px] bg-white text-[#080B13] hover:bg-gray-100 text-xs font-black disabled:opacity-50 transition"
                         >
-                            {saving ? 'Сохранение…' : 'Сохранить'}
+                            {saving ? t(language, 'adminSaving') : t(language, 'adminSaveBtn')}
                         </button>
                     )}
                 </div>
@@ -269,26 +291,26 @@ function OrderDetails({ order, onSaved }) {
                 {editing ? (
                     <div className="space-y-3">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <AdminInput label="Продукт" value={form.product_name} onChange={v => update('product_name', v)} />
+                            <AdminInput label={t(language, 'adminProductLabel')} value={form.product_name} onChange={v => update('product_name', v)} />
                             <AdminInput label="Email" value={form.user_email} onChange={v => update('user_email', v)} />
-                            <AdminInput label="Количество" type="number" value={form.quantity} onChange={v => update('quantity', v)} />
-                            <AdminInput label="Цена" type="number" value={form.total_price} onChange={v => update('total_price', v)} />
-                            <AdminInput label="Валюта" value={form.currency} onChange={v => update('currency', v.toUpperCase())} />
+                            <AdminInput label={t(language, 'adminQtyLabel')} type="number" value={form.quantity} onChange={v => update('quantity', v)} />
+                            <AdminInput label={t(language, 'adminPriceLabel')} type="number" value={form.total_price} onChange={v => update('total_price', v)} />
+                            <AdminInput label={t(language, 'adminCurrencyLabel')} value={form.currency} onChange={v => update('currency', v.toUpperCase())} />
                             <label className="flex flex-col gap-1.5">
-                                <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Статус</span>
+                                <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">{t(language, 'adminStatusLabel')}</span>
                                 <select
                                     value={form.status}
                                     onChange={e => update('status', e.target.value)}
                                     className="bg-black/30 border border-white/10 rounded-[8px] px-3 py-2 text-sm text-white outline-none focus:border-white/30"
                                 >
-                                    {Object.entries(STATUS_LABEL).map(([value, label]) => (
-                                        <option key={value} value={value}>{label}</option>
+                                    {Object.entries(STATUS_KEYS).map(([value, key]) => (
+                                        <option key={value} value={value}>{t(language, key)}</option>
                                     ))}
                                 </select>
                             </label>
                         </div>
                         <label className="flex flex-col gap-1.5">
-                            <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Конфигурация заказа JSON</span>
+                            <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">{t(language, 'adminOrderConfigJson')}</span>
                             <textarea
                                 value={form.configuration}
                                 onChange={e => update('configuration', e.target.value)}
@@ -303,7 +325,7 @@ function OrderDetails({ order, onSaved }) {
                             <ValueRow key={label} label={label} value={value} />
                         ))}
                         {rows.length === 0 && (
-                            <div className="text-sm text-white/25 py-8">Нет распознанных данных. Откройте режим редактирования, чтобы посмотреть JSON.</div>
+                            <div className="text-sm text-white/25 py-8">{t(language, 'adminNoData')}</div>
                         )}
                     </div>
                 )}
@@ -312,13 +334,13 @@ function OrderDetails({ order, onSaved }) {
             <div className="space-y-4">
                 <div>
                     <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-2">
-                        История статусов
+                        {t(language, 'adminStageHistory')}
                     </p>
                     <div className="space-y-1.5">
                         {(order.stage_history ?? []).map((s, i) => (
                             <div key={i} className="flex items-center gap-3 bg-black/30 rounded-[7px] px-3 py-1.5">
                                 <span className={`text-xs font-bold ${STATUS_CLS[s.status]?.split(' ')[0] ?? 'text-white/50'}`}>
-                                    {STATUS_LABEL[s.status] ?? s.status}
+                                    {getStatusLabel(s.status, language)}
                                 </span>
                                 {s.comment && <span className="text-xs text-white/45">{s.comment}</span>}
                                 <span className="text-xs text-white/25 ml-auto">
@@ -327,12 +349,12 @@ function OrderDetails({ order, onSaved }) {
                             </div>
                         ))}
                         {!(order.stage_history?.length) && (
-                            <span className="text-xs text-white/20">Нет истории</span>
+                            <span className="text-xs text-white/20">{t(language, 'adminNoHistory')}</span>
                         )}
                     </div>
                 </div>
                 <div>
-                    <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">UUID</p>
+                    <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">{t(language, 'adminStatusHistoryUuid')}</p>
                     <code className="text-xs font-mono text-white/30 break-all">{order.id}</code>
                 </div>
                 {order.user_id && (
@@ -362,11 +384,11 @@ function AdminInput({ label, value, onChange, type = 'text' }) {
 
 // ─── Заказы ──────────────────────────────────────────────────────────────────
 
-function OrdersTab() {
-    const { data, setData, loading, error } = useData(() => adminApi.getOrders(1, 100));
+function OrdersTab({ language }) {
+    const { data, setData, loading, error } = useData(() => adminApi.getOrders(1, 100), language);
     const [expanded, setExpanded] = useState(null);
 
-    if (loading) return <Loader />;
+    if (loading) return <Loader language={language} />;
     if (error) return <ErrBox msg={error} />;
     const orders = data?.items ?? [];
     const updateOrderInList = (updatedOrder) => {
@@ -378,10 +400,18 @@ function OrdersTab() {
 
     return (
         <>
-            <SectionHeader title="Заказы" count={orders.length} />
+            <SectionHeader title={t(language, 'adminOrdersHeader')} count={orders.length} />
             <Table
-                headers={['ID', 'Email', 'Продукт', 'Статус', 'Кол-во', 'Цена', 'Дата']}
-                empty={orders.length === 0 ? 'Заказов нет' : null}
+                headers={[
+                    t(language, 'adminColId'),
+                    t(language, 'adminColEmail'),
+                    t(language, 'adminColProduct'),
+                    t(language, 'adminColStatus'),
+                    t(language, 'adminColQty'),
+                    t(language, 'adminColPrice'),
+                    t(language, 'adminColDate'),
+                ]}
+                empty={orders.length === 0 ? t(language, 'adminOrdersEmpty') : null}
             >
                 {orders.map(o => (
                     <Fragment key={o.id}>
@@ -394,7 +424,7 @@ function OrdersTab() {
                             <td className="px-4 py-2.5 text-sm text-white/65">{o.product_name || '—'}</td>
                             <td className="px-4 py-2.5">
                                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${STATUS_CLS[o.status] ?? 'text-white/40 bg-white/5 border-white/10'}`}>
-                                    {STATUS_LABEL[o.status] ?? o.status}
+                                    {getStatusLabel(o.status, language)}
                                 </span>
                             </td>
                             <td className="px-4 py-2.5 text-sm text-white/60">{o.quantity}</td>
@@ -408,7 +438,7 @@ function OrdersTab() {
                         {expanded === o.id && (
                             <tr className="bg-black/20">
                                 <td colSpan={7} className="px-5 py-5">
-                                    <OrderDetails order={o} onSaved={updateOrderInList} />
+                                    <OrderDetails order={o} onSaved={updateOrderInList} language={language} />
                                 </td>
                             </tr>
                         )}
@@ -1055,8 +1085,8 @@ function DashboardTab({ onJumpToUsers }) {
 
 // ─── JSON-конфиги ────────────────────────────────────────────────────────────
 
-function JsonTab() {
-    const { data, loading, error } = useData(() => adminApi.listOrderTypes());
+function JsonTab({ language }) {
+    const { data, loading, error } = useData(() => adminApi.listOrderTypes(), language);
     const [selected, setSelected] = useState(null);
     const [editText, setEditText] = useState('');
     const [saving, setSaving] = useState(false);
@@ -1074,7 +1104,7 @@ function JsonTab() {
             const parsed = JSON.parse(editText);
             setSaving(true);
             await adminApi.updateOrderType(selected, parsed);
-            setMsg('✓ Сохранено');
+            setMsg(t(language, 'adminSaved'));
         } catch (e) {
             setMsg('✗ ' + e.message);
         } finally {
@@ -1083,14 +1113,14 @@ function JsonTab() {
         }
     };
 
-    if (loading) return <Loader />;
+    if (loading) return <Loader language={language} />;
     if (error) return <ErrBox msg={error} />;
     const items = data?.items ?? [];
 
     return (
         <div className="flex gap-5 h-[calc(100vh-9rem)]">
             <div className="w-52 shrink-0 flex flex-col gap-1">
-                <h2 className="text-xl font-bold mb-3">JSON-конфиги</h2>
+                <h2 className="text-xl font-bold mb-3">{t(language, 'adminJsonHeader')}</h2>
                 {items.map(item => (
                     <button
                         key={item.id}
@@ -1110,7 +1140,7 @@ function JsonTab() {
                         </div>
                     </button>
                 ))}
-                {items.length === 0 && <p className="text-white/20 text-xs px-3">Нет файлов</p>}
+                {items.length === 0 && <p className="text-white/20 text-xs px-3">{t(language, 'adminJsonEmpty')}</p>}
             </div>
 
             <div className="flex-1 flex flex-col min-w-0">
@@ -1128,7 +1158,7 @@ function JsonTab() {
                                 disabled={saving}
                                 className="ml-auto px-4 py-1.5 bg-white text-[#080B13] text-xs font-black rounded-[8px] hover:bg-gray-100 disabled:opacity-40 transition-all"
                             >
-                                {saving ? 'Сохранение…' : 'Сохранить'}
+                                {saving ? t(language, 'adminSaving') : t(language, 'adminSaveBtn')}
                             </button>
                         </div>
                         <textarea
@@ -1140,7 +1170,7 @@ function JsonTab() {
                     </>
                 ) : (
                     <div className="flex items-center justify-center h-full text-white/15 text-sm">
-                        Выберите файл слева
+                        {t(language, 'adminJsonSelectFile')}
                     </div>
                 )}
             </div>
@@ -1150,19 +1180,26 @@ function JsonTab() {
 
 // ─── Продукты ────────────────────────────────────────────────────────────────
 
-function ProductsTab() {
-    const { data, loading, error } = useData(() => productApi.getAll());
+function ProductsTab({ language }) {
+    const { data, loading, error } = useData(() => productApi.getAll(), language);
 
-    if (loading) return <Loader />;
+    if (loading) return <Loader language={language} />;
     if (error) return <ErrBox msg={error} />;
     const products = Array.isArray(data) ? data : [];
 
     return (
         <>
-            <SectionHeader title="Продукты" count={products.length} />
+            <SectionHeader title={t(language, 'adminProductsHeader')} count={products.length} />
             <Table
-                headers={['Название', 'Дилер', 'Цена', 'Переплёт', 'Форматы', 'Создан']}
-                empty={products.length === 0 ? 'Нет продуктов' : null}
+                headers={[
+                    t(language, 'adminColProduct'),
+                    t(language, 'adminColDealer'),
+                    t(language, 'adminColPrice'),
+                    t(language, 'adminColBinding'),
+                    t(language, 'adminColFormats'),
+                    t(language, 'adminColCreated'),
+                ]}
+                empty={products.length === 0 ? t(language, 'adminProductsEmpty') : null}
             >
                 {products.map(p => (
                     <tr key={p.id} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors">
@@ -1190,17 +1227,18 @@ function ProductsTab() {
 // ─── Дашборд ─────────────────────────────────────────────────────────────────
 
 const TABS = [
-    ['dashboard', 'Сводка'],
-    ['orders', 'Заказы'],
-    ['users', 'Пользователи'],
-    ['dealers', 'Дилеры'],
-    ['manufacturers', 'Производство'],
-    ['admins', 'Администраторы'],
-    ['products', 'Продукты'],
-    ['json', 'JSON-конфиги'],
+    ['dashboard', 'adminTabDashboard'],
+    ['orders', 'adminTabOrders'],
+    ['users', 'adminTabUsers'],
+    ['dealers', 'adminTabDealers'],
+    ['manufacturers', 'adminTabManufacturers'],
+    ['admins', 'adminTabAdmins'],
+    ['json', 'adminTabJson'],
+    ['products', 'adminTabProducts'],
 ];
 
 export const AdminDashboard = ({ onLogout }) => {
+    const { language } = useConfigurator();
     const [tab, setTab] = useState('dashboard');
 
     return (
@@ -1209,9 +1247,9 @@ export const AdminDashboard = ({ onLogout }) => {
             <header className="flex items-center gap-2 px-6 py-3 border-b border-white/8 bg-[#0A0E1A] shrink-0">
                 <span className="text-[11px] font-black tracking-[0.25em] uppercase text-white/20">SPRUZHYK</span>
                 <span className="text-white/12 mx-2 select-none">|</span>
-                <span className="text-sm font-bold text-white/60">Admin Panel</span>
+                <span className="text-sm font-bold text-white/60">{t(language, 'adminPanelLabel')}</span>
                 <nav className="flex gap-1 ml-6 flex-wrap">
-                    {TABS.map(([id, label]) => (
+                    {TABS.map(([id, labelKey]) => (
                         <button
                             key={id}
                             onClick={() => setTab(id)}
@@ -1221,7 +1259,7 @@ export const AdminDashboard = ({ onLogout }) => {
                                     : 'text-white/35 hover:text-white/70 hover:bg-white/5'
                             }`}
                         >
-                            {label}
+                            {t(language, labelKey)}
                         </button>
                     ))}
                 </nav>
@@ -1229,19 +1267,19 @@ export const AdminDashboard = ({ onLogout }) => {
                     onClick={onLogout}
                     className="ml-auto text-xs text-white/25 hover:text-white/60 border border-white/8 hover:border-white/20 px-3 py-1.5 rounded-[8px] transition-all"
                 >
-                    Выйти
+                    {t(language, 'adminLogout')}
                 </button>
             </header>
 
             <div className="flex-1 overflow-auto p-6">
                 {tab === 'dashboard' && <DashboardTab onJumpToUsers={(role) => setTab(role === 'dealer' ? 'dealers' : role === 'manufacturer' ? 'manufacturers' : role === 'admin' ? 'admins' : 'users')} />}
-                {tab === 'orders' && <OrdersTab />}
+                {tab === 'orders' && <OrdersTab language={language} />}
                 {tab === 'users' && <UsersTab key="all" initialFilter={null} />}
                 {tab === 'dealers' && <UsersTab key="dealers" initialFilter="dealer" />}
                 {tab === 'manufacturers' && <UsersTab key="manufacturers" initialFilter="manufacturer" />}
                 {tab === 'admins' && <UsersTab key="admins" initialFilter="admin" />}
-                {tab === 'products' && <ProductsTab />}
-                {tab === 'json' && <JsonTab />}
+                {tab === 'json' && <JsonTab language={language} />}
+                {tab === 'products' && <ProductsTab language={language} />}
             </div>
         </div>
     );

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { t } from '../../i18n';
 import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { useConfigurator } from "../../store";
@@ -23,18 +24,19 @@ const TabBtn = ({ active, children, onClick }) => (
     </button>
 );
 
-const ORDER_STAGES = [
-    { key: 'new',         label: 'Ожидает',        icon: '🕐' },
-    { key: 'production',  label: 'Производство',    icon: '🏭' },
-    { key: 'processing',  label: 'Обработка',       icon: '⚙️' },
-    { key: 'in_delivery', label: 'Доставка',        icon: '🚚' },
-    { key: 'done',        label: 'Готово',          icon: '✅' },
+const ORDER_STAGE_KEYS = [
+    { key: 'new',         labelKey: 'stageNew',        icon: '🕐' },
+    { key: 'production',  labelKey: 'stageProduction',  icon: '🏭' },
+    { key: 'processing',  labelKey: 'stageProcessing',  icon: '⚙️' },
+    { key: 'in_delivery', labelKey: 'stageDelivery',    icon: '🚚' },
+    { key: 'done',        labelKey: 'stageDone',        icon: '✅' },
 ];
 
-const STAGE_INDEX = Object.fromEntries(ORDER_STAGES.map((s, i) => [s.key, i]));
+const STAGE_INDEX = Object.fromEntries(ORDER_STAGE_KEYS.map((s, i) => [s.key, i]));
 
-const OrderProgressBar = ({ status, stageHistory = [] }) => {
+const OrderProgressBar = ({ status, stageHistory = [], language }) => {
     const currentIdx = STAGE_INDEX[status] ?? 0;
+    const ORDER_STAGES = ORDER_STAGE_KEYS.map(s => ({ ...s, label: t(language, s.labelKey) }));
     const historyMap = {};
     stageHistory.forEach(h => { historyMap[h.status] = h; });
 
@@ -90,18 +92,19 @@ const OrderProgressBar = ({ status, stageHistory = [] }) => {
     );
 };
 
-const OrderStatus = ({ status }) => {
+const OrderStatus = ({ status, language }) => {
     const s = {
-        processing: { text: 'В обработке', color: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' },
-        production: { text: 'В производстве', color: 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' },
-        in_delivery: { text: 'Доставляется', color: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' },
-        done: { text: 'Готово', color: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' },
-        new: { text: 'Ожидает', color: 'bg-white/10 text-gray-400 border border-white/10' },
-    }[status] || { text: status, color: 'bg-white/10 text-gray-400 border border-white/10' };
+        processing: { textKey: 'statusProcessing', color: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' },
+        production: { textKey: 'statusProduction', color: 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' },
+        in_delivery: { textKey: 'statusDelivery', color: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' },
+        done: { textKey: 'statusDone', color: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' },
+        new: { textKey: 'statusNew', color: 'bg-white/10 text-gray-400 border border-white/10' },
+    }[status] || { textKey: null, color: 'bg-white/10 text-gray-400 border border-white/10' };
+    const text = s.textKey ? t(language, s.textKey) : status;
 
     return (
         <span className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${s.color}`}>
-            {s.text}
+            {text}
         </span>
     );
 };
@@ -111,7 +114,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
         currentUser, logout, cartItem, clearCart,
         activeProduct, coverColor, elasticColor, hasElastic,
         paperPattern, bindingType, spiralColor, format,
-        thermosBodyColor, thermosCapColor,
+        thermosBodyColor, thermosCapColor, language,
     } = useConfigurator();
     const [activeTab, setActiveTab] = useState(initialTab ?? (cartItem ? 'cart' : 'orders'));
 
@@ -191,7 +194,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
 
     const handleApprove = async () => {
         if (!formData.name || !formData.phone) {
-            setFormError('Заполните имя и телефон');
+            setFormError(t(language, 'fillNamePhone'));
             return;
         }
         setFormError('');
@@ -221,7 +224,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                 status: 'new',
                 stageHistory: [{
                     status: 'new',
-                    comment: 'Заказ принят системой, ожидайте связи с типографией',
+                    comment: t(language, 'orderAcceptedComment'),
                     updated_at: new Date().toISOString(),
                 }],
                 date: new Date().toLocaleDateString('ru-RU'),
@@ -239,7 +242,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
             changeTab('orders');
         } catch (error) {
             console.error(error);
-            setFormError('Ошибка сети. Попробуйте позже.');
+            setFormError(t(language, 'networkError'));
         } finally {
             setSubmitting(false);
         }
@@ -275,17 +278,17 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                         onClick={() => { logout(); onBack(); }}
                         className="flex items-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 transition-colors px-4 py-2 rounded-full text-xs font-bold text-gray-300 uppercase tracking-widest"
                     >
-                        Выйти
+                        {t(language, 'logout')}
                     </button>
                 </div>
 
                 {/* TABS */}
                 <div className="max-w-6xl mx-auto flex gap-8 mt-1">
-                    <TabBtn active={activeTab === 'catalog'} onClick={() => changeTab('catalog')}>Каталог</TabBtn>
+                    <TabBtn active={activeTab === 'catalog'} onClick={() => changeTab('catalog')}>{t(language, 'tabCatalog')}</TabBtn>
                     <TabBtn active={activeTab === 'cart'} onClick={() => changeTab('cart')}>
-                        Корзина {cartItem && <span className="ml-1 w-1.5 h-1.5 bg-emerald-400 rounded-full inline-block shadow-[0_0_6px_rgba(52,211,153,0.8)]"></span>}
+                        {t(language, 'tabCart')} {cartItem && <span className="ml-1 w-1.5 h-1.5 bg-emerald-400 rounded-full inline-block shadow-[0_0_6px_rgba(52,211,153,0.8)]"></span>}
                     </TabBtn>
-                    <TabBtn active={activeTab === 'orders'} onClick={() => changeTab('orders')}>Заказы</TabBtn>
+                    <TabBtn active={activeTab === 'orders'} onClick={() => changeTab('orders')}>{t(language, 'tabOrders')}</TabBtn>
                 </div>
             </header>
 
@@ -298,11 +301,11 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                         {productsLoading ? (
                             <div className="py-16 flex flex-col items-center gap-3">
                                 <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                                <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Загрузка...</p>
+                                <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">{t(language, 'loading')}</p>
                             </div>
                         ) : products.length === 0 ? (
                             <div className="py-16 flex flex-col items-center gap-4">
-                                <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">Каталог пуст</p>
+                                <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">{t(language, 'catalogEmpty')}</p>
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -312,13 +315,13 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                         <div className="relative z-10 flex flex-col flex-1 gap-3">
                                             <h3 className="font-bold text-base text-white">{prod.name}</h3>
                                             {prod.formats?.length > 0 && (
-                                                <p className="text-xs text-gray-500">Форматы: {prod.formats.join(', ')}</p>
+                                                <p className="text-xs text-gray-500">{t(language, 'formatsLabel')} {prod.formats.join(', ')}</p>
                                             )}
                                             {prod.binding?.length > 0 && (
-                                                <p className="text-xs text-gray-500">Переплёт: {prod.binding.map(b => b === 'hard' ? 'Твёрдый' : 'На пружине').join(', ')}</p>
+                                                <p className="text-xs text-gray-500">{t(language, 'bindingFormatLabel')} {prod.binding.map(b => b === 'hard' ? t(language, 'bindingHard') : t(language, 'bindingSpiral')).join(', ')}</p>
                                             )}
                                             <div className="pt-4 border-t border-white/5 mt-auto">
-                                                <span className="font-bold text-white">{prod.retailPrice ? `${prod.retailPrice} BYN` : 'По запросу'}</span>
+                                                <span className="font-bold text-white">{prod.retailPrice ? `${prod.retailPrice} BYN` : t(language, 'onRequest')}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -334,7 +337,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                         {!cartItem ? (
                             <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[24px] p-16 flex flex-col items-center gap-4">
                                 <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10 text-2xl">🛒</div>
-                                <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Корзина пуста</p>
+                                <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">{t(language, 'cartEmpty')}</p>
                             </div>
                         ) : (
                             <div className="flex flex-col lg:flex-row gap-8">
@@ -357,25 +360,25 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                 </PresentationControls>
                                             </Canvas>
                                             <SceneLoadingOverlay compact label="3D" />
-                                            <div className="absolute top-3 left-3 text-white/30 text-[10px] font-bold tracking-wider pointer-events-none uppercase">Перетащи для вращения</div>
+                                            <div className="absolute top-3 left-3 text-white/30 text-[10px] font-bold tracking-wider pointer-events-none uppercase">{t(language, 'dragRotate')}</div>
                                         </div>
 
                                         {/* Параметры */}
                                         <div className="p-5 space-y-2 border-t border-white/5">
-                                            <CartRow label="Продукт" value={cartItem.productName} />
+                                            <CartRow label={t(language, 'productLabel')} value={cartItem.productName} />
                                             {activeProduct === 'thermos' ? (
                                                 <>
-                                                    <CartRow label="Корпус" value={<ColorDot color={thermosBodyColor} />} />
-                                                    <CartRow label="Крышка" value={<ColorDot color={thermosCapColor} />} />
+                                                    <CartRow label={t(language, 'bodyLabel')} value={<ColorDot color={thermosBodyColor} />} />
+                                                    <CartRow label={t(language, 'capLabel')} value={<ColorDot color={thermosCapColor} />} />
                                                 </>
                                             ) : (
                                                 <>
-                                                    <CartRow label="Формат" value={format} />
-                                                    <CartRow label="Переплет" value={bindingType === 'hard' ? 'Твердый' : 'На пружине'} />
-                                                    <CartRow label="Разлиновка" value={{ blank: 'Пустой', lined: 'Линейка', tlined: 'Т. линейка', grid: 'Клетка', dotted: 'Точка' }[paperPattern]} />
-                                                    <CartRow label="Обложка" value={<ColorDot color={coverColor} />} />
-                                                    {hasElastic && <CartRow label="Резинка" value={<ColorDot color={elasticColor} />} />}
-                                                    {bindingType === 'spiral' && <CartRow label="Пружина" value={<ColorDot color={spiralColor} />} />}
+                                                    <CartRow label={t(language, 'formatLabel')} value={format} />
+                                                    <CartRow label={t(language, 'bindingLabel')} value={bindingType === 'hard' ? t(language, 'bindingHard') : t(language, 'bindingSpiral')} />
+                                                    <CartRow label={t(language, 'patternLabel')} value={{ blank: t(language, 'patternBlank'), lined: t(language, 'patternLined'), tlined: t(language, 'patternTLined'), grid: t(language, 'patternGrid'), dotted: t(language, 'patternDotted') }[paperPattern]} />
+                                                    <CartRow label={t(language, 'coverLabel')} value={<ColorDot color={coverColor} />} />
+                                                    {hasElastic && <CartRow label={t(language, 'elasticLabel')} value={<ColorDot color={elasticColor} />} />}
+                                                    {bindingType === 'spiral' && <CartRow label={t(language, 'spiralLabel')} value={<ColorDot color={spiralColor} />} />}
                                                 </>
                                             )}
                                         </div>
@@ -385,51 +388,51 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                         onClick={onEdit}
                                         className="w-full py-3 rounded-[14px] border border-white/10 text-gray-400 font-bold uppercase tracking-widest text-xs hover:border-white/30 hover:text-white transition-all"
                                     >
-                                        ← Допилить в редакторе
+                                        {t(language, 'editInEditor')}
                                     </button>
                                 </div>
 
                                 {/* ПРАВАЯ — контактные данные */}
                                 <div className="w-full lg:w-3/5 flex flex-col gap-4">
                                     <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[24px] p-6 md:p-8 flex flex-col gap-6">
-                                        <h3 className="font-bold text-lg uppercase tracking-widest text-white">Контактные данные</h3>
+                                        <h3 className="font-bold text-lg uppercase tracking-widest text-white">{t(language, 'contactsTitle')}</h3>
 
                                         {/* Физ/Юр переключатель */}
                                         <div className="bg-white/5 p-1.5 rounded-[14px] flex border border-white/8">
                                             <button
                                                 onClick={() => setClientType('phys')}
                                                 className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-widest rounded-[12px] transition-all ${clientType === 'phys' ? 'bg-white/15 text-white' : 'text-gray-500 hover:text-gray-300'}`}
-                                            >Физ. лицо</button>
+                                            >{t(language, 'physClient')}</button>
                                             <button
                                                 onClick={() => setClientType('jur')}
                                                 className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-widest rounded-[12px] transition-all ${clientType === 'jur' ? 'bg-white/15 text-white' : 'text-gray-500 hover:text-gray-300'}`}
-                                            >Юр. лицо</button>
+                                            >{t(language, 'jurClient')}</button>
                                         </div>
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {clientType === 'phys' ? (<>
-                                                <CartInput name="name" label="ФИО *" placeholder="Иванов Иван" value={formData.name} onChange={handleInputChange} />
-                                                <CartInput name="phone" label="Телефон *" placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} />
-                                                <CartInput name="email" label="Email" placeholder="mail@..." type="email" value={formData.email} onChange={handleInputChange} />
-                                                <CartInput name="address" label="Адрес доставки" placeholder="Город, улица..." value={formData.address} onChange={handleInputChange} />
+                                                <CartInput name="name" label={t(language, 'fullNameRequired')} placeholder={t(language, 'placeholderFullName')} value={formData.name} onChange={handleInputChange} />
+                                                <CartInput name="phone" label={t(language, 'phoneRequired')} placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} />
+                                                <CartInput name="email" label={t(language, 'emailLabel')} placeholder="mail@..." type="email" value={formData.email} onChange={handleInputChange} />
+                                                <CartInput name="address" label={t(language, 'orderAddress')} placeholder={t(language, 'placeholderCityStreet')} value={formData.address} onChange={handleInputChange} />
                                                 <div className="md:col-span-2">
-                                                    <CartInput name="address" label="Адрес доставки" placeholder="Город, улица..." value={formData.address} onChange={handleInputChange} />
+                                                    <CartInput name="address" label={t(language, 'orderAddress')} placeholder={t(language, 'placeholderCityStreet')} value={formData.address} onChange={handleInputChange} />
                                                 </div>
                                             </>) : (<>
-                                                <CartInput name="name" label="Название компании *" placeholder='ООО "Пример"' value={formData.name} onChange={handleInputChange} />
-                                                <CartInput name="inn" label="УНП / ИНН" placeholder="123456789" value={formData.inn} onChange={handleInputChange} />
-                                                <CartInput name="contactPerson" label="Контактное лицо *" placeholder="ФИО" value={formData.contactPerson} onChange={handleInputChange} />
-                                                <CartInput name="phone" label="Телефон *" placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} />
+                                                <CartInput name="name" label={t(language, 'companyRequired')} placeholder={t(language, 'placeholderCompany')} value={formData.name} onChange={handleInputChange} />
+                                                <CartInput name="inn" label={t(language, 'unpInn')} placeholder="123456789" value={formData.inn} onChange={handleInputChange} />
+                                                <CartInput name="contactPerson" label={t(language, 'contactPersonRequired')} placeholder={t(language, 'placeholderFio')} value={formData.contactPerson} onChange={handleInputChange} />
+                                                <CartInput name="phone" label={t(language, 'phoneRequired')} placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} />
                                             </>)}
                                             <div className="md:col-span-2">
-                                                <CartInput name="comment" label="Комментарий" placeholder="Доп. пожелания..." value={formData.comment} onChange={handleInputChange} isTextarea />
+                                                <CartInput name="comment" label={t(language, 'orderComment')} placeholder={t(language, 'commentsPlaceholder')} value={formData.comment} onChange={handleInputChange} isTextarea />
                                             </div>
                                         </div>
 
                                         {/* Тираж и тиражный образец */}
                                         <div className="flex flex-col sm:flex-row gap-4 sm:items-end pt-2 border-t border-white/8">
                                             <div className="flex flex-col gap-1.5">
-                                                <span className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">Тираж (шт.)</span>
+                                                <span className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">{t(language, 'quantityLabel')}</span>
                                                 <div className="flex items-center gap-2 bg-white/5 rounded-[12px] p-1.5 border border-white/10 w-max">
                                                     <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-9 h-9 flex items-center justify-center bg-white/10 rounded-[9px] text-white font-bold text-lg hover:bg-white/20 active:scale-95 transition">−</button>
                                                     <span className="w-12 text-center font-black text-white text-xl select-none">{quantity}</span>
@@ -443,8 +446,8 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                         {isSample && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#0B0F19" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                                                     </div>
                                                     <div className="flex flex-col">
-                                                        <span className="text-sm font-bold text-blue-300 uppercase tracking-wide">Тиражный образец</span>
-                                                        <span className="text-[10px] text-blue-500">Изготовление 1 шт. перед партией</span>
+                                                        <span className="text-sm font-bold text-blue-300 uppercase tracking-wide">{t(language, 'sampleLabel')}</span>
+                                                        <span className="text-[10px] text-blue-500">{t(language, 'sampleDesc')}</span>
                                                     </div>
                                                 </label>
                                             )}
@@ -461,7 +464,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                             disabled={submitting}
                                             className={`w-full py-4 font-bold uppercase tracking-widest rounded-[14px] transition-all text-sm ${submitting ? 'bg-white/10 text-gray-500 cursor-wait' : 'bg-white text-black hover:bg-gray-100 shadow-[0_0_30px_rgba(255,255,255,0.15)] active:scale-[0.98]'}`}
                                         >
-                                            {submitting ? 'Отправка...' : 'Оформить заказ →'}
+                                            {submitting ? t(language, 'sending') : t(language, 'cartOrderSubmit')}
                                         </button>
                                     </div>
                                 </div>
@@ -473,17 +476,17 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                 {/* ORDERS TAB */}
                 {activeTab === 'orders' && (
                     <div>
-                        <h2 className="text-xl font-bold uppercase tracking-widest mb-6 text-white">Мои заказы</h2>
+                        <h2 className="text-xl font-bold uppercase tracking-widest mb-6 text-white">{t(language, 'myOrders')}</h2>
                         <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[24px] overflow-hidden">
                             {ordersLoading ? (
                                 <div className="py-16 flex flex-col items-center gap-3">
                                     <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Загрузка...</p>
+                                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">{t(language, 'loading')}</p>
                                 </div>
                             ) : orders.length === 0 ? (
                                 <div className="py-16 flex flex-col items-center gap-4">
                                     <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10 text-2xl">📋</div>
-                                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Нет заказов</p>
+                                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">{t(language, 'noOrders')}</p>
                                 </div>
                             ) : (
                                 orders.map((order, i) => {
@@ -510,14 +513,14 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                 <div className="flex-1 min-w-0">
                                                     <p className="font-bold text-sm text-white truncate">{order.product}</p>
                                                     <p className="text-xs text-gray-500 truncate">
-                                                        {order.quantity ? `${order.quantity} шт.` : ''}
+                                                        {order.quantity ? `${order.quantity} ${t(language, 'pcsUnit')}` : ''}
                                                         {order.quantity && order.configuration?.productConfig?.format ? ' · ' : ''}
                                                         {order.configuration?.productConfig?.format || ''}
                                                     </p>
                                                 </div>
                                                 <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 shrink-0">
                                                     <span className="font-bold text-white text-sm">{order.price ? `${order.price} BYN` : ''}</span>
-                                                    <OrderStatus status={order.status} />
+                                                    <OrderStatus status={order.status} language={language} />
                                                     <svg
                                                         width="14" height="14" viewBox="0 0 14 14" fill="none"
                                                         className={`text-gray-500 transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
@@ -534,7 +537,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
 
                                                         {/* 3D preview */}
                                                         <div className="w-full lg:w-64 shrink-0">
-                                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">3D Макет</p>
+                                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">{t(language, 'view3d')}</p>
                                                             <ClientOrder3DPreview configuration={order.configuration} productName={order.product} />
                                                         </div>
 
@@ -542,42 +545,42 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                         <div className="flex-1 flex flex-col gap-5">
                                                             {/* Order params */}
                                                             <div>
-                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">Параметры заказа</p>
+                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">{t(language, 'orderParams')}</p>
                                                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                                     {order.quantity && (
-                                                                        <ClientDetailRow label="Тираж" value={`${order.quantity} шт.`} accent />
+                                                                        <ClientDetailRow label={t(language, 'circulationLabel')} value={`${order.quantity} ${t(language, 'pcsUnit')}`} accent />
                                                                     )}
                                                                     {order.configuration?.isSample && (
-                                                                        <ClientDetailRow label="Образец" value="Тиражный образец" />
+                                                                        <ClientDetailRow label={t(language, 'sampleOrderLabel')} value={t(language, 'sampleLabel')} />
                                                                     )}
                                                                     {order.configuration?.productConfig?.format && (
-                                                                        <ClientDetailRow label="Формат" value={order.configuration.productConfig.format} />
+                                                                        <ClientDetailRow label={t(language, 'formatLabel')} value={order.configuration.productConfig.format} />
                                                                     )}
                                                                     {order.configuration?.productConfig?.bindingType && (
-                                                                        <ClientDetailRow label="Переплёт" value={order.configuration.productConfig.bindingType === 'hard' ? 'Твёрдый' : 'На пружине'} />
+                                                                        <ClientDetailRow label={t(language, 'bindingLabel')} value={order.configuration.productConfig.bindingType === 'hard' ? t(language, 'bindingHard') : t(language, 'bindingSpiral')} />
                                                                     )}
                                                                     {order.configuration?.productConfig?.paperPattern && (
-                                                                        <ClientDetailRow label="Разлиновка" value={{ blank: 'Пустой', lined: 'Линейка', tlined: 'Т. линейка', grid: 'Клетка', dotted: 'Точка' }[order.configuration.productConfig.paperPattern] || ''} />
+                                                                        <ClientDetailRow label={t(language, 'patternLabel')} value={{ blank: t(language, 'patternBlank'), lined: t(language, 'patternLined'), tlined: t(language, 'patternTLined'), grid: t(language, 'patternGrid'), dotted: t(language, 'patternDotted') }[order.configuration.productConfig.paperPattern] || ''} />
                                                                     )}
                                                                     {order.configuration?.productConfig?.coverColor && (
-                                                                        <ClientDetailRow label="Обложка" value={<ClientColorDot color={order.configuration.productConfig.coverColor} />} />
+                                                                        <ClientDetailRow label={t(language, 'coverLabel')} value={<ClientColorDot color={order.configuration.productConfig.coverColor} />} />
                                                                     )}
                                                                     {order.configuration?.productConfig?.hasElastic && order.configuration?.productConfig?.elasticColor && (
-                                                                        <ClientDetailRow label="Резинка" value={<ClientColorDot color={order.configuration.productConfig.elasticColor} />} />
+                                                                        <ClientDetailRow label={t(language, 'elasticLabel')} value={<ClientColorDot color={order.configuration.productConfig.elasticColor} />} />
                                                                     )}
                                                                     {order.configuration?.productConfig?.bindingType === 'spiral' && order.configuration?.productConfig?.spiralColor && (
-                                                                        <ClientDetailRow label="Пружина" value={<ClientColorDot color={order.configuration.productConfig.spiralColor} />} />
+                                                                        <ClientDetailRow label={t(language, 'spiralLabel')} value={<ClientColorDot color={order.configuration.productConfig.spiralColor} />} />
                                                                     )}
                                                                     {order.price > 0 && (
-                                                                        <ClientDetailRow label="Стоимость" value={`${order.price} BYN`} />
+                                                                        <ClientDetailRow label={t(language, 'costLabel')} value={`${order.price} BYN`} />
                                                                     )}
                                                                 </div>
                                                             </div>
 
                                                             {/* Progress */}
                                                             <div>
-                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Статус выполнения</p>
-                                                                <OrderProgressBar status={order.status} stageHistory={order.stageHistory} />
+                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">{t(language, 'orderStatusLabel')}</p>
+                                                                <OrderProgressBar status={order.status} stageHistory={order.stageHistory} language={language} />
                                                             </div>
 
                                                             {/* Approval flow */}
@@ -608,8 +611,8 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                         <div className="w-14 h-14 bg-emerald-500/20 border border-emerald-500/30 rounded-full flex items-center justify-center mx-auto mb-4">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                         </div>
-                        <p className="font-bold text-lg text-white uppercase tracking-wide">Заказ принят системой</p>
-                        <p className="text-sm text-gray-400 mt-2">Ожидайте связи с типографией</p>
+                        <p className="font-bold text-lg text-white uppercase tracking-wide">{t(language, 'orderAccepted')}</p>
+                        <p className="text-sm text-gray-400 mt-2">{t(language, 'waitPrint')}</p>
                     </div>
                 </div>
             )}
@@ -670,7 +673,7 @@ const ClientOrder3DPreview = ({ configuration, productName }) => {
     if (!isNote && !isThermos) {
         return (
             <div className="w-full h-40 rounded-[14px] bg-white/[0.03] border border-white/8 flex items-center justify-center">
-                <span className="text-gray-600 text-xs font-bold uppercase tracking-widest">Нет макета</span>
+                <span className="text-gray-600 text-xs font-bold uppercase tracking-widest">{t(language, 'noLayout')}</span>
             </div>
         );
     }

@@ -1,5 +1,7 @@
 import { useCallback } from 'react';
 import { useTemporalConfigurator } from '../../hooks/useTemporalConfigurator';
+import { useConfigurator } from '../../store';
+import { t } from '../../i18n';
 
 export const UndoRedoControls = ({ className = '' }) => {
     const undo = useTemporalConfigurator((s) => s.undo);
@@ -7,6 +9,7 @@ export const UndoRedoControls = ({ className = '' }) => {
     const pastLen = useTemporalConfigurator((s) => s.pastStates.length);
     const futureLen = useTemporalConfigurator((s) => s.futureStates.length);
 
+    const { language } = useConfigurator();
     const onUndo = useCallback(() => undo(), [undo]);
     const onRedo = useCallback(() => redo(), [redo]);
 
@@ -15,8 +18,8 @@ export const UndoRedoControls = ({ className = '' }) => {
             <button
                 onClick={onUndo}
                 disabled={pastLen === 0}
-                title="Отменить (Ctrl+Z)"
-                aria-label="Отменить"
+                title={t(language, 'undoTitle')}
+                aria-label={t(language, 'undoLabel')}
                 className="w-9 h-9 flex items-center justify-center text-[#1a1a1a] dark:text-white rounded-[6px] transition active:scale-95 hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
             >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -28,8 +31,8 @@ export const UndoRedoControls = ({ className = '' }) => {
             <button
                 onClick={onRedo}
                 disabled={futureLen === 0}
-                title="Вернуть (Ctrl+Shift+Z)"
-                aria-label="Вернуть"
+                title={t(language, 'redoTitle')}
+                aria-label={t(language, 'redoLabel')}
                 className="w-9 h-9 flex items-center justify-center text-[#1a1a1a] dark:text-white rounded-[6px] transition active:scale-95 hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
             >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

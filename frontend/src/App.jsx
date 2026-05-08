@@ -9,6 +9,7 @@ import { ManufacturerDashboard } from './components/dashboard/ManufacturerDashbo
 import { AuthModal } from './components/auth/AuthModal'
 import { ClientDashboard } from './components/dashboard/ClientDashboard'
 import { useConfigurator } from './store'
+import { t } from './i18n'
 import { restoreSession } from './api'
 import { ThermosInterface } from './components/thermos/ThermosInterface'
 import { PowerbankInterface } from './components/powerbank/PowerbankInterface'
@@ -117,6 +118,7 @@ function App() {
         cartRestoredFromCookie,
         clearCart,
         resetConfigurator,
+        language,
     } = useConfigurator();
 
     const isConfiguratorScreen = screen === 'configurator';
@@ -200,10 +202,10 @@ function App() {
 
             <ConfirmModal
                 open={!!pendingNavigation}
-                title="Уйти из конструктора?"
-                message="Вы вносили изменения. Уверены, что хотите выйти на другой экран?"
-                confirmLabel="Выйти"
-                cancelLabel="Остаться и продолжить"
+                title={t(language, 'leaveConfirmTitle')}
+                message={t(language, 'leaveConfirmMsg')}
+                confirmLabel={t(language, 'confirmLeaveBtn')}
+                cancelLabel={t(language, 'stayBtn')}
                 onConfirm={confirmDiscardAndNavigate}
                 onCancel={() => setPendingNavigation(null)}
             />
@@ -228,7 +230,7 @@ function App() {
                             📦
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="font-bold text-white text-sm leading-tight mb-1">Незавершённый заказ</p>
+                            <p className="font-bold text-white text-sm leading-tight mb-1">{t(language, 'cartRestoredTitle')}</p>
                             <p className="text-gray-400 text-xs truncate">{cartItem?.productName}</p>
                             {cartItem?.design && (
                                 <p className="text-gray-600 text-[11px] truncate mt-0.5">{cartItem.design}</p>
@@ -237,7 +239,7 @@ function App() {
                         <button
                             onClick={clearCart}
                             className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-gray-300 transition-colors shrink-0 mt-0.5"
-                            aria-label="Удалить"
+                            aria-label={t(language, 'cartDeleteBtn')}
                         >
                             <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                         </button>
@@ -247,13 +249,13 @@ function App() {
                             onClick={handleContinueOrder}
                             className="flex-1 py-2.5 bg-white text-black text-xs font-bold uppercase tracking-widest rounded-[12px] hover:bg-gray-100 active:scale-[0.98] transition-all"
                         >
-                            Продолжить →
+                            {t(language, 'cartContinueBtn')}
                         </button>
                         <button
                             onClick={clearCart}
                             className="px-4 py-2.5 bg-white/5 border border-white/10 hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400 text-gray-400 text-xs font-bold rounded-[12px] transition-all"
                         >
-                            Удалить
+                            {t(language, 'cartDeleteBtn')}
                         </button>
                     </div>
                 </div>
@@ -315,12 +317,13 @@ function App() {
                         onClick={() => guardedNavigate(currentUser ? (userRole === 'dealer' ? 'dealer' : 'client_dashboard') : 'home')}
                         className="absolute top-6 left-6 z-50 px-6 py-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10"
                     >
-                        ← {currentUser ? 'В Кабинет' : 'В Меню'}
+                        {currentUser ? t(language, 'backToCabinet') : t(language, 'backToMenu')}
                     </button>
 
                     <ConfiguratorToolbar
                         onReset={() => resetConfigurator(activeProduct)}
-                        productLabel={productLabel(activeProduct)}
+                        productLabel={t(language, activeProduct) || activeProduct}
+                        language={language}
                     />
 
                     {activeProduct === 'calendar' ? (
@@ -328,10 +331,10 @@ function App() {
                             <h1 className="text-4xl md:text-8xl font-black tracking-[0.1em] uppercase text-center px-4 text-[#cfcfcf] dark:text-white/10"
                                 style={{ textShadow: '2px 2px 0px rgba(255,255,255,0.5), -1px -1px 0px rgba(0,0,0,0.1)' }}
                             >
-                                В Разработке
+                                {t(language, 'inDevHeading')}
                             </h1>
                             <p className="mt-8 font-bold uppercase tracking-[0.2em] text-xs md:text-sm text-center text-black/60 dark:text-white/30">
-                                Раздел "Настольный календарь" скоро появится
+                                {t(language, 'calendarComingSoon')}
                             </p>
                         </div>
                     ) : (
@@ -354,7 +357,7 @@ function App() {
                                 >
                                     <Experience />
                                 </Canvas>
-                                <SceneLoadingOverlay label="Собираем 3D" />
+                                <SceneLoadingOverlay label={t(language, 'sceneLoading')} />
                                 <SceneHints containerRef={configuratorCanvasRef} />
                             </div>
 
@@ -419,15 +422,7 @@ function App() {
 
 export default App
 
-const PRODUCT_LABELS = {
-    notebook: 'Ежедневник',
-    thermos: 'Термос',
-    powerbank: 'Повербанк',
-    calendar: 'Календарь',
-};
-const productLabel = (p) => PRODUCT_LABELS[p] ?? 'продукт';
-
-function ConfiguratorToolbar({ onReset, productLabel }) {
+function ConfiguratorToolbar({ onReset, productLabel, language = 'ru' }) {
     const [confirmReset, setConfirmReset] = useState(false);
     return (
         <>
@@ -435,22 +430,22 @@ function ConfiguratorToolbar({ onReset, productLabel }) {
                 <UndoRedoControls />
                 <button
                     onClick={() => setConfirmReset(true)}
-                    title="Сбросить конфигурацию"
+                    title={t(language, 'resetConfigTitle')}
                     className="h-[42px] px-4 flex items-center gap-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-[9px] border border-black/10 dark:border-white/10 shadow-xl text-[#1a1a1a] dark:text-white text-xs font-bold uppercase tracking-widest hover:bg-white dark:hover:bg-white/10 active:scale-95 transition-all"
                 >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M3 12a9 9 0 1 0 3-6.7" />
                         <polyline points="3 4 3 9 8 9" />
                     </svg>
-                    <span className="hidden sm:inline">Сбросить</span>
+                    <span className="hidden sm:inline">{t(language, 'resetBtn')}</span>
                 </button>
             </div>
             <ConfirmModal
                 open={confirmReset}
-                title={`Сбросить «${productLabel}»?`}
-                message="Все настройки этого продукта вернутся к исходным. Действие нельзя отменить."
-                confirmLabel="Сбросить"
-                cancelLabel="Оставить"
+                title={`${t(language, 'resetBtn')} «${productLabel}»?`}
+                message={t(language, 'resetConfirmMsg')}
+                confirmLabel={t(language, 'resetBtn')}
+                cancelLabel={t(language, 'keepBtn')}
                 danger
                 onConfirm={() => { onReset(); setConfirmReset(false); }}
                 onCancel={() => setConfirmReset(false)}

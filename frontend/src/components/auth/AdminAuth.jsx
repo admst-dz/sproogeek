@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { authApi } from '../../api';
 import { hasCookieConsent, setCookie } from '../../utils/cookies';
+import { useConfigurator } from '../../store';
+import { t } from '../../i18n';
 
 const AUTH_COOKIE = 'spruzhuk_auth';
 
 export const AdminAuth = ({ onSuccess }) => {
+    const { language } = useConfigurator();
     const [login, setLogin] = useState('');
     const [password, setPassword] = useState('');
     const [rsaKey, setRsaKey] = useState('');
@@ -17,7 +20,7 @@ export const AdminAuth = ({ onSuccess }) => {
         setError('');
 
         if (!login.trim() || !password.trim() || !rsaKey.trim()) {
-            setError('Заполните все поля');
+            setError(t(language, 'adminFillAll'));
             return;
         }
 
@@ -37,7 +40,7 @@ export const AdminAuth = ({ onSuccess }) => {
             }
             onSuccess?.(data.user);
         } catch {
-            setError('Доступ запрещён');
+            setError(t(language, 'adminAccessDenied'));
         } finally {
             setLoading(false);
         }
@@ -64,15 +67,15 @@ export const AdminAuth = ({ onSuccess }) => {
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                             </svg>
                         </div>
-                        <h1 className="text-xl font-bold text-white tracking-tight">Административный доступ</h1>
-                        <p className="text-sm text-white/30 mt-1">Введите учётные данные для входа</p>
+                        <h1 className="text-xl font-bold text-white tracking-tight">{t(language, 'adminAccessTitle')}</h1>
+                        <p className="text-sm text-white/30 mt-1">{t(language, 'adminEnterCreds')}</p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
 
                         <div>
                             <label className="block text-xs font-semibold text-white/40 uppercase tracking-widest mb-2">
-                                Логин
+                                {t(language, 'adminLoginLabel')}
                             </label>
                             <input
                                 type="text"
@@ -87,7 +90,7 @@ export const AdminAuth = ({ onSuccess }) => {
 
                         <div>
                             <label className="block text-xs font-semibold text-white/40 uppercase tracking-widest mb-2">
-                                Пароль
+                                {t(language, 'adminPasswordLabel')}
                             </label>
                             <div className="relative">
                                 <input
@@ -156,9 +159,9 @@ export const AdminAuth = ({ onSuccess }) => {
                                         <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.25"/>
                                         <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
                                     </svg>
-                                    Проверка...
+                                    {t(language, 'adminChecking')}
                                 </span>
-                            ) : 'Войти'}
+                            ) : t(language, 'adminEnterBtn')}
                         </button>
 
                     </form>

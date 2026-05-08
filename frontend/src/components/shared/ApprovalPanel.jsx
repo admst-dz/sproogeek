@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { orderApi } from '../../api';
 import { downloadBlob } from '../../utils/download';
+import { useConfigurator } from '../../store';
+import { t } from '../../i18n';
 
-const STATUS_BADGE = {
-    pending:  { text: 'Ожидает согласования', cls: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' },
-    approved: { text: 'Согласовано клиентом', cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
-    rejected: { text: 'Отклонено клиентом',   cls: 'bg-red-500/20 text-red-300 border-red-500/30' },
+const STATUS_BADGE_CLS = {
+    pending:  'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
+    approved: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+    rejected: 'bg-red-500/20 text-red-300 border-red-500/30',
 };
 
 /**
@@ -18,13 +20,15 @@ const STATUS_BADGE = {
  *   onChanged(updatedOrder) — called after a successful state change
  */
 export function ApprovalPanel({ order, role, onChanged }) {
+    const { language } = useConfigurator();
     const [busy, setBusy] = useState(null);
     const [comment, setComment] = useState('');
     const [error, setError] = useState('');
 
     const status = order.approvalStatus || order.approval_status || 'pending';
     const dealerConfirmedAt = order.dealerConfirmedAt || order.dealer_confirmed_at;
-    const badge = STATUS_BADGE[status] || STATUS_BADGE.pending;
+    const badgeCls = STATUS_BADGE_CLS[status] || STATUS_BADGE_CLS.pending;
+    const badgeText = { pending: t(language, 'approvalPending'), approved: t(language, 'approvalApproved'), rejected: t(language, 'approvalRejected') }[status] || status;
 
     const handle = async (action, fn) => {
         setBusy(action); setError('');
@@ -33,7 +37,7 @@ export function ApprovalPanel({ order, role, onChanged }) {
             onChanged?.(updated);
             setComment('');
         } catch (e) {
-            setError(e?.response?.data?.detail || e.message || 'Ошибка');
+            setError(e?.response?.data?.detail || e.message || t(language, 'errorGeneric'));
         } finally {
             setBusy(null);
         }
@@ -70,9 +74,9 @@ export function ApprovalPanel({ order, role, onChanged }) {
     return (
         <div className="bg-white/[0.03] border border-white/10 rounded-[14px] p-4 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3 flex-wrap">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Согласование</p>
-                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${badge.cls}`}>
-                    {badge.text}
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{t(language, 'approvalTitle')}</p>
+                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${badgeCls}`}>
+                    {badgeText}
                 </span>
             </div>
 
@@ -82,7 +86,7 @@ export function ApprovalPanel({ order, role, onChanged }) {
                     disabled={busy === 'preview'}
                     className="px-3 py-2 rounded-[10px] bg-white/10 hover:bg-white/15 text-xs font-bold transition disabled:opacity-50"
                 >
-                    {busy === 'preview' ? 'Генерация…' : '⬇ PDF согласования'}
+                    {busy === 'preview' ? t(language, 'approvalGenerating') : t(language, 'approvalDownloadPdf')}
                 </button>
 
                 {canDecide && (
@@ -92,14 +96,14 @@ export function ApprovalPanel({ order, role, onChanged }) {
                             disabled={busy === 'approve'}
                             className="px-3 py-2 rounded-[10px] bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold transition disabled:opacity-50"
                         >
-                            {busy === 'approve' ? '…' : '✓ Подтвердить'}
+                            {busy === 'approve' ? '…' : t(language, 'approvalConfirmBtn')}
                         </button>
                         <button
                             onClick={reject}
                             disabled={busy === 'reject'}
                             className="px-3 py-2 rounded-[10px] bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-300 text-xs font-bold transition disabled:opacity-50"
                         >
-                            {busy === 'reject' ? '…' : '✗ Отклонить'}
+                            {busy === 'reject' ? '…' : t(language, 'approvalRejectBtn')}
                         </button>
                     </>
                 )}
@@ -110,7 +114,7 @@ export function ApprovalPanel({ order, role, onChanged }) {
                         disabled={busy === 'confirm'}
                         className="px-3 py-2 rounded-[10px] bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-indigo-300 text-xs font-bold transition disabled:opacity-50"
                     >
-                        {busy === 'confirm' ? '…' : '🏭 В производство'}
+                        {busy === 'confirm' ? '…' : t(language, 'approvalToProduction')}
                     </button>
                 )}
             </div>
@@ -119,7 +123,7 @@ export function ApprovalPanel({ order, role, onChanged }) {
                 <textarea
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
-                    placeholder="Комментарий (опционально)…"
+                    placeholder={t(language, 'approvalCommentPlaceholder')}
                     rows={2}
                     maxLength={1000}
                     className="w-full bg-white/5 border border-white/10 rounded-[10px] px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-white/30 resize-none"
@@ -128,7 +132,7 @@ export function ApprovalPanel({ order, role, onChanged }) {
 
             {error && <p className="text-xs text-red-400">{error}</p>}
             {dealerConfirmedAt && (
-                <p className="text-[10px] text-gray-500">Передано в производство {new Date(dealerConfirmedAt).toLocaleString('ru-RU')}</p>
+                <p className="text-[10px] text-gray-500">{t(language, 'approvalSentToProduction')} {new Date(dealerConfirmedAt).toLocaleString()}</p>
             )}
         </div>
     );

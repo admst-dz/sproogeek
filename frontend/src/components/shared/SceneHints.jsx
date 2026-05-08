@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useConfigurator } from '../../store';
+import { t } from '../../i18n';
 
 const STORAGE_KEY = 'spruzhuk_scene_hints_dismissed';
 
@@ -12,6 +14,7 @@ const writeDismissed = () => {
 };
 
 export const SceneHints = ({ containerRef }) => {
+    const { language } = useConfigurator();
     const [hidden, setHidden] = useState(() => readDismissed());
     const [fadingOut, setFadingOut] = useState(false);
 
@@ -50,14 +53,14 @@ export const SceneHints = ({ containerRef }) => {
             <div className="flex flex-col gap-2.5 items-center bg-black/45 dark:bg-black/60 backdrop-blur-md rounded-[16px] px-6 py-4 border border-white/15 shadow-xl font-zen">
                 <div className="flex items-center gap-3 text-white text-xs md:text-sm font-bold uppercase tracking-wider">
                     <DragIcon />
-                    <span>Перетащи — поверни модель</span>
+                    <span>{t(language, 'hintDrag')}</span>
                 </div>
                 <div className="flex items-center gap-3 text-white text-xs md:text-sm font-bold uppercase tracking-wider">
                     <ZoomIcon />
-                    <span>Колесо мыши — приближение</span>
+                    <span>{t(language, 'hintZoom')}</span>
                 </div>
                 <div className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">
-                    Скроется при первом действии
+                    {t(language, 'hintDismiss')}
                 </div>
             </div>
         </div>

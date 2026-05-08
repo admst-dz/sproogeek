@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useConfigurator } from '../../store';
+import { t } from '../../i18n';
 
 const COOKIE_CONSENT_KEY = 'spruzhuk_cookie_consent';
 
 export const CookieBanner = () => {
+    const { language } = useConfigurator();
     const [visible, setVisible] = useState(false);
 
     useEffect(() => {
@@ -30,16 +33,16 @@ export const CookieBanner = () => {
                         🍪
                     </div>
                     <div>
-                        <p className="font-bold text-white text-sm leading-snug mb-1">Мы используем файлы cookie</p>
+                        <p className="font-bold text-white text-sm leading-snug mb-1">{t(language, 'cookieTitle')}</p>
                         <p className="text-gray-400 text-xs leading-relaxed">
-                            Для авторизации и сохранения заказа мы используем куки. Продолжая, вы соглашаетесь с{' '}
+                            {t(language, 'cookieMessage')}{' '}
                             <a
                                 href="/cookie-policy"
                                 className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
                                 target="_blank"
                                 rel="noopener noreferrer"
                             >
-                                политикой куки
+                                {t(language, 'cookiePolicyLink')}
                             </a>.
                         </p>
                     </div>
@@ -49,13 +52,13 @@ export const CookieBanner = () => {
                         onClick={accept}
                         className="flex-1 py-2.5 bg-white text-black text-xs font-bold uppercase tracking-widest rounded-[12px] hover:bg-gray-100 active:scale-[0.98] transition-all"
                     >
-                        Принять
+                        {t(language, 'cookieAccept')}
                     </button>
                     <button
                         onClick={decline}
                         className="px-4 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 text-gray-400 hover:text-white text-xs font-bold rounded-[12px] transition-all"
                     >
-                        Отклонить
+                        {t(language, 'cookieDecline')}
                     </button>
                 </div>
             </div>

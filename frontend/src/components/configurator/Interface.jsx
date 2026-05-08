@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
-import { useConfigurator, captureRender } from "../../store"
+import { useConfigurator, captureRender } from "../../store";
+import { t } from '../../i18n';
 import { BlockPDFPreview } from './BlockPDFPreview';
 import patternBlank  from '../../assets/icons/pattern-blank.svg';
 import patternLined  from '../../assets/icons/pattern-lined.svg';
@@ -7,13 +8,9 @@ import patternTlined from '../../assets/icons/pattern-tlined.svg';
 import patternGrid   from '../../assets/icons/pattern-grid.svg';
 import patternDotted from '../../assets/icons/pattern-dotted.svg';
 
-const PATTERNS = [
-    { id: 'blank',  label: 'Пустой',   icon: patternBlank },
-    { id: 'lined',  label: 'Линейка',  icon: patternLined },
-    { id: 'tlined', label: 'Т. линейка', icon: patternTlined },
-    { id: 'grid',   label: 'Клетка',   icon: patternGrid },
-    { id: 'dotted', label: 'Точка',    icon: patternDotted },
-];
+const PATTERN_IDS = ['blank', 'lined', 'tlined', 'grid', 'dotted'];
+const PATTERN_ICONS = { blank: patternBlank, lined: patternLined, tlined: patternTlined, grid: patternGrid, dotted: patternDotted };
+const PATTERN_KEYS = { blank: 'patternBlank', lined: 'patternLined', tlined: 'patternTLined', grid: 'patternGrid', dotted: 'patternDotted' };
 
 const palette = [
     { name: 'Yellow', bg: '#FDD835' },
@@ -43,7 +40,8 @@ export const Interface = ({ onFinish }) => {
         activeProduct,
         zoomLevel, setZoom,
         addToCart,
-        setRenderSnapshot
+        setRenderSnapshot,
+        language
     } = useConfigurator();
 
     if (activeProduct === 'calendar') {
@@ -51,7 +49,7 @@ export const Interface = ({ onFinish }) => {
             <div className="pointer-events-auto w-full h-full md:h-[95%] custom-gradient backdrop-blur-xl rounded-t-[30px] md:rounded-[9px] flex items-center justify-center border-t md:border border-white/30 relative">
                 <ZoomControlsOverlay zoomLevel={zoomLevel} setZoom={setZoom} />
                 <div className="font-zen text-2xl font-bold uppercase tracking-widest text-white drop-shadow-md">
-                    В Разработке
+                    {t(language, 'wip')}
                 </div>
             </div>
         );
@@ -60,11 +58,11 @@ export const Interface = ({ onFinish }) => {
     const handleAddToCart = () => {
         const snapshot = captureRender();
         if (snapshot) setRenderSnapshot(snapshot);
-        const bindingLabel = bindingType === 'hard' ? 'Твердый' : bindingType === 'spiral' ? 'На пружине' : 'Мягкий';
+        const bindingLabel = bindingType === 'hard' ? t(language, 'bindingHard') : bindingType === 'spiral' ? t(language, 'bindingSpiral') : t(language, 'bindingSoft');
         const orderHasElastic = bindingType !== 'hard' && hasElastic;
         const newItem = {
-            productName: `Ежедневник ${format}`,
-            design: `Переплет: ${bindingLabel}, Блок: ${paperPattern}`,
+            productName: `${t(language, 'notebook')} ${format}`,
+            design: `${t(language, 'bindingFormatLabel')} ${bindingLabel}, ${t(language, 'patternLabel')}: ${paperPattern}`,
             priceBYN: 1500,
             type: 'notebook',
             config: { format, coverColor, hasElastic: orderHasElastic, elasticColor, paperPattern, bindingType, spiralColor, hasCorners },
@@ -82,30 +80,30 @@ export const Interface = ({ onFinish }) => {
         <div className="pointer-events-auto w-full h-full md:h-[95%] custom-gradient backdrop-blur-xl rounded-t-[30px] md:rounded-[9px] shadow-2xl flex flex-col overflow-hidden font-zen border-t md:border border-white/20 relative">
 
             <div className="flex items-end gap-8 px-8 py-6 shrink-0 z-10 bg-white/5 backdrop-blur-sm">
-                <button onClick={() => { setTab('cover'); setNotebookOpen(false); }} className={`text-2xl md:text-3xl transition-all leading-none ${tab === 'cover' ? 'opacity-100 scale-105 border-b-2 border-white pb-1' : 'opacity-50 hover:opacity-80'}`}>Обложка</button>
-                <button onClick={() => { setTab('block'); setNotebookOpen(true); }} className={`text-2xl md:text-3xl transition-all leading-none ${tab === 'block' ? 'opacity-100 scale-105 border-b-2 border-white pb-1' : 'opacity-50 hover:opacity-80'}`}>Блок</button>
+                <button onClick={() => { setTab('cover'); setNotebookOpen(false); }} className={`text-2xl md:text-3xl transition-all leading-none ${tab === 'cover' ? 'opacity-100 scale-105 border-b-2 border-white pb-1' : 'opacity-50 hover:opacity-80'}`}>{t(language, 'tabCover')}</button>
+                <button onClick={() => { setTab('block'); setNotebookOpen(true); }} className={`text-2xl md:text-3xl transition-all leading-none ${tab === 'block' ? 'opacity-100 scale-105 border-b-2 border-white pb-1' : 'opacity-50 hover:opacity-80'}`}>{t(language, 'tabBlock')}</button>
             </div>
 
             <div className="flex-1 px-4 md:px-6 pt-4 overflow-y-auto custom-scrollbar flex flex-col gap-3 relative z-0">
                 {tab === 'cover' && (
                     <div className="animate-fade-in flex flex-col gap-3 pb-40">
-                        <GlassDropdown label="Переплет" currentValue={bindingType === 'hard' ? 'Твердый' : bindingType === 'spiral' ? 'На пружине' : 'Мягкий'}>
+                        <GlassDropdown label={t(language, 'bindingTypeLabel')} currentValue={bindingType === 'hard' ? t(language, 'bindingHard') : bindingType === 'spiral' ? t(language, 'bindingSpiral') : t(language, 'bindingSoft')}>
                             <div className="flex flex-col gap-1">
-                                <button onClick={() => setBindingType('hard')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'hard' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>Твёрдый переплёт</span> {bindingType === 'hard' && <span>✓</span>}</button>
-                                <button onClick={() => setBindingType('spiral')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'spiral' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>На пружине</span> {bindingType === 'spiral' && <span>✓</span>}</button>
-                                <button onClick={() => setBindingType('soft')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'soft' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>Мягкий переплёт</span> {bindingType === 'soft' && <span>✓</span>}</button>
+                                <button onClick={() => setBindingType('hard')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'hard' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>{t(language, 'bindingHardFull')}</span> {bindingType === 'hard' && <span>✓</span>}</button>
+                                <button onClick={() => setBindingType('spiral')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'spiral' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>{t(language, 'bindingSpiralFull')}</span> {bindingType === 'spiral' && <span>✓</span>}</button>
+                                <button onClick={() => setBindingType('soft')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'soft' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>{t(language, 'bindingSoftFull')}</span> {bindingType === 'soft' && <span>✓</span>}</button>
                             </div>
                         </GlassDropdown>
-                        {bindingType === 'spiral' && (<div className="glass-panel rounded-[11px] overflow-hidden animate-fade-in"><ColorGlassList currentColor={spiralColor} onSelect={(c) => setColor('spiral', c)} label="Цвет пружины"/></div>)}
+                        {bindingType === 'spiral' && (<div className="glass-panel rounded-[11px] overflow-hidden animate-fade-in"><ColorGlassList currentColor={spiralColor} onSelect={(c) => setColor('spiral', c)} label={t(language, 'spiralColorLabel')}/></div>)}
                         {(bindingType === 'hard' || bindingType === 'soft') && (
                             <div className="glass-panel rounded-[11px] overflow-hidden transition-all animate-fade-in">
                                 <div className="p-5 flex items-center justify-between cursor-pointer" onClick={toggleCorners}>
-                                    <span className="text-xl font-bold tracking-wide">Уголки</span>
+                                    <span className="text-xl font-bold tracking-wide">{t(language, 'cornersLabel')}</span>
                                     <div className={`w-12 h-7 rounded-full p-1 transition-colors border border-white/30 ${hasCorners ? 'bg-green-500/80' : 'bg-gray-500/50'}`}><div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${hasCorners ? 'translate-x-5' : ''}`} /></div>
                                 </div>
                             </div>
                         )}
-                        <GlassDropdown label="Формат" currentValue={format}>
+                        <GlassDropdown label={t(language, 'formatLabel')} currentValue={format}>
                             <div className="flex flex-col gap-1">
                                 {['A5', 'A6'].map(f => (<button key={f} onClick={() => setFormat(f)} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${format === f ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>{f}</span> {format === f && <span>✓</span>}</button>))}
                             </div>
@@ -113,37 +111,37 @@ export const Interface = ({ onFinish }) => {
                         {bindingType !== 'hard' && (
                             <div className="glass-panel rounded-[11px] overflow-hidden transition-all">
                                 <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setHasElastic(!hasElastic)}>
-                                    <span className="text-xl font-bold tracking-wide">Резинка</span>
+                                    <span className="text-xl font-bold tracking-wide">{t(language, 'elasticLabel')}</span>
                                     <div className={`w-12 h-7 rounded-full p-1 transition-colors border border-white/30 ${hasElastic ? 'bg-green-500/80' : 'bg-gray-500/50'}`}><div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${hasElastic ? 'translate-x-5' : ''}`} /></div>
                                 </div>
-                                {hasElastic && (<div className="border-t border-white/10"><ColorGlassList currentColor={elasticColor} onSelect={(c) => setColor('elastic', c)} label="Цвет резинки" /></div>)}
+                                {hasElastic && (<div className="border-t border-white/10"><ColorGlassList currentColor={elasticColor} onSelect={(c) => setColor('elastic', c)} label={t(language, 'elasticColorLabel')} /></div>)}
                             </div>
                         )}
-                        <div className="glass-panel rounded-[11px] overflow-hidden"><ColorGlassList currentColor={coverColor} onSelect={(c) => setColor('cover', c)} label="Цвет обложки"/></div>
-                        <LogoPanel logos={logos} selectedLogoId={selectedLogoId} addLogo={addLogo} selectLogo={selectLogo} removeLogo={removeLogo} resetLogoTransform={resetLogoTransform} setLogoPosition={setLogoPosition} setLogoRotation={setLogoRotation} setLogoScale={setLogoScale} setLogoSide={setLogoSide} />
+                        <div className="glass-panel rounded-[11px] overflow-hidden"><ColorGlassList currentColor={coverColor} onSelect={(c) => setColor('cover', c)} label={t(language, 'coverColorLabel')}/></div>
+                        <LogoPanel logos={logos} selectedLogoId={selectedLogoId} addLogo={addLogo} selectLogo={selectLogo} removeLogo={removeLogo} resetLogoTransform={resetLogoTransform} setLogoPosition={setLogoPosition} setLogoRotation={setLogoRotation} setLogoScale={setLogoScale} setLogoSide={setLogoSide} language={language} />
                     </div>
                 )}
 
                 {tab === 'block' && (
                     <div className="animate-fade-in flex flex-col gap-4 pb-40">
                         <div className="grid grid-cols-5 gap-2">
-                            {PATTERNS.map(({ id, label, icon }) => (
+                            {PATTERN_IDS.map((id) => (
                                 <button
                                     key={id}
                                     onClick={() => setPaperPattern(id)}
                                     className={`glass-panel rounded-[11px] flex flex-col items-center justify-center gap-1.5 py-3 px-1 transition-all hover:bg-white/20 ${paperPattern === id ? 'bg-white/30 border-white/50 shadow-lg scale-[1.02]' : ''}`}
                                 >
                                     <div className={`w-10 h-10 rounded-[8px] border p-1.5 flex items-center justify-center ${paperPattern === id ? 'border-white bg-white/20' : 'border-white/20'}`}>
-                                        <img src={icon} alt={label} className="w-full h-full object-contain" />
+                                        <img src={PATTERN_ICONS[id]} alt={t(language, PATTERN_KEYS[id])} className="w-full h-full object-contain" />
                                     </div>
-                                    <span className="text-[10px] font-bold tracking-wide text-center leading-tight opacity-90">{label}</span>
+                                    <span className="text-[10px] font-bold tracking-wide text-center leading-tight opacity-90">{t(language, PATTERN_KEYS[id])}</span>
                                 </button>
                             ))}
                         </div>
                         <BlockPDFPreview pattern={paperPattern} />
                         {paperPattern === 'blank' && (
                             <div className="glass-panel rounded-[11px] p-6 flex items-center justify-center opacity-60 text-sm text-center">
-                                Чистые страницы без разлиновки
+                                {t(language, 'blankPages')}
                             </div>
                         )}
                     </div>
@@ -154,7 +152,7 @@ export const Interface = ({ onFinish }) => {
             <div className="absolute bottom-0 left-0 w-full px-4 md:px-6 pt-3 pb-4 md:pb-6 z-20 border-t border-white/10 bg-[#0E2235]/85 dark:bg-[#0E2235]/85 backdrop-blur-xl flex flex-col gap-3">
                 <div className="flex items-center justify-between gap-4">
                     <div className="flex flex-col gap-1">
-                        <span className="text-[10px] opacity-50 font-bold uppercase tracking-widest">Тираж (шт.)</span>
+                        <span className="text-[10px] opacity-50 font-bold uppercase tracking-widest">{t(language, 'quantityLabel')}</span>
                         <div className="flex items-center gap-1">
                             <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-8 h-8 flex items-center justify-center bg-white/10 rounded-[8px] text-white font-bold text-lg hover:bg-white/20 active:scale-95 transition">−</button>
                             <span className="w-10 text-center font-black text-white text-lg select-none">{quantity}</span>
@@ -166,8 +164,8 @@ export const Interface = ({ onFinish }) => {
                             {isSample && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#0B0F19" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-xs font-bold text-white leading-tight">Тиражный образец</span>
-                            <span className="text-[9px] text-white/40 leading-tight">1 шт. перед партией</span>
+                            <span className="text-xs font-bold text-white leading-tight">{t(language, 'sampleLabel')}</span>
+                            <span className="text-[9px] text-white/40 leading-tight">{t(language, 'sampleDesc')}</span>
                         </div>
                     </label>
                 </div>
@@ -175,7 +173,7 @@ export const Interface = ({ onFinish }) => {
                     onClick={handleAddToCart}
                     className="w-full py-4 bg-white text-[#1a1a1a] rounded-[11px] text-xl font-black tracking-[0.2em] uppercase hover:bg-gray-100 transition-all shadow-lg active:scale-[0.98]"
                 >
-                    Оформить заказ
+                    {t(language, 'placeOrder')}
                 </button>
             </div>
         </div>
@@ -183,7 +181,7 @@ export const Interface = ({ onFinish }) => {
 }
 
 // --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
-const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide }) => {
+const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide, language }) => {
     const selected = logos.find(l => l.id === selectedLogoId) || null;
     const [uploadSide, setUploadSide] = useState('front');
     const rotStart = useRef(0);
@@ -204,11 +202,11 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
 
     return (
         <div className="glass-panel rounded-[11px] p-5">
-            <h3 className="text-xl font-bold tracking-wide mb-4">Тиснение</h3>
+            <h3 className="text-xl font-bold tracking-wide mb-4">{t(language, 'embossing')}</h3>
             <div className="grid grid-cols-2 gap-2 mb-4">
                 {[
-                    ['front', 'Лицевая'],
-                    ['back', 'Обратная'],
+                    ['front', t(language, 'sideFront')],
+                    ['back', t(language, 'sideBack')],
                 ].map(([side, label]) => (
                     <button
                         key={side}
@@ -220,7 +218,7 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
                 ))}
             </div>
             <label className="block w-full py-3 bg-white/10 rounded-[6px] text-center cursor-pointer border border-white/20 text-sm font-bold mb-4 hover:bg-white/20 transition-colors">
-                + ДОБАВИТЬ ЛОГОТИП
+                {t(language, 'addLogo')}
                 <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) { addLogo(e.target.files[0], activeSide); e.target.value = ''; } }} className="hidden"/>
             </label>
             {logos.length > 0 && (
@@ -229,9 +227,9 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
                         <div key={logo.id} className={`flex items-center rounded-[6px] border ${logo.id === selectedLogoId ? 'bg-white/30 border-white/40' : 'bg-white/10 border-white/10'}`}>
                             <button onClick={() => { selectLogo(logo.id); setUploadSide(logo.side ?? 'front'); }} className="flex-1 py-2 px-3 text-left text-sm font-bold truncate hover:opacity-80 transition-opacity">
                                 <span className="block truncate">{logo.filename}</span>
-                                <span className="block text-[9px] opacity-50 uppercase tracking-widest">{(logo.side ?? 'front') === 'back' ? 'Обратная' : 'Лицевая'}</span>
+                                <span className="block text-[9px] opacity-50 uppercase tracking-widest">{(logo.side ?? 'front') === 'back' ? t(language, 'sideBack') : t(language, 'sideFront')}</span>
                             </button>
-                            <button onClick={() => removeLogo(logo.id)} className="px-3 py-2 text-white/40 hover:text-white/90 text-lg leading-none transition-colors shrink-0" title="Удалить">×</button>
+                            <button onClick={() => removeLogo(logo.id)} className="px-3 py-2 text-white/40 hover:text-white/90 text-lg leading-none transition-colors shrink-0" title={t(language, 'deleteTooltip')}>×</button>
                         </div>
                     ))}
                 </div>
@@ -240,8 +238,8 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
                 <div className="flex flex-col gap-4 mt-1">
                     <div className="flex flex-col gap-1">
                         <div className="flex items-center justify-between mb-1">
-                            <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">Позиция</span>
-                            <button onClick={resetLogoTransform} className="text-[10px] font-bold opacity-40 hover:opacity-80 transition-opacity uppercase tracking-wider border border-white/20 px-2 py-0.5 rounded-[5px] hover:border-white/40">↺ По центру</button>
+                            <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">{t(language, 'position')}</span>
+                            <button onClick={resetLogoTransform} className="text-[10px] font-bold opacity-40 hover:opacity-80 transition-opacity uppercase tracking-wider border border-white/20 px-2 py-0.5 rounded-[5px] hover:border-white/40">{t(language, 'centerBtn')}</button>
                         </div>
                         <div
                             className="relative w-full aspect-square bg-white/8 rounded-[10px] border border-white/15 cursor-crosshair touch-none select-none overflow-hidden"
@@ -267,7 +265,7 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
 
                     <div className="flex flex-col gap-1.5">
                         <div className="flex justify-between items-center">
-                            <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">Поворот</span>
+                            <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">{t(language, 'rotation')}</span>
                             <span className="text-xs font-bold opacity-80">{Math.round((selected.rotation ?? 0) * 180 / Math.PI)}°</span>
                         </div>
                         <div
@@ -291,7 +289,7 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
 
                     <div className="flex flex-col gap-1">
                         <div className="flex justify-between items-center">
-                            <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">Размер</span>
+                            <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">{t(language, 'size')}</span>
                             <span className="text-xs font-bold opacity-80">{Math.round((selected.scale ?? 0.6) * 100)}%</span>
                         </div>
                         <input type="range" min="0.2" max="1.5" step="0.05"

@@ -30,7 +30,7 @@ export function useLoaderCompletionGate(loading, duration = LOGO_ANIMATION_MS) {
     return visible;
 }
 
-export function VibeLoader({ progress = 0, label = 'Собираем сцену', compact = false, className = '' }) {
+export function VibeLoader({ progress = 0, label = 'Loading...', compact = false, className = '' }) {
     const pct = clampProgress(progress);
 
     return (
@@ -90,7 +90,7 @@ export function SceneLoadingOverlay({ label, compact = false }) {
     );
 }
 
-export function FullPageVibeLoader({ label = 'Загружаем' }) {
+export function FullPageVibeLoader({ label = 'Loading...' }) {
     return (
         <div className="app-bg fixed inset-0 flex items-center justify-center">
             <VibeLoader progress={72} label={label} />
