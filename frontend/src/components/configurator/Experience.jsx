@@ -276,6 +276,7 @@ export const Experience = () => {
                 <>
                     <OrbitControls
                         ref={orbitControlsRef}
+                        target={[0, 0, 0]}
                         enablePan={false}
                         enableZoom={false}
                         enableDamping
@@ -284,7 +285,7 @@ export const Experience = () => {
                         maxPolarAngle={Math.PI / 2 + Math.PI / 3}
                         rotateSpeed={isMobile ? 1.5 : 1.0}
                     />
-                    <Stage environment={null} intensity={0} contactShadow={false}>
+                    <Stage environment={null} intensity={0} contactShadow={false} adjustCamera={false}>
                         {activeProduct === 'thermos' && <Thermos />}
                         {activeProduct === 'powerbank' && <Powerbank />}
                     </Stage>
@@ -296,7 +297,7 @@ export const Experience = () => {
                     azimuth={[-Math.PI, Math.PI]}
                     polar={[-0.1, Math.PI / 4]}
                 >
-                    <Stage environment={null} intensity={0} contactShadow={false}>
+                    <Stage environment={null} intensity={0} contactShadow={false} adjustCamera={false}>
                         {activeProduct === 'notebook' && <Notebook />}
                         {activeProduct === 'calendar' && <Calendar />}
                     </Stage>
