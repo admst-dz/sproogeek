@@ -40,4 +40,8 @@ async def exchange_google_code(code: str) -> dict:
         payload = userinfo_resp.json()
         if not payload.get("email"):
             raise ValueError("Email not found in Google token")
+        # Без этой проверки владелец произвольного Google Workspace мог бы
+        # выпустить токен с чужим (не подтверждённым) email и захватить аккаунт.
+        if payload.get("email_verified") is not True:
+            raise ValueError("Google email is not verified")
         return payload

@@ -44,6 +44,7 @@ async def issue_token(request: Request, current_user=Depends(get_current_user)):
 
 
 @router.get("/orders")
+@limiter.limit("60/minute")
 async def stream_orders(
     request: Request,
     token: str = Query(..., description="Event token (from POST /events/token)", min_length=10, max_length=512),

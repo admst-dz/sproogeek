@@ -3,15 +3,18 @@ import json
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.core.config import get_settings
-from app.core.deps import request_id
+from app.core.deps import get_current_user, request_id
 from app.core.event_logger import event_logger
 
 
 router = APIRouter()
 settings = get_settings()
+limiter = Limiter(key_func=get_remote_address)
 
 ALLOWED_IMAGE_TYPES = {
     "image/png": lambda content: content.startswith(b"\x89PNG\r\n\x1a\n"),
@@ -205,14 +208,19 @@ async def _download_as_data_uri(client: httpx.AsyncClient, image_url: str) -> st
 
 
 @router.post("/thermos-design")
+@limiter.limit("10/minute")
 async def generate_thermos_design(
     request: Request,
-    prompt: str = Form(...),
+    prompt: str = Form(..., max_length=2000),
     target: str = Form("body"),
     body_color: str = Form("#E65405"),
     cap_color: str = Form("#E65405"),
     files: list[UploadFile] | None = File(default=None),
+    current_user=Depends(get_current_user),
 ):
+    # Endpoint расходует платный Abacus-кредит. Без auth/rate-limit аноним
+    # может в одиночку выработать дневной лимит — оставляем только для
+    # авторизованных и ограничиваем 10 запросов/мин на IP.
     if not settings.abacus_api_key:
         raise HTTPException(status_code=503, detail="Abacus API key is not configured")
     if target not in TARGET_LABELS:
