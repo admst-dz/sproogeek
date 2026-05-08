@@ -201,9 +201,9 @@ function App() {
             <ConfirmModal
                 open={!!pendingNavigation}
                 title="Уйти из конструктора?"
-                message="Вы вносили изменения. Уверены, что хотите перейти на другой экран?"
-                confirmLabel="Перейти"
-                cancelLabel="Остаться"
+                message="Вы вносили изменения. Уверены, что хотите выйти на другой экран?"
+                confirmLabel="Выйти"
+                cancelLabel="Остаться и продолжить"
                 onConfirm={confirmDiscardAndNavigate}
                 onCancel={() => setPendingNavigation(null)}
             />

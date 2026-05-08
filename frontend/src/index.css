@@ -124,7 +124,7 @@ html.dark, html.dark body, html.dark #root {
 }
 
 .vibe-loader__logo-frame {
-  --frame-step: 0.3s;
+  --frame-step: 0.5s;
   --frame-duration: 0.42s;
   position: absolute;
   inset: 0;
