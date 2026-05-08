@@ -67,7 +67,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         )
         if request.url.scheme == "https":
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        response.headers.pop("server", None)
+        if "server" in response.headers:
+            del response.headers["server"]
         return response
 
 

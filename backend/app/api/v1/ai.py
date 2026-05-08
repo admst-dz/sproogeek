@@ -41,19 +41,24 @@ def _data_uri(content: bytes, content_type: str) -> str:
     return f"data:{content_type};base64,{encoded}"
 
 
+def _detect_image_type(content: bytes, declared_type: str = "") -> str | None:
+    if declared_type in ALLOWED_IMAGE_TYPES and ALLOWED_IMAGE_TYPES[declared_type](content):
+        return declared_type
+    for content_type, validate in ALLOWED_IMAGE_TYPES.items():
+        if validate(content):
+            return content_type
+    return None
+
+
 async def _read_reference_images(files: list[UploadFile]) -> list[dict[str, str]]:
     images: list[dict[str, str]] = []
     for file in files[:4]:
-        content_type = file.content_type or ""
-        validate = ALLOWED_IMAGE_TYPES.get(content_type)
-        if not validate:
-            raise HTTPException(status_code=400, detail="Unsupported reference image format")
-
         content = await file.read()
+        content_type = _detect_image_type(content, file.content_type or "")
+        if not content_type:
+            raise HTTPException(status_code=400, detail="Unsupported reference image format")
         if len(content) > settings.max_logo_bytes:
             raise HTTPException(status_code=413, detail="Reference image is too large")
-        if not validate(content):
-            raise HTTPException(status_code=400, detail="Reference image content does not match declared type")
 
         images.append({
             "filename": file.filename or "reference-image",

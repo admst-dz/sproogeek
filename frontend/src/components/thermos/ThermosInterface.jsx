@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useConfigurator, captureRender } from '../../store';
 import { aiApi } from '../../api';
+import { normalizeImageFile } from '../../utils/images';
 
 const palette = [
     { name: 'Оранжевый',  bg: '#e65405' },
@@ -11,6 +12,22 @@ const palette = [
     { name: 'Серый',  bg: '#716D6A' },
     { name: 'Темно-синий',  bg: '#1B365D' },
 ];
+
+const dataUrlToPngFile = async (dataUrl, filename) => {
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    const basename = filename.replace(/\.[^.]+$/, '') || 'reference';
+    return new File([blob], `${basename}.png`, { type: 'image/png' });
+};
+
+const normalizeAiReferenceFiles = async (files) => {
+    const normalized = [];
+    for (const file of files.slice(0, 4)) {
+        const dataUrl = await normalizeImageFile(file);
+        normalized.push(await dataUrlToPngFile(dataUrl, file.name));
+    }
+    return normalized;
+};
 
 export const ThermosInterface = ({ onFinish }) => {
     const [logoArea, setLogoArea] = useState('body');
@@ -223,8 +240,13 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLog
                             type="file"
                             accept="image/*"
                             multiple
-                            onChange={(e) => {
-                                setAiFiles(Array.from(e.target.files || []).slice(0, 4));
+                            onChange={async (e) => {
+                                setAiError('');
+                                try {
+                                    setAiFiles(await normalizeAiReferenceFiles(Array.from(e.target.files || [])));
+                                } catch {
+                                    setAiError('Не получилось подготовить файл. Используйте PNG, JPG, WebP или SVG.');
+                                }
                                 e.target.value = '';
                             }}
                             className="hidden"
