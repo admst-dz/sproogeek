@@ -336,7 +336,7 @@ function App() {
                         </div>
                     ) : (
                         <>
-                            <div ref={configuratorCanvasRef} className="app-bg relative w-full h-[45%] md:absolute md:inset-0 md:w-[75%] md:h-full md:bg-transparent dark:md:bg-transparent">
+                            <div ref={configuratorCanvasRef} className="app-bg relative w-full h-[45%] md:absolute md:top-0 md:left-0 md:bottom-0 md:w-[70%] md:h-full md:bg-transparent dark:md:bg-transparent">
                                 <div className="absolute bottom-4 right-4 z-10 md:hidden">
                                     <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
                                 </div>
