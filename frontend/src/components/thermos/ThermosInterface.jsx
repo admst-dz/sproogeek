@@ -137,6 +137,7 @@ export const ThermosInterface = ({ onFinish }) => {
 const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLogoTarget, setCapLogoTarget, activeLogoTarget, thermosBodyColor, thermosCapColor, addLogo, addGeneratedLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale }) => {
     const [aiPrompt, setAiPrompt] = useState('');
     const [aiFiles, setAiFiles] = useState([]);
+    const [aiPreparingFiles, setAiPreparingFiles] = useState(false);
     const [aiLoading, setAiLoading] = useState(false);
     const [aiError, setAiError] = useState('');
     const visibleLogos = logos.filter(l => (l.target ?? 'body') === activeLogoTarget);
@@ -154,7 +155,7 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLog
     };
 
     const handleAiGenerate = async () => {
-        if (aiLoading) return;
+        if (aiLoading || aiPreparingFiles) return;
         if (!aiPrompt.trim() && aiFiles.length === 0) {
             setAiError('Добавьте логотип или опишите дизайн.');
             return;
@@ -221,7 +222,7 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLog
 
             <div className="rounded-[10px] border border-white/15 bg-white/10 p-3 mb-4">
                 <div className="flex items-center justify-between gap-3 mb-2">
-                    <span className="text-[11px] font-bold uppercase tracking-widest opacity-50">AI дизайн</span>
+                    <span className="text-[11px] font-bold uppercase tracking-widest opacity-50">{activeLogoTarget === 'body' ? 'AI обертка' : 'AI дизайн'}</span>
                     {aiFiles.length > 0 && (
                         <span className="text-[10px] font-bold opacity-50">{aiFiles.length}/4</span>
                     )}
@@ -229,7 +230,7 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLog
                 <textarea
                     value={aiPrompt}
                     onChange={(e) => setAiPrompt(e.target.value)}
-                    placeholder="Например: белый минималистичный логотип, зеленые линии, без фона"
+                    placeholder={activeLogoTarget === 'body' ? 'Например: современная обертка на весь корпус с логотипом и динамичным паттерном' : 'Например: белый минималистичный логотип, зеленые линии, без фона'}
                     rows={3}
                     className="w-full resize-none rounded-[8px] border border-white/10 bg-black/15 px-3 py-2 text-sm outline-none placeholder:text-white/30 focus:border-white/35"
                 />
@@ -242,10 +243,13 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLog
                             multiple
                             onChange={async (e) => {
                                 setAiError('');
+                                setAiPreparingFiles(true);
                                 try {
                                     setAiFiles(await normalizeAiReferenceFiles(Array.from(e.target.files || [])));
                                 } catch {
                                     setAiError('Не получилось подготовить файл. Используйте PNG, JPG, WebP или SVG.');
+                                } finally {
+                                    setAiPreparingFiles(false);
                                 }
                                 e.target.value = '';
                             }}
@@ -254,10 +258,10 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLog
                     </label>
                     <button
                         onClick={handleAiGenerate}
-                        disabled={aiLoading}
+                        disabled={aiLoading || aiPreparingFiles}
                         className="px-4 py-2 rounded-[7px] bg-white text-[#1a1a1a] text-[11px] font-black uppercase tracking-wider disabled:opacity-50 disabled:cursor-wait hover:bg-gray-100 transition-colors"
                     >
-                        {aiLoading ? '...' : 'Создать'}
+                        {aiLoading ? '...' : aiPreparingFiles ? 'Файл' : 'Создать'}
                     </button>
                 </div>
                 {aiFiles.length > 0 && (
@@ -287,6 +291,12 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLog
             )}
             {selected && (
                 <div className="flex flex-col gap-4 mt-1">
+                    {selected.mode === 'wrap' && (
+                        <div className="rounded-[8px] border border-white/10 bg-white/8 px-3 py-2 text-xs font-bold text-white/70">
+                            AI-обертка нанесена на всю печатную часть корпуса.
+                        </div>
+                    )}
+                    {selected.mode !== 'wrap' && (
                     <div className="flex flex-col gap-1">
                         <div className="flex items-center justify-between mb-1">
                             <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">Позиция</span>
@@ -315,7 +325,9 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLog
                             />
                         </div>
                     </div>
+                    )}
 
+                    {selected.mode !== 'wrap' && (
                     <div className="flex flex-col gap-1.5">
                         <div className="flex justify-between items-center">
                             <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">Поворот</span>
@@ -339,7 +351,9 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLog
                             <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] text-white/20 font-bold pointer-events-none select-none">→</span>
                         </div>
                     </div>
+                    )}
 
+                    {selected.mode !== 'wrap' && (
                     <div className="flex flex-col gap-1">
                         <div className="flex justify-between items-center">
                             <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">Размер</span>
@@ -350,6 +364,7 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLog
                             onChange={(e) => setLogoScale(parseFloat(e.target.value))}
                             className="w-full h-1 bg-white/30 rounded-full appearance-none accent-white" />
                     </div>
+                    )}
                 </div>
             )}
         </div>

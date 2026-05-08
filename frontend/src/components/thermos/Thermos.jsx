@@ -47,9 +47,7 @@ function LogoMaterial({ map, roughness = 0.42, metalness = 0.05 }) {
     );
 }
 
-function createCurvedLogoGeometry({ radius, centerTheta, centerY, width, height, rotation }) {
-    const segmentsX = 36;
-    const segmentsY = 14;
+function createCurvedLogoGeometry({ radius, centerTheta, centerY, width, height, rotation, segmentsX = 36, segmentsY = 14 }) {
     const surfaceRadius = radius + LOGO_SURFACE_OFFSET;
     const cos = Math.cos(rotation);
     const sin = Math.sin(rotation);
@@ -96,23 +94,30 @@ function createCurvedLogoGeometry({ radius, centerTheta, centerY, width, height,
 }
 
 // ─── Logo planes ───────────────────────────────────────────────────────────────
-function LogoPlane({ texture, position, rotation = 0, scale = 0.6, bodyRadius = 0.4, bodyCenterY = 0, bodyTopY = 999 }) {
+function LogoPlane({ logo, texture, position, rotation = 0, scale = 0.6, bodyRadius = 0.4, bodyCenterY = 0, bodyMinY = -1, bodyTopY = 999, bodyNeckStartY = 999 }) {
     const map = useLogoTexture(texture);
+    const isWrap = logo?.mode === 'wrap';
     const theta = (position[0] / 0.35) * Math.PI;
     const cylinderTop = bodyCenterY + (bodyTopY - bodyCenterY) * 0.4;
-    const posY = Math.min(cylinderTop, position[1] + bodyCenterY);
+    const printTopY = Math.min(bodyNeckStartY, bodyTopY);
+    const printBottomY = bodyMinY + Math.max(0.03, bodyRadius * 0.04);
+    const wrapHeight = Math.max(0.1, printTopY - printBottomY);
+    const wrapWidth = Math.max(0.1, bodyRadius * Math.PI * 2 * 0.995);
+    const posY = isWrap ? printBottomY + wrapHeight / 2 : Math.min(cylinderTop, position[1] + bodyCenterY);
     const geometry = useMemo(() => createCurvedLogoGeometry({
         radius: bodyRadius,
-        centerTheta: theta,
+        centerTheta: isWrap ? (rotation ?? 0) : theta,
         centerY: posY,
-        width: scale,
-        height: scale,
-        rotation,
-    }), [bodyRadius, theta, posY, scale, rotation]);
+        width: isWrap ? wrapWidth : scale,
+        height: isWrap ? wrapHeight : scale,
+        rotation: isWrap ? 0 : rotation,
+        segmentsX: isWrap ? 128 : 36,
+        segmentsY: isWrap ? 48 : 14,
+    }), [bodyRadius, isWrap, theta, posY, scale, rotation, wrapWidth, wrapHeight]);
 
     return (
-        <mesh geometry={geometry} renderOrder={20}>
-            <LogoMaterial map={map} roughness={0.4} metalness={0.1} />
+        <mesh geometry={geometry} renderOrder={isWrap ? 18 : 20}>
+            <LogoMaterial map={map} roughness={isWrap ? 0.72 : 0.4} metalness={0.05} />
         </mesh>
     );
 }
@@ -157,7 +162,7 @@ function CapLogoPlane({ texture, target = 'capTop', position, rotation = 0, scal
 }
 
 // ─── Generic mesh component ────────────────────────────────────────────────────
-function ThermosMesh({ geo, matRef, color, neckStartY = null, capInner = null, capLogos = [], capRadius = 0.4, capMinY = 0, capMaxY = 1, metalness = 0.05, roughness = 0.82, logos = [], bodyRadius = 0.4, bodyCenterY = 0, bodyTopY = 999 }) {
+function ThermosMesh({ geo, matRef, color, neckStartY = null, capInner = null, capLogos = [], capRadius = 0.4, capMinY = 0, capMaxY = 1, metalness = 0.05, roughness = 0.82, logos = [], bodyRadius = 0.4, bodyCenterY = 0, bodyMinY = -1, bodyTopY = 999, bodyNeckStartY = 999 }) {
     const materialShader = useMemo(() => {
         if (neckStartY === null && !capInner) return {};
 
@@ -211,9 +216,9 @@ function ThermosMesh({ geo, matRef, color, neckStartY = null, capInner = null, c
                 {...materialShader}
             />
             {logos.map(logo => (
-                <LogoPlane key={logo.id} texture={logo.texture} position={logo.position}
+                <LogoPlane key={logo.id} logo={logo} texture={logo.texture} position={logo.position}
                     rotation={logo.rotation ?? 0} scale={logo.scale ?? 0.6}
-                    bodyRadius={bodyRadius} bodyCenterY={bodyCenterY} bodyTopY={bodyTopY} />
+                    bodyRadius={bodyRadius} bodyCenterY={bodyCenterY} bodyMinY={bodyMinY} bodyTopY={bodyTopY} bodyNeckStartY={bodyNeckStartY} />
             ))}
             {capLogos.map(logo => (
                 <CapLogoPlane key={logo.id} texture={logo.texture} target={logo.target}
@@ -232,8 +237,8 @@ export function Thermos(props) {
     const bodyLogos = thermosLogos.filter(logo => (logo.target ?? 'body') === 'body');
     const capLogos = thermosLogos.filter(logo => ['capTop', 'capSide'].includes(logo.target));
 
-    const { bodyGeo, capGeo, capInner, capLogoRadius, capMinY, capMaxY, bodyRadius, bodyCenterY, bodyTopY, bodyNeckStartY, capFloatX, capFloatY } = useMemo(() => {
-        const fallback = { bodyGeo: null, capGeo: null, capInner: null, capLogoRadius: 0.4, capMinY: 0, capMaxY: 1, bodyRadius: 0.4, bodyCenterY: 0, bodyTopY: 5, bodyNeckStartY: 4.25, capFloatX: 1.8, capFloatY: -2 };
+    const { bodyGeo, capGeo, capInner, capLogoRadius, capMinY, capMaxY, bodyRadius, bodyCenterY, bodyMinY, bodyTopY, bodyNeckStartY, capFloatX, capFloatY } = useMemo(() => {
+        const fallback = { bodyGeo: null, capGeo: null, capInner: null, capLogoRadius: 0.4, capMinY: 0, capMaxY: 1, bodyRadius: 0.4, bodyCenterY: 0, bodyMinY: -2.5, bodyTopY: 5, bodyNeckStartY: 4.25, capFloatX: 1.8, capFloatY: -2 };
         if (!nodes) return fallback;
 
         const entries = Object.entries(nodes)
@@ -259,6 +264,7 @@ export function Thermos(props) {
                 capMaxY: b.max.y,
                 bodyRadius: r || 0.4,
                 bodyCenterY: cy,
+                bodyMinY: b.min.y,
                 bodyTopY: b.max.y,
                 bodyNeckStartY: b.max.y - (b.max.y - b.min.y) * THERMOS_NECK_RATIO,
                 capFloatX: r * CAP_SIDE_DISTANCE,
@@ -341,6 +347,7 @@ export function Thermos(props) {
             capMaxY: capConfig?.maxY ?? 1,
             bodyRadius: radius,
             bodyCenterY: centerY,
+            bodyMinY: bb.min.y,
             bodyTopY: bb.max.y,
             bodyNeckStartY: bb.max.y - (bb.max.y - bb.min.y) * THERMOS_NECK_RATIO,
             capFloatX: radius * CAP_SIDE_DISTANCE,
@@ -387,7 +394,9 @@ export function Thermos(props) {
                     logos={bodyLogos}
                     bodyRadius={bodyRadius}
                     bodyCenterY={bodyCenterY}
+                    bodyMinY={bodyMinY}
                     bodyTopY={bodyTopY}
+                    bodyNeckStartY={bodyNeckStartY}
                 />
             )}
             {capGeo && (
