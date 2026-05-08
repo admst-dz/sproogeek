@@ -44,6 +44,7 @@ function WheelZoom({ controlsRef }) {
     const pinchPointersRef = useRef(new Map())
     const isPinchingRef = useRef(false)
     const lockedCameraPoseRef = useRef(null)
+    const enableControlsFrameRef = useRef(null)
 
     useEffect(() => { activeProductRef.current = activeProduct }, [activeProduct])
 
@@ -72,6 +73,22 @@ function WheelZoom({ controlsRef }) {
             if (controlsRef?.current) controlsRef.current.enabled = enabled
         }
 
+        const cancelDeferredControlsEnable = () => {
+            if (enableControlsFrameRef.current === null) return
+            window.cancelAnimationFrame(enableControlsFrameRef.current)
+            enableControlsFrameRef.current = null
+        }
+
+        const deferControlsEnable = () => {
+            cancelDeferredControlsEnable()
+            enableControlsFrameRef.current = window.requestAnimationFrame(() => {
+                enableControlsFrameRef.current = null
+                restoreCameraPose()
+                setControlsEnabled(true)
+                lockedCameraPoseRef.current = null
+            })
+        }
+
         const lockCameraPose = () => {
             if (lockedCameraPoseRef.current) return
             lockedCameraPoseRef.current = {
@@ -97,8 +114,7 @@ function WheelZoom({ controlsRef }) {
             restoreCameraPose()
             lastPinchDistRef.current = null
             isPinchingRef.current = false
-            lockedCameraPoseRef.current = null
-            setControlsEnabled(true)
+            deferControlsEnable()
         }
 
         const handleWheel = (e) => {
@@ -117,6 +133,10 @@ function WheelZoom({ controlsRef }) {
             pinchPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
             if (pinchPointersRef.current.size >= 2) {
                 stopGesture(e)
+                if (!isPinchingRef.current) {
+                    cancelDeferredControlsEnable()
+                    lockedCameraPoseRef.current = null
+                }
                 isPinchingRef.current = true
                 lockCameraPose()
                 restoreCameraPose()
@@ -164,7 +184,12 @@ function WheelZoom({ controlsRef }) {
 
         return () => {
             canvas.style.touchAction = previousTouchAction
-            finishPinch()
+            cancelDeferredControlsEnable()
+            restoreCameraPose()
+            lastPinchDistRef.current = null
+            isPinchingRef.current = false
+            lockedCameraPoseRef.current = null
+            setControlsEnabled(true)
             pinchPointersRef.current.clear()
             canvas.removeEventListener('wheel', handleWheel)
             canvas.removeEventListener('pointerdown', handlePointerDown, { capture: true })
