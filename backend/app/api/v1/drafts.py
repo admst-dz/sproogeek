@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -48,8 +49,14 @@ class DraftResponse(BaseModel):
 def _resolve_owner(current_user, anon_id: Optional[str]) -> str:
     if current_user is not None:
         return f"u:{current_user.id}"
-    if anon_id and len(anon_id) >= 8 and anon_id.replace("-", "").isalnum():
-        return f"a:{anon_id}"
+    # Анонимный ID должен быть полноценным UUID, иначе короткий/угадываемый
+    # идентификатор вида "12345678" даёт чужому пользователю доступ к черновику.
+    if anon_id:
+        try:
+            parsed = uuid.UUID(anon_id)
+        except (ValueError, TypeError, AttributeError):
+            raise HTTPException(status_code=400, detail="X-Anonymous-Id must be a UUID")
+        return f"a:{parsed}"
     raise HTTPException(status_code=400, detail="Authentication or X-Anonymous-Id required")
 
 
