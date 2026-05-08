@@ -19,8 +19,11 @@ export default defineConfig({
           if (!id.includes('node_modules')) return
           if (id.includes('three') || id.includes('@react-three')) return 'three'
           if (id.includes('pdfjs-dist')) return 'pdfjs'
-          if (id.includes('react-dom')) return 'react-dom'
-          if (id.includes('react') || id.includes('zustand')) return 'react'
+          // ВАЖНО: react и react-dom должны быть в одном чанке.
+          // React 19's react-dom пишет в shared internals react'а — если они
+          // в разных ESM-чанках, может инициализироваться раньше, чем react
+          // создаст эти internals, и упасть с "Cannot set properties of undefined".
+          if (id.includes('react-dom') || id.includes('react') || id.includes('zustand')) return 'react'
           if (id.includes('axios')) return 'axios'
         },
       },
