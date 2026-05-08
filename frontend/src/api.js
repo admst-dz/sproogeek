@@ -52,7 +52,23 @@ export const orderApi = {
 export const adminApi = {
     getOrders: (page = 1, size = 100) => apiClient.get(`/admin/orders?${new URLSearchParams({ page, size })}`),
     updateOrder: (orderId, data) => apiClient.patch(`/admin/orders/${encodeURIComponent(orderId)}`, data),
-    getUsers: () => apiClient.get('/admin/users'),
+
+    getUsers: ({ role = null, search = null } = {}) => {
+        const params = new URLSearchParams();
+        if (role) params.set('role', role);
+        if (search) params.set('search', search);
+        const qs = params.toString();
+        return apiClient.get(qs ? `/admin/users?${qs}` : '/admin/users');
+    },
+    getUser: (userId) => apiClient.get(`/admin/users/${encodeURIComponent(userId)}`),
+    createUser: (data) => apiClient.post('/admin/users', data),
+    updateUser: (userId, data) => apiClient.patch(`/admin/users/${encodeURIComponent(userId)}`, data),
+    resetUserPassword: (userId, password) =>
+        apiClient.post(`/admin/users/${encodeURIComponent(userId)}/reset-password`, { password }),
+    deleteUser: (userId) => apiClient.delete(`/admin/users/${encodeURIComponent(userId)}`),
+
+    getStats: () => apiClient.get('/admin/stats'),
+
     generateTechcard: (orderId) => apiClient.post(`/admin/orders/${encodeURIComponent(orderId)}/techcard`),
     downloadTechcard: (orderId, filename) => apiClient.get(
         `/admin/orders/${encodeURIComponent(orderId)}/techcard.pdf`,

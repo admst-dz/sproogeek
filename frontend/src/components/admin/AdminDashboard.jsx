@@ -18,8 +18,18 @@ const ROLE_CLS = {
     admin: 'text-red-400 bg-red-500/10',
     owner: 'text-yellow-400 bg-yellow-500/10',
     dealer: 'text-blue-400 bg-blue-500/10',
+    manufacturer: 'text-purple-400 bg-purple-500/10',
     client: 'text-white/40 bg-white/5',
 };
+const ROLE_LABEL = {
+    admin: 'Администратор',
+    owner: 'Владелец',
+    dealer: 'Дилер',
+    manufacturer: 'Производство',
+    client: 'Клиент',
+};
+const ADMIN_MANAGED_ROLES = ['client', 'dealer', 'manufacturer', 'admin'];
+const ADMIN_MANAGED_SUB_ROLES = ['', 'PL', 'PKL', 'KL', 'KPR', 'PR', 'TP'];
 
 function formatApiError(error) {
     const detail = error?.response?.data?.detail;
@@ -411,38 +421,634 @@ function OrdersTab() {
 
 // ─── Пользователи ────────────────────────────────────────────────────────────
 
-function UsersTab() {
-    const { data, loading, error } = useData(() => adminApi.getUsers());
+function suggestPassword() {
+    const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    const len = 14;
+    let out = '';
+    const buf = new Uint32Array(len);
+    (window.crypto || window.msCrypto).getRandomValues(buf);
+    for (let i = 0; i < len; i += 1) out += charset[buf[i] % charset.length];
+    return out;
+}
 
-    if (loading) return <Loader />;
-    if (error) return <ErrBox msg={error} />;
-    const users = data ?? [];
+function CreateUserDialog({ initialRole = 'dealer', onClose, onCreated }) {
+    const [form, setForm] = useState({
+        email: '',
+        password: suggestPassword(),
+        display_name: '',
+        role: initialRole,
+        sub_role: '',
+        company_name: '',
+        token_balance: 0,
+    });
+    const [showPassword, setShowPassword] = useState(true);
+    const [busy, setBusy] = useState(false);
+    const [msg, setMsg] = useState('');
+
+    const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+    const regenerate = () => update('password', suggestPassword());
+    const copyPassword = async () => {
+        try {
+            await navigator.clipboard.writeText(form.password);
+            setMsg('✓ Пароль скопирован');
+            setTimeout(() => setMsg(''), 1500);
+        } catch {
+            setMsg('✗ Не удалось скопировать');
+        }
+    };
+
+    const submit = async (e) => {
+        e.preventDefault();
+        setMsg('');
+        setBusy(true);
+        try {
+            const payload = {
+                email: form.email.trim().toLowerCase(),
+                password: form.password,
+                display_name: form.display_name || null,
+                role: form.role,
+                sub_role: form.sub_role || null,
+                company_name: form.company_name || null,
+                token_balance: Number(form.token_balance) || 0,
+            };
+            const { data } = await adminApi.createUser(payload);
+            onCreated(data, form.password);
+        } catch (err) {
+            setMsg('✗ ' + formatApiError(err));
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <form
+                onSubmit={submit}
+                className="w-full max-w-lg bg-[#0F1422] border border-white/10 rounded-[18px] p-6 shadow-[0_32px_80px_rgba(0,0,0,0.8)] space-y-4"
+            >
+                <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-bold">Новый пользователь</h2>
+                    <button type="button" onClick={onClose} className="text-white/40 hover:text-white">✕</button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <AdminInput label="Email" value={form.email} onChange={v => update('email', v)} />
+                    <AdminInput label="Имя" value={form.display_name} onChange={v => update('display_name', v)} />
+                    <label className="flex flex-col gap-1.5">
+                        <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Роль</span>
+                        <select
+                            value={form.role}
+                            onChange={e => update('role', e.target.value)}
+                            className="bg-black/30 border border-white/10 rounded-[8px] px-3 py-2 text-sm text-white outline-none focus:border-white/30"
+                        >
+                            {ADMIN_MANAGED_ROLES.map(role => (
+                                <option key={role} value={role}>{ROLE_LABEL[role] || role}</option>
+                            ))}
+                        </select>
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                        <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Sub-роль</span>
+                        <select
+                            value={form.sub_role}
+                            onChange={e => update('sub_role', e.target.value)}
+                            className="bg-black/30 border border-white/10 rounded-[8px] px-3 py-2 text-sm text-white outline-none focus:border-white/30"
+                        >
+                            {ADMIN_MANAGED_SUB_ROLES.map(s => (
+                                <option key={s || 'none'} value={s}>{s || '— нет —'}</option>
+                            ))}
+                        </select>
+                    </label>
+                    <AdminInput label="Компания" value={form.company_name} onChange={v => update('company_name', v)} />
+                    <AdminInput label="Баланс токенов" type="number" value={form.token_balance} onChange={v => update('token_balance', v)} />
+                </div>
+
+                <div>
+                    <label className="block text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1.5">
+                        Пароль (запишите — после закрытия скрытого окна вернуть его нельзя)
+                    </label>
+                    <div className="flex gap-2">
+                        <input
+                            type={showPassword ? 'text' : 'password'}
+                            value={form.password}
+                            onChange={e => update('password', e.target.value)}
+                            className="flex-1 bg-black/30 border border-white/10 rounded-[8px] px-3 py-2 text-sm font-mono text-emerald-300 outline-none focus:border-white/30"
+                        />
+                        <button type="button" onClick={() => setShowPassword(v => !v)} className="px-3 rounded-[8px] bg-white/5 hover:bg-white/10 text-xs">
+                            {showPassword ? 'Скрыть' : 'Показать'}
+                        </button>
+                        <button type="button" onClick={regenerate} className="px-3 rounded-[8px] bg-white/5 hover:bg-white/10 text-xs">↻</button>
+                        <button type="button" onClick={copyPassword} className="px-3 rounded-[8px] bg-white/5 hover:bg-white/10 text-xs">📋</button>
+                    </div>
+                </div>
+
+                {msg && (
+                    <div className={`text-xs font-bold ${msg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{msg}</div>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="flex-1 px-4 py-2.5 rounded-[10px] bg-white/5 hover:bg-white/10 text-sm font-bold"
+                    >
+                        Отмена
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={busy}
+                        className="flex-1 px-4 py-2.5 rounded-[10px] bg-white text-[#080B13] hover:bg-gray-100 text-sm font-black disabled:opacity-40"
+                    >
+                        {busy ? 'Создание…' : 'Создать'}
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+}
+
+function ResetPasswordDialog({ user, onClose, onDone }) {
+    const [pw, setPw] = useState(suggestPassword());
+    const [busy, setBusy] = useState(false);
+    const [msg, setMsg] = useState('');
+    const [show, setShow] = useState(true);
+
+    const submit = async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        try {
+            await adminApi.resetUserPassword(user.id, pw);
+            onDone(pw);
+        } catch (err) {
+            setMsg('✗ ' + formatApiError(err));
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <form
+                onSubmit={submit}
+                className="w-full max-w-md bg-[#0F1422] border border-white/10 rounded-[18px] p-6 shadow-[0_32px_80px_rgba(0,0,0,0.8)] space-y-4"
+            >
+                <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-bold">Сбросить пароль</h2>
+                    <button type="button" onClick={onClose} className="text-white/40 hover:text-white">✕</button>
+                </div>
+                <p className="text-xs text-white/40">
+                    Пароль для <span className="font-bold text-white/70">{user.email}</span>. После сохранения старый
+                    пароль перестанет работать. Запишите новый — поднять прежний нельзя.
+                </p>
+                <div className="flex gap-2">
+                    <input
+                        type={show ? 'text' : 'password'}
+                        value={pw}
+                        onChange={e => setPw(e.target.value)}
+                        className="flex-1 bg-black/30 border border-white/10 rounded-[8px] px-3 py-2 text-sm font-mono text-emerald-300 outline-none focus:border-white/30"
+                    />
+                    <button type="button" onClick={() => setShow(v => !v)} className="px-3 rounded-[8px] bg-white/5 hover:bg-white/10 text-xs">
+                        {show ? 'Скрыть' : 'Показать'}
+                    </button>
+                    <button type="button" onClick={() => setPw(suggestPassword())} className="px-3 rounded-[8px] bg-white/5 hover:bg-white/10 text-xs">↻</button>
+                </div>
+                {msg && <div className="text-xs font-bold text-red-400">{msg}</div>}
+                <div className="flex gap-2 pt-2">
+                    <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 rounded-[10px] bg-white/5 hover:bg-white/10 text-sm font-bold">
+                        Отмена
+                    </button>
+                    <button type="submit" disabled={busy} className="flex-1 px-4 py-2.5 rounded-[10px] bg-white text-[#080B13] hover:bg-gray-100 text-sm font-black disabled:opacity-40">
+                        {busy ? 'Сохранение…' : 'Сбросить пароль'}
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+}
+
+function ShowPasswordDialog({ user, password, onClose }) {
+    const [copied, setCopied] = useState(false);
+    const copy = async () => {
+        try {
+            await navigator.clipboard.writeText(password);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+        } catch {/* noop */}
+    };
+    return (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-md bg-[#0F1422] border border-emerald-500/20 rounded-[18px] p-6 space-y-4">
+                <h2 className="text-lg font-bold">Пароль установлен</h2>
+                <p className="text-xs text-white/50">
+                    Сохраните пароль для <span className="font-bold text-white/80">{user.email}</span>. Это
+                    единственный момент, когда вы видите его в открытом виде — после закрытия окна восстановить
+                    его нельзя, только сбросить заново.
+                </p>
+                <div className="flex gap-2">
+                    <code className="flex-1 bg-black/40 border border-white/10 rounded-[8px] px-3 py-2.5 text-sm font-mono text-emerald-300 break-all">
+                        {password}
+                    </code>
+                    <button onClick={copy} className="px-3 rounded-[8px] bg-white/10 hover:bg-white/15 text-xs font-bold">
+                        {copied ? '✓' : '📋'}
+                    </button>
+                </div>
+                <button onClick={onClose} className="w-full px-4 py-2.5 rounded-[10px] bg-white text-[#080B13] hover:bg-gray-100 text-sm font-black">
+                    Готово
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
+    const [editing, setEditing] = useState(false);
+    const [form, setForm] = useState(() => ({
+        display_name: user.display_name || '',
+        role: user.role || 'client',
+        sub_role: user.sub_role || '',
+        company_name: user.company_name || '',
+        token_balance: user.token_balance ?? 0,
+    }));
+    const [saving, setSaving] = useState(false);
+    const [msg, setMsg] = useState('');
+
+    useEffect(() => {
+        setEditing(false);
+        setMsg('');
+        setForm({
+            display_name: user.display_name || '',
+            role: user.role || 'client',
+            sub_role: user.sub_role || '',
+            company_name: user.company_name || '',
+            token_balance: user.token_balance ?? 0,
+        });
+    }, [user.id]);
+
+    const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+
+    const save = async () => {
+        try {
+            setSaving(true);
+            setMsg('');
+            const payload = {
+                display_name: form.display_name || null,
+                role: form.role,
+                sub_role: form.sub_role || null,
+                company_name: form.company_name || null,
+                token_balance: Number(form.token_balance) || 0,
+            };
+            const { data } = await adminApi.updateUser(user.id, payload);
+            onSaved(data);
+            setEditing(false);
+            setMsg('✓ Сохранено');
+        } catch (e) {
+            setMsg('✗ ' + formatApiError(e));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const remove = async () => {
+        if (!window.confirm(`Удалить пользователя ${user.email}? Действие необратимо.`)) return;
+        try {
+            await adminApi.deleteUser(user.id);
+            onDeleted(user.id);
+        } catch (e) {
+            setMsg('✗ ' + formatApiError(e));
+        }
+    };
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-5">
+            <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                    <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Профиль</p>
+                    {msg && <span className={`text-xs font-bold ${msg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{msg}</span>}
+                    <button
+                        onClick={() => onResetRequested(user)}
+                        className="ml-auto px-3 py-1.5 rounded-[8px] bg-orange-500/15 hover:bg-orange-500/25 text-orange-300 text-xs font-bold transition"
+                    >
+                        🔑 Сбросить пароль
+                    </button>
+                    <button
+                        onClick={() => setEditing(v => !v)}
+                        className="px-3 py-1.5 rounded-[8px] bg-white/10 hover:bg-white/15 text-xs font-bold transition"
+                    >
+                        {editing ? 'Просмотр' : 'Редактировать'}
+                    </button>
+                    {editing && (
+                        <button
+                            onClick={save}
+                            disabled={saving}
+                            className="px-3 py-1.5 rounded-[8px] bg-white text-[#080B13] hover:bg-gray-100 text-xs font-black disabled:opacity-50 transition"
+                        >
+                            {saving ? '…' : 'Сохранить'}
+                        </button>
+                    )}
+                    <button
+                        onClick={remove}
+                        className="px-3 py-1.5 rounded-[8px] bg-red-500/15 hover:bg-red-500/25 text-red-300 text-xs font-bold transition"
+                    >
+                        Удалить
+                    </button>
+                </div>
+
+                {editing ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <AdminInput label="Имя" value={form.display_name} onChange={v => update('display_name', v)} />
+                        <label className="flex flex-col gap-1.5">
+                            <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Роль</span>
+                            <select
+                                value={form.role}
+                                onChange={e => update('role', e.target.value)}
+                                className="bg-black/30 border border-white/10 rounded-[8px] px-3 py-2 text-sm text-white outline-none focus:border-white/30"
+                            >
+                                {ADMIN_MANAGED_ROLES.map(role => (
+                                    <option key={role} value={role}>{ROLE_LABEL[role] || role}</option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="flex flex-col gap-1.5">
+                            <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Sub-роль</span>
+                            <select
+                                value={form.sub_role}
+                                onChange={e => update('sub_role', e.target.value)}
+                                className="bg-black/30 border border-white/10 rounded-[8px] px-3 py-2 text-sm text-white outline-none focus:border-white/30"
+                            >
+                                {ADMIN_MANAGED_SUB_ROLES.map(s => (
+                                    <option key={s || 'none'} value={s}>{s || '— нет —'}</option>
+                                ))}
+                            </select>
+                        </label>
+                        <AdminInput label="Компания" value={form.company_name} onChange={v => update('company_name', v)} />
+                        <AdminInput label="Баланс токенов" type="number" value={form.token_balance} onChange={v => update('token_balance', v)} />
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <ValueRow label="Email" value={user.email} />
+                        <ValueRow label="Имя" value={user.display_name} />
+                        <ValueRow label="Роль" value={ROLE_LABEL[user.role] || user.role} />
+                        <ValueRow label="Sub-роль" value={user.sub_role} />
+                        <ValueRow label="Компания" value={user.company_name} />
+                        <ValueRow label="Баланс" value={`${user.token_balance ?? 0}`} />
+                        <ValueRow label="Заказов" value={`${user.orders_count ?? 0}`} />
+                        <ValueRow label="Последний заказ" value={user.last_order_at ? new Date(user.last_order_at).toLocaleString('ru') : '—'} />
+                        <ValueRow label="Пароль установлен" value={user.has_password ? 'Да' : 'Нет (только OAuth)'} />
+                        <ValueRow label="Создан" value={user.created_at ? new Date(user.created_at).toLocaleString('ru') : null} />
+                    </div>
+                )}
+            </div>
+
+            <div className="space-y-3">
+                <div>
+                    <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">UUID</p>
+                    <code className="text-xs font-mono text-white/35 break-all">{user.id}</code>
+                </div>
+                <div className="text-[10px] text-white/35 leading-relaxed">
+                    Чтобы посмотреть пароль пользователя — нельзя: хеш bcrypt односторонний.
+                    Кнопка «Сбросить пароль» задаёт новый и единожды показывает его.
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function UsersTab({ initialFilter = null }) {
+    const [filter, setFilter] = useState({ role: initialFilter, search: '' });
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [expanded, setExpanded] = useState(null);
+    const [createOpen, setCreateOpen] = useState(false);
+    const [resetTarget, setResetTarget] = useState(null);
+    const [showPasswordFor, setShowPasswordFor] = useState(null);
+    const [showPassword, setShowPassword] = useState('');
+    const gatedLoading = useLoaderCompletionGate(loading);
+
+    const reload = async (params = filter) => {
+        setLoading(true);
+        setError(null);
+        try {
+            const { data } = await adminApi.getUsers({
+                role: params.role || undefined,
+                search: params.search || undefined,
+            });
+            setUsers(data || []);
+        } catch (err) {
+            setError(formatApiError(err));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { reload(filter); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+    useEffect(() => {
+        if (initialFilter !== filter.role) {
+            const next = { ...filter, role: initialFilter };
+            setFilter(next);
+            reload(next);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialFilter]);
+
+    const onCreated = (created, password) => {
+        setCreateOpen(false);
+        setShowPasswordFor(created);
+        setShowPassword(password);
+        reload();
+    };
+
+    const onSaved = (updated) => {
+        setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+    };
+
+    const onDeleted = (deletedId) => {
+        setUsers(prev => prev.filter(u => u.id !== deletedId));
+        setExpanded(null);
+    };
+
+    const tabTitle = initialFilter
+        ? `${ROLE_LABEL[initialFilter] || initialFilter}`
+        : 'Пользователи';
 
     return (
         <>
-            <SectionHeader title="Пользователи" count={users.length} />
-            <Table
-                headers={['Email', 'Имя', 'Роль', 'Sub-роль', 'Баланс', 'Компания', 'Дата']}
-                empty={users.length === 0 ? 'Нет пользователей' : null}
-            >
-                {users.map(u => (
-                    <tr key={u.id} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors">
-                        <td className="px-4 py-2.5 text-sm text-white/80">{u.email}</td>
-                        <td className="px-4 py-2.5 text-sm text-white/60">{u.display_name || '—'}</td>
-                        <td className="px-4 py-2.5">
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${ROLE_CLS[u.role] ?? 'text-white/40 bg-white/5'}`}>
-                                {u.role}
-                            </span>
-                        </td>
-                        <td className="px-4 py-2.5 text-xs text-white/45">{u.sub_role || '—'}</td>
-                        <td className="px-4 py-2.5 text-sm text-white/60">{u.token_balance ?? 0}</td>
-                        <td className="px-4 py-2.5 text-sm text-white/45">{u.company_name || '—'}</td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-white/30">
-                            {u.created_at ? new Date(u.created_at).toLocaleString('ru') : '—'}
-                        </td>
-                    </tr>
-                ))}
-            </Table>
+            <div className="flex items-center gap-3 mb-5 flex-wrap">
+                <SectionHeader title={tabTitle} count={users.length} />
+                <input
+                    type="search"
+                    value={filter.search}
+                    onChange={e => setFilter({ ...filter, search: e.target.value })}
+                    onKeyDown={e => { if (e.key === 'Enter') reload({ ...filter }); }}
+                    placeholder="Поиск email / имя / компания"
+                    className="bg-black/30 border border-white/10 rounded-[10px] px-3 py-1.5 text-sm w-64 outline-none focus:border-white/30"
+                />
+                {!initialFilter && (
+                    <select
+                        value={filter.role || ''}
+                        onChange={e => { const next = { ...filter, role: e.target.value || null }; setFilter(next); reload(next); }}
+                        className="bg-black/30 border border-white/10 rounded-[10px] px-3 py-1.5 text-sm outline-none"
+                    >
+                        <option value="">Все роли</option>
+                        {ADMIN_MANAGED_ROLES.map(role => (
+                            <option key={role} value={role}>{ROLE_LABEL[role] || role}</option>
+                        ))}
+                        <option value="owner">Владелец</option>
+                    </select>
+                )}
+                <button
+                    onClick={() => reload(filter)}
+                    className="px-3 py-1.5 rounded-[10px] bg-white/5 hover:bg-white/10 text-xs font-bold"
+                >
+                    ↻ Обновить
+                </button>
+                <button
+                    onClick={() => setCreateOpen(true)}
+                    className="ml-auto px-4 py-1.5 rounded-[10px] bg-white text-[#080B13] hover:bg-gray-100 text-sm font-black"
+                >
+                    + Добавить
+                </button>
+            </div>
+
+            {gatedLoading ? <Loader /> : error ? <ErrBox msg={error} /> : (
+                <Table
+                    headers={['Email', 'Имя', 'Роль', 'Sub-роль', 'Компания', 'Заказов', 'Пароль', 'Создан']}
+                    empty={users.length === 0 ? 'Нет пользователей' : null}
+                >
+                    {users.map(u => (
+                        <Fragment key={u.id}>
+                            <tr
+                                onClick={() => setExpanded(expanded === u.id ? null : u.id)}
+                                className="border-b border-white/5 hover:bg-white/[0.03] cursor-pointer transition-colors select-none"
+                            >
+                                <td className="px-4 py-2.5 text-sm text-white/80">{u.email}</td>
+                                <td className="px-4 py-2.5 text-sm text-white/60">{u.display_name || '—'}</td>
+                                <td className="px-4 py-2.5">
+                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${ROLE_CLS[u.role] ?? 'text-white/40 bg-white/5'}`}>
+                                        {ROLE_LABEL[u.role] || u.role}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-2.5 text-xs text-white/45">{u.sub_role || '—'}</td>
+                                <td className="px-4 py-2.5 text-sm text-white/45">{u.company_name || '—'}</td>
+                                <td className="px-4 py-2.5 text-sm text-white/60">{u.orders_count ?? 0}</td>
+                                <td className="px-4 py-2.5 text-xs">
+                                    {u.has_password
+                                        ? <span className="text-emerald-400">✓ задан</span>
+                                        : <span className="text-white/30">OAuth</span>}
+                                </td>
+                                <td className="px-4 py-2.5 font-mono text-xs text-white/30">
+                                    {u.created_at ? new Date(u.created_at).toLocaleDateString('ru') : '—'}
+                                </td>
+                            </tr>
+                            {expanded === u.id && (
+                                <tr className="bg-black/20">
+                                    <td colSpan={8} className="px-5 py-5">
+                                        <UserDetails
+                                            user={u}
+                                            onSaved={onSaved}
+                                            onDeleted={onDeleted}
+                                            onResetRequested={setResetTarget}
+                                        />
+                                    </td>
+                                </tr>
+                            )}
+                        </Fragment>
+                    ))}
+                </Table>
+            )}
+
+            {createOpen && (
+                <CreateUserDialog
+                    initialRole={initialFilter || 'dealer'}
+                    onClose={() => setCreateOpen(false)}
+                    onCreated={onCreated}
+                />
+            )}
+            {resetTarget && (
+                <ResetPasswordDialog
+                    user={resetTarget}
+                    onClose={() => setResetTarget(null)}
+                    onDone={(pw) => { setResetTarget(null); setShowPasswordFor(resetTarget); setShowPassword(pw); }}
+                />
+            )}
+            {showPasswordFor && (
+                <ShowPasswordDialog
+                    user={showPasswordFor}
+                    password={showPassword}
+                    onClose={() => { setShowPasswordFor(null); setShowPassword(''); }}
+                />
+            )}
+        </>
+    );
+}
+
+// ─── Dashboard / статистика ──────────────────────────────────────────────────
+
+function StatCard({ label, value, hint }) {
+    return (
+        <div className="bg-white/[0.03] border border-white/10 rounded-[14px] p-4">
+            <div className="text-[10px] font-bold text-white/35 uppercase tracking-widest">{label}</div>
+            <div className="text-3xl font-black mt-1.5">{value}</div>
+            {hint && <div className="text-xs text-white/40 mt-1.5">{hint}</div>}
+        </div>
+    );
+}
+
+function DashboardTab({ onJumpToUsers }) {
+    const { data, loading, error } = useData(() => adminApi.getStats());
+    if (loading) return <Loader />;
+    if (error) return <ErrBox msg={error} />;
+    const s = data || {};
+    const usersByRole = s.users_by_role || [];
+    const ordersByStatus = s.orders_by_status || [];
+
+    return (
+        <>
+            <SectionHeader title="Сводка" />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <StatCard label="Пользователей" value={s.users_total ?? 0} hint={`+${s.new_users_last_30d ?? 0} за 30 дней`} />
+                <StatCard label="Заказов" value={s.orders_total ?? 0} hint={`+${s.new_orders_last_30d ?? 0} за 30 дней`} />
+                <StatCard label="Выручка (всего)" value={`${(s.revenue_total ?? 0).toLocaleString('ru')} ${s.revenue_currency || 'BYN'}`} />
+                <StatCard label="Дилеров" value={usersByRole.find(r => r.role === 'dealer')?.count ?? 0} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-6">
+                <div>
+                    <SectionHeader title="Пользователи по ролям" />
+                    <div className="space-y-1.5">
+                        {usersByRole.map(({ role, count }) => (
+                            <button
+                                key={role}
+                                onClick={() => onJumpToUsers(role)}
+                                className="w-full flex items-center justify-between bg-white/[0.03] border border-white/8 rounded-[10px] px-3 py-2 hover:bg-white/[0.06] transition text-left"
+                            >
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${ROLE_CLS[role] ?? 'text-white/40 bg-white/5'}`}>
+                                    {ROLE_LABEL[role] || role}
+                                </span>
+                                <span className="font-mono text-sm text-white/70">{count}</span>
+                            </button>
+                        ))}
+                        {usersByRole.length === 0 && <div className="text-white/25 text-sm">Нет данных</div>}
+                    </div>
+                </div>
+
+                <div>
+                    <SectionHeader title="Заказы по статусам" />
+                    <div className="space-y-1.5">
+                        {ordersByStatus.map(({ role: status, count }) => (
+                            <div
+                                key={status}
+                                className="flex items-center justify-between bg-white/[0.03] border border-white/8 rounded-[10px] px-3 py-2"
+                            >
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${STATUS_CLS[status] ?? 'text-white/40 bg-white/5 border-white/10'}`}>
+                                    {STATUS_LABEL[status] ?? status}
+                                </span>
+                                <span className="font-mono text-sm text-white/70">{count}</span>
+                            </div>
+                        ))}
+                        {ordersByStatus.length === 0 && <div className="text-white/25 text-sm">Нет данных</div>}
+                    </div>
+                </div>
+            </div>
         </>
     );
 }
@@ -584,14 +1190,18 @@ function ProductsTab() {
 // ─── Дашборд ─────────────────────────────────────────────────────────────────
 
 const TABS = [
+    ['dashboard', 'Сводка'],
     ['orders', 'Заказы'],
     ['users', 'Пользователи'],
-    ['json', 'JSON-конфиги'],
+    ['dealers', 'Дилеры'],
+    ['manufacturers', 'Производство'],
+    ['admins', 'Администраторы'],
     ['products', 'Продукты'],
+    ['json', 'JSON-конфиги'],
 ];
 
 export const AdminDashboard = ({ onLogout }) => {
-    const [tab, setTab] = useState('orders');
+    const [tab, setTab] = useState('dashboard');
 
     return (
         <div className="app-bg fixed inset-0 text-gray-900 dark:text-white flex flex-col font-sans overflow-hidden">
@@ -600,7 +1210,7 @@ export const AdminDashboard = ({ onLogout }) => {
                 <span className="text-[11px] font-black tracking-[0.25em] uppercase text-white/20">SPRUZHYK</span>
                 <span className="text-white/12 mx-2 select-none">|</span>
                 <span className="text-sm font-bold text-white/60">Admin Panel</span>
-                <nav className="flex gap-1 ml-6">
+                <nav className="flex gap-1 ml-6 flex-wrap">
                     {TABS.map(([id, label]) => (
                         <button
                             key={id}
@@ -624,10 +1234,14 @@ export const AdminDashboard = ({ onLogout }) => {
             </header>
 
             <div className="flex-1 overflow-auto p-6">
+                {tab === 'dashboard' && <DashboardTab onJumpToUsers={(role) => setTab(role === 'dealer' ? 'dealers' : role === 'manufacturer' ? 'manufacturers' : role === 'admin' ? 'admins' : 'users')} />}
                 {tab === 'orders' && <OrdersTab />}
-                {tab === 'users' && <UsersTab />}
-                {tab === 'json' && <JsonTab />}
+                {tab === 'users' && <UsersTab key="all" initialFilter={null} />}
+                {tab === 'dealers' && <UsersTab key="dealers" initialFilter="dealer" />}
+                {tab === 'manufacturers' && <UsersTab key="manufacturers" initialFilter="manufacturer" />}
+                {tab === 'admins' && <UsersTab key="admins" initialFilter="admin" />}
                 {tab === 'products' && <ProductsTab />}
+                {tab === 'json' && <JsonTab />}
             </div>
         </div>
     );
