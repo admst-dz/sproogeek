@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     admin_backdoor_key: str = Field("", alias="ADMIN_BACKDOOR_KEY")
     admin_backdoor_email: str = Field("admin@spruzhyk.internal", alias="ADMIN_BACKDOOR_EMAIL")
 
+    redis_url: str = Field("redis://redis:6379/0", alias="REDIS_URL")
+    cache_default_ttl: int = Field(300, alias="CACHE_DEFAULT_TTL")
+
     @field_validator("allowed_hosts", "allowed_origins", mode="before")
     @classmethod
     def split_csv(cls, value):

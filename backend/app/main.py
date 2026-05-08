@@ -15,7 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api.v1 import ai, admin, auth, dealer, events, files, manufacturer, orders, products, users
+from app.api.v1 import ai, admin, auth, dealer, drafts, events, files, manufacturer, orders, pricing, products, users
+from app.core.cache import close_cache
 from app.core.config import get_settings
 from app.core.event_logger import event_logger
 from app.core.kafka import kafka_producer
@@ -37,6 +38,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await kafka_producer.stop()
+        await close_cache()
         event_logger.log("APP_SHUTDOWN", "Backend application shutdown")
 
 
@@ -143,5 +145,7 @@ app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(dealer.router, prefix="/api/v1/dealer", tags=["Dealer"])
 app.include_router(manufacturer.router, prefix="/api/v1/manufacturer", tags=["Manufacturer"])
 app.include_router(events.router, prefix="/api/v1/events", tags=["Events"])
+app.include_router(pricing.router, prefix="/api/v1/pricing", tags=["Pricing"])
+app.include_router(drafts.router, prefix="/api/v1/drafts", tags=["Drafts"])
 
 add_pagination(app)

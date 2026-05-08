@@ -44,12 +44,43 @@ services:
       retries: 5
       start_period: 30s
 
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: spruzhuk_pgbouncer
+    restart: unless-stopped
+    environment:
+      # Подключение к реальной PG (asyncpg-формат не нужен — pgbouncer ждёт
+      # обычный postgres URL без +asyncpg).
+      DATABASE_URL: ${PGBOUNCER_BACKEND_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 25
+      RESERVE_POOL_SIZE: 5
+      RESERVE_POOL_TIMEOUT: 3
+      SERVER_RESET_QUERY: DISCARD ALL
+      AUTH_TYPE: scram-sha-256
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - spruzhuk_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   backend:
     image: ghcr.io/admst-dz/spruzhyk-backend:latest
     pull_policy: always
-    container_name: spruzhuk_backend
+    # container_name снят: позволяет запускать через `--scale backend=2|3`.
     restart: unless-stopped
+    deploy:
+      replicas: 2  # подсказка для swarm; в обычном compose используется --scale backend=2
     environment:
+      # Бэкенд ходит в БД через pgbouncer, а не напрямую в db.
+      # DATABASE_URL должен указывать на pgbouncer:5432 (см. .env.example).
       DATABASE_URL: ${DATABASE_URL}
       SECRET_KEY: ${SECRET_KEY}
       APP_ENV: ${APP_ENV:-production}
@@ -60,6 +91,7 @@ services:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       RENDERER_URL: ${RENDERER_URL:-http://renderer:3000}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       ADMIN_BACKDOOR_ENABLED: ${ADMIN_BACKDOOR_ENABLED:-false}
       ADMIN_BACKDOOR_LOGIN: ${ADMIN_BACKDOOR_LOGIN:-}
       ADMIN_BACKDOOR_PASSWORD: ${ADMIN_BACKDOOR_PASSWORD:-}
@@ -76,15 +108,30 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET: ${S3_BUCKET:-techcards}
     depends_on:
-      db:
+      pgbouncer:
         condition: service_healthy
       kafka:
         condition: service_healthy
         required: false
       minio:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - spruzhuk_net
+
+  redis:
+    image: public.ecr.aws/docker/library/redis:7-alpine
+    container_name: spruzhuk_redis
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
+    networks:
+      - spruzhuk_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   frontend:
     image: ghcr.io/admst-dz/spruzhyk-frontend:latest

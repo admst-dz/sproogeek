@@ -135,12 +135,14 @@ class MaterialTopup(BaseModel):
 
 @router.get("/materials", response_model=List[MaterialOut])
 async def materials(db: AsyncSession = Depends(get_db)):
-    return await list_materials(db)
+    items = await _cached_materials(db)
+    return items
 
 
 @router.get("/materials/low", response_model=List[MaterialOut])
 async def materials_low(db: AsyncSession = Depends(get_db)):
-    return await low_stock(db)
+    items = await _cached_materials_low(db)
+    return items
 
 
 @router.post("/materials/{material_id}/topup", response_model=MaterialOut)
@@ -148,9 +150,30 @@ async def materials_topup(material_id: str, payload: MaterialTopup, db: AsyncSes
     if payload.qty <= 0:
         raise HTTPException(status_code=422, detail="qty must be positive")
     try:
-        return await topup(db, material_id, payload.qty, payload.reason or "topup")
+        result = await topup(db, material_id, payload.qty, payload.reason or "topup")
+        # Инвалидируем кеш материалов после изменения остатков.
+        from app.core.cache import invalidate
+        await invalidate("materials")
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+# ─── Cached read helpers (TTL 60s; короткий т.к. остатки часто двигаются) ──────
+
+from app.core.cache import cached  # noqa: E402
+
+
+@cached(prefix="materials", ttl=60)
+async def _cached_materials(db: AsyncSession):
+    rows = await list_materials(db)
+    return [MaterialOut.model_validate(r).model_dump(mode="json") for r in rows]
+
+
+@cached(prefix="materials", ttl=60)
+async def _cached_materials_low(db: AsyncSession):
+    rows = await low_stock(db)
+    return [MaterialOut.model_validate(r).model_dump(mode="json") for r in rows]
 
 
 # ─── Imposition / SRA3 + QR ───────────────────────────────────────────────────

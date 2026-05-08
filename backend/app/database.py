@@ -6,6 +6,9 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
+# При работе через PgBouncer в transaction pool mode серверные prepared
+# statements asyncpg конфликтуют с пулом (statement готовится на одном
+# backend-коннекте, а исполняется на другом). Отключаем кеш PS.
 engine = create_async_engine(
     settings.database_url,
     echo=False,
@@ -13,6 +16,10 @@ engine = create_async_engine(
     max_overflow=20,
     pool_recycle=1800,
     pool_pre_ping=True,
+    connect_args={
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    },
 )
 
 AsyncSessionLocal = async_sessionmaker(
