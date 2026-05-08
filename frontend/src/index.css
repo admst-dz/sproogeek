@@ -10,8 +10,9 @@ html, body, #root {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background-color: #E5E5E5;
-  transition: background-color 0.4s ease;
+  background: linear-gradient(180deg, #EBE5CD 0%, #DEF0F3 100%);
+  background-attachment: fixed;
+  transition: background 0.4s ease;
 }
 
 @media (max-width: 768px) {
@@ -22,7 +23,8 @@ html, body, #root {
   }
 }
 html.dark, html.dark body, html.dark #root {
-  background-color: #0B0F19;
+  background: linear-gradient(180deg, #132B3F 0%, #4A3839 100%);
+  background-attachment: fixed;
 }
 
 /* === ВАШИ НОВЫЕ СТИЛИ === */
