@@ -173,7 +173,7 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
     };
 
     return (
-        <div className="min-h-screen w-full flex flex-col font-sans transition-colors duration-500 bg-gray-50 text-gray-900 dark:bg-[#0B0F19] dark:bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] dark:from-[#1A2642] dark:via-[#0B0F19] dark:to-[#080B13] dark:text-white overflow-x-hidden selection:bg-blue-500/30 md:h-screen">
+        <div className="app-bg min-h-screen w-full flex flex-col font-sans transition-colors duration-500 text-gray-900 dark:text-white overflow-x-hidden selection:bg-blue-500/30 md:h-screen">
 
             <header className="w-full px-6 py-5 flex items-center justify-between z-50">
                 <div className="flex items-center gap-3 bg-white border border-gray-200 dark:bg-white/5 dark:border-white/10 px-4 py-2 rounded-full backdrop-blur-md shadow-sm dark:shadow-none transition-colors">

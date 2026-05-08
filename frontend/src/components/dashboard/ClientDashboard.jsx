@@ -249,7 +249,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
     };
 
     return (
-        <div className="min-h-screen font-sans text-white bg-[#0B0F19] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#1A2642] via-[#0B0F19] to-[#080B13] overflow-x-hidden flex flex-col">
+        <div className="app-bg min-h-screen font-sans text-gray-900 dark:text-white overflow-x-hidden flex flex-col">
 
             <LiveOrderToasts onEvent={(ev) => {
                 const data = ev?.data;

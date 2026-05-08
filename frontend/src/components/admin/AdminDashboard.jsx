@@ -593,7 +593,7 @@ export const AdminDashboard = ({ onLogout }) => {
     const [tab, setTab] = useState('orders');
 
     return (
-        <div className="fixed inset-0 bg-[#080B13] text-white flex flex-col font-sans overflow-hidden">
+        <div className="app-bg fixed inset-0 text-gray-900 dark:text-white flex flex-col font-sans overflow-hidden">
             <LiveOrderToasts />
             <header className="flex items-center gap-2 px-6 py-3 border-b border-white/8 bg-[#0A0E1A] shrink-0">
                 <span className="text-[11px] font-black tracking-[0.25em] uppercase text-white/20">SPRUZHYK</span>

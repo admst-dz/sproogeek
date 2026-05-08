@@ -527,7 +527,7 @@ export const DealerDashboard = ({ onBack }) => {
     const openEdit = (p) => { setEditingProduct(p); setShowModal(true); };
 
     return (
-        <div className="flex h-screen font-sans text-white bg-[#0B0F19] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#1A2642] via-[#0B0F19] to-[#080B13] overflow-hidden">
+        <div className="app-bg flex h-screen font-sans text-gray-900 dark:text-white overflow-hidden">
 
             <LiveOrderToasts onEvent={handleLiveEvent} />
 
