@@ -343,7 +343,7 @@ function App() {
                         </div>
                     ) : (
                         <>
-                            <div ref={configuratorCanvasRef} className="relative w-full h-[45%] md:absolute md:inset-0 md:w-[75%] md:h-full bg-[#dcdcdc] dark:bg-[#0A0E1A] md:bg-transparent dark:md:bg-transparent">
+                            <div ref={configuratorCanvasRef} className="app-bg relative w-full h-[45%] md:absolute md:inset-0 md:w-[75%] md:h-full md:bg-transparent dark:md:bg-transparent">
                                 <div className="absolute bottom-4 right-4 z-10 md:hidden">
                                     <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
                                 </div>
@@ -354,7 +354,7 @@ function App() {
                                     gl={{
                                         antialias: true,
                                         preserveDrawingBuffer: true,
-                                        alpha: false,
+                                        alpha: true, // прозрачный canvas — палитра-градиент подложки видна
                                         powerPreference: 'high-performance',
                                         logarithmicDepthBuffer: true // Важно для устранения z-fighting в Safari
                                     }}
@@ -418,8 +418,8 @@ function App() {
                         productLabel="Скетчбук"
                     />
                     <>
-                        <div ref={sketchbookCanvasRef} className="relative w-full h-[45%] md:absolute md:inset-0 md:w-[75%] md:h-full bg-[#dcdcdc] dark:bg-[#0A0E1A] md:bg-transparent dark:md:bg-transparent">
-                            <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true }}>
+                        <div ref={sketchbookCanvasRef} className="app-bg relative w-full h-[45%] md:absolute md:inset-0 md:w-[75%] md:h-full md:bg-transparent dark:md:bg-transparent">
+                            <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true, preserveDrawingBuffer: true, alpha: true, logarithmicDepthBuffer: true }}>
                                 {/* Освещение и контролы */}
                                 <ambientLight intensity={0.6} />
                                 <directionalLight position={[10, 10, 5]} intensity={1.5} />
