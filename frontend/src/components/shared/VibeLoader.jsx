@@ -10,7 +10,7 @@ import loaderFrame07 from '../../assets/loader/logo-loader-07.svg';
 import loaderFrame08 from '../../assets/loader/logo-loader-08.svg';
 
 const clampProgress = (value) => Math.max(0, Math.min(100, Math.round(value || 0)));
-const LOGO_ANIMATION_MS = 6400;
+const LOGO_ANIMATION_MS = 2600;
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 const loaderFrames = [
     loaderFrame01,
@@ -57,7 +57,7 @@ export function VibeLoader({ progress = 0, label = 'Собираем сцену'
                         key={frame}
                         src={frame}
                         alt=""
-                        className="vibe-loader__logo-frame"
+                        className={`vibe-loader__logo-frame ${index === loaderFrames.length - 1 ? 'vibe-loader__logo-frame--final' : ''}`}
                         style={{ '--frame-index': String(index) }}
                     />
                 ))}
@@ -92,8 +92,7 @@ export function SceneLoadingOverlay({ label, compact = false }) {
         if (visible) {
             setDisplayProgress(100);
             const elapsed = Math.max(0, now() - startedAt);
-            const remainingCycle = LOGO_ANIMATION_MS - (elapsed % LOGO_ANIMATION_MS);
-            const delay = Math.max(520, remainingCycle);
+            const delay = Math.max(520, LOGO_ANIMATION_MS - elapsed);
             const timeout = window.setTimeout(() => setVisible(false), delay);
             return () => window.clearTimeout(timeout);
         }

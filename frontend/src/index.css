@@ -124,7 +124,8 @@ html.dark, html.dark body, html.dark #root {
 }
 
 .vibe-loader__logo-frame {
-  --frame-step: 0.8s;
+  --frame-step: 0.3s;
+  --frame-duration: 0.42s;
   position: absolute;
   inset: 0;
   display: block;
@@ -133,8 +134,12 @@ html.dark, html.dark body, html.dark #root {
   object-fit: contain;
   opacity: 0;
   transform: scale(0.985);
-  animation: vibe-logo-frame-flow 6.4s linear infinite both;
-  animation-delay: calc((var(--frame-index) - 8) * var(--frame-step));
+  animation: vibe-logo-frame-flow var(--frame-duration) ease-out forwards;
+  animation-delay: calc(var(--frame-index) * var(--frame-step));
+}
+
+.vibe-loader__logo-frame--final {
+  animation-name: vibe-logo-frame-hold;
 }
 
 .vibe-loader__meta {
@@ -189,10 +194,12 @@ html.dark, html.dark body, html.dark #root {
 
 @keyframes vibe-logo-frame-flow {
   0% { opacity: 1; transform: scale(1); }
-  6.25% { opacity: 1; transform: scale(1); }
-  12.5% { opacity: 0; transform: scale(1.015); }
-  87.5% { opacity: 0; transform: scale(0.985); }
-  93.75% { opacity: 1; transform: scale(1); }
+  72% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.015); }
+}
+
+@keyframes vibe-logo-frame-hold {
+  0% { opacity: 1; transform: scale(1); }
   100% { opacity: 1; transform: scale(1); }
 }
 
