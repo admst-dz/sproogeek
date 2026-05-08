@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { temporal } from 'zundo'
 import { getCookie, setCookie, deleteCookie, hasCookieConsent } from './utils/cookies'
 import { clearMemoryToken } from './api'
 import { normalizeImageFile } from './utils/images'
@@ -22,7 +23,48 @@ export const captureRender = () => {
     try { return _webglCanvas.toDataURL('image/png') } catch (e) { return null }
 }
 
-export const useConfigurator = create((set) => ({
+// Поля, которые откатываются по Undo/Redo и сравниваются с defaults для "грязного" состояния.
+// Сюда НЕ попадают auth/UI-state/корзина/тема/zoom — они не должны влиять на историю конструктора.
+export const NOTEBOOK_DEFAULTS = {
+    bindingType: 'hard',
+    format: 'A5',
+    paperPattern: 'blank',
+    coverColor: '#D2B48C',
+    hasElastic: true,
+    elasticColor: '#1a1a1a',
+    spiralColor: '#1a1a1a',
+    hasCorners: true,
+    logos: [],
+    selectedLogoId: null,
+};
+export const THERMOS_DEFAULTS = {
+    thermosBodyColor: '#E65405',
+    thermosCapColor: '#E65405',
+    thermosCapVisible: false,
+    thermosLogos: [],
+    selectedThermosLogoId: null,
+};
+export const POWERBANK_DEFAULTS = {
+    powerbankBodyColor: '#75787B',
+    powerbankLogos: [],
+    selectedPowerbankLogoId: null,
+};
+export const ALL_PRODUCT_DEFAULTS = { ...NOTEBOOK_DEFAULTS, ...THERMOS_DEFAULTS, ...POWERBANK_DEFAULTS };
+const TRACKED_KEYS = Object.keys(ALL_PRODUCT_DEFAULTS);
+
+const pickTracked = (state) => {
+    const out = {};
+    for (const k of TRACKED_KEYS) out[k] = state[k];
+    return out;
+};
+
+export const getDefaultsForProduct = (product) => {
+    if (product === 'thermos') return THERMOS_DEFAULTS;
+    if (product === 'powerbank') return POWERBANK_DEFAULTS;
+    return NOTEBOOK_DEFAULTS;
+};
+
+export const useConfigurator = create(temporal((set, get) => ({
     activeProduct: 'notebook', // 'notebook' | 'calendar' | 'sketchbook' | 'thermos'
     applyRenderConfig: (config) => set((state) => ({ ...state, ...config })),
 
@@ -242,4 +284,26 @@ export const useConfigurator = create((set) => ({
                 : state.selectedPowerbankLogoId
         };
     }),
+
+    // --- RESET ---
+    resetConfigurator: (product) => {
+        const target = product ?? get().activeProduct;
+        const defaults = getDefaultsForProduct(target);
+        set(defaults);
+        try { useConfigurator.temporal.getState().clear(); } catch { /* noop */ }
+    },
+    resetAllConfigurators: () => {
+        set(ALL_PRODUCT_DEFAULTS);
+        try { useConfigurator.temporal.getState().clear(); } catch { /* noop */ }
+    },
+}), {
+    // zundo: трекаем только конфигурационные поля, не auth/тему/зум/корзину
+    partialize: (state) => pickTracked(state),
+    limit: 50,
+    equality: (a, b) => {
+        for (const k of TRACKED_KEYS) {
+            if (a[k] !== b[k]) return false;
+        }
+        return true;
+    },
 }))

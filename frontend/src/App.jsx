@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Experience } from './components/configurator/Experience'
 import { Interface, ZoomControls } from './components/configurator/Interface'
@@ -17,6 +17,11 @@ import { CookieBanner } from './components/shared/CookieBanner'
 import { FullPageVibeLoader, SceneLoadingOverlay } from './components/shared/VibeLoader'
 import { AdminAuth } from './components/auth/AdminAuth'
 import { AdminDashboard } from './components/admin/AdminDashboard'
+import { SceneHints } from './components/shared/SceneHints'
+import { ConfirmModal } from './components/shared/ConfirmModal'
+import { UndoRedoControls } from './components/shared/UndoRedoControls'
+import { useUndoRedoHotkeys, useTemporalConfigurator } from './hooks/useTemporalConfigurator'
+import { CommandPalette } from './components/shared/CommandPalette'
 
 const SCREEN_TO_PATH = {
     home: '/',
@@ -93,6 +98,10 @@ function App() {
     const [screen, setScreen] = useState(() => getInitialState().screen);
     const [showAuth, setShowAuth] = useState(false);
     const [pendingSuccessToast, setPendingSuccessToast] = useState(false);
+    const [pendingNavigation, setPendingNavigation] = useState(null);
+
+    const configuratorCanvasRef = useRef(null);
+    const sketchbookCanvasRef = useRef(null);
 
     const {
         activeProduct,
@@ -110,7 +119,28 @@ function App() {
         cartItem,
         cartRestoredFromCookie,
         clearCart,
+        resetConfigurator,
     } = useConfigurator();
+
+    const isConfiguratorScreen = screen === 'configurator' || screen === 'sketchbook_configurator';
+    useUndoRedoHotkeys(isConfiguratorScreen);
+    const pastLen = useTemporalConfigurator((s) => s.pastStates.length);
+    const isDirty = isConfiguratorScreen && pastLen > 0;
+
+    const guardedNavigate = (target) => {
+        if (isDirty) {
+            setPendingNavigation(target);
+        } else {
+            setScreen(target);
+        }
+    };
+    const confirmDiscardAndNavigate = () => {
+        if (pendingNavigation) {
+            try { useConfigurator.temporal.getState().clear(); } catch { /* noop */ }
+            setScreen(pendingNavigation);
+            setPendingNavigation(null);
+        }
+    };
 
     useEffect(() => {
         if (theme === 'dark') document.documentElement.classList.add('dark');
@@ -168,6 +198,22 @@ function App() {
     return (
         <>
             <CookieBanner />
+
+            <CommandPalette
+                navigate={guardedNavigate}
+                screen={screen}
+                openAuth={() => setShowAuth(true)}
+            />
+
+            <ConfirmModal
+                open={!!pendingNavigation}
+                title="Уйти из конструктора?"
+                message="Вы вносили изменения. Уверены, что хотите перейти на другой экран?"
+                confirmLabel="Перейти"
+                cancelLabel="Остаться"
+                onConfirm={confirmDiscardAndNavigate}
+                onCancel={() => setPendingNavigation(null)}
+            />
 
             {/* --- МОДАЛЬНОЕ ОКНО АВТОРИЗАЦИИ --- */}
             {showAuth && (
@@ -273,11 +319,16 @@ function App() {
                 <div className="fixed inset-0 w-full h-full bg-[#E5E5E5] dark:bg-[#080B13] overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
 
                     <button
-                        onClick={() => setScreen(currentUser ? (userRole === 'dealer' ? 'dealer' : 'client_dashboard') : 'home')}
+                        onClick={() => guardedNavigate(currentUser ? (userRole === 'dealer' ? 'dealer' : 'client_dashboard') : 'home')}
                         className="absolute top-6 left-6 z-50 px-6 py-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10"
                     >
                         ← {currentUser ? 'В Кабинет' : 'В Меню'}
                     </button>
+
+                    <ConfiguratorToolbar
+                        onReset={() => resetConfigurator(activeProduct)}
+                        productLabel={productLabel(activeProduct)}
+                    />
 
                     {activeProduct === 'calendar' ? (
                         <div className="w-full h-full flex flex-col items-center justify-center font-zen bg-[#E5E5E5] dark:bg-[#080B13] select-none transition-colors duration-300">
@@ -292,7 +343,7 @@ function App() {
                         </div>
                     ) : (
                         <>
-                            <div className="relative w-full h-[45%] md:absolute md:inset-0 md:w-[75%] md:h-full bg-[#dcdcdc] dark:bg-[#0A0E1A] md:bg-transparent dark:md:bg-transparent">
+                            <div ref={configuratorCanvasRef} className="relative w-full h-[45%] md:absolute md:inset-0 md:w-[75%] md:h-full bg-[#dcdcdc] dark:bg-[#0A0E1A] md:bg-transparent dark:md:bg-transparent">
                                 <div className="absolute bottom-4 right-4 z-10 md:hidden">
                                     <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
                                 </div>
@@ -311,6 +362,7 @@ function App() {
                                     <Experience />
                                 </Canvas>
                                 <SceneLoadingOverlay label="Собираем 3D" />
+                                <SceneHints containerRef={configuratorCanvasRef} />
                             </div>
 
                             <div className="relative h-[55%] w-full z-10 md:absolute md:top-0 md:right-0 md:h-full md:w-[30%] pointer-events-none md:p-4 md:flex md:flex-col md:justify-center">
@@ -358,11 +410,15 @@ function App() {
             {/* --- ЭКРАН: КОНСТРУКТОР БЛОКНОТА --- */}
             {screen === 'sketchbook_configurator' && (
                 <div className="fixed inset-0 w-full h-full bg-[#E5E5E5] dark:bg-[#080B13] overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
-                    <button onClick={() => setScreen('home')} className="absolute top-6 left-6 z-50 px-6 py-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10">
+                    <button onClick={() => guardedNavigate('home')} className="absolute top-6 left-6 z-50 px-6 py-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10">
                         ← В Меню
                     </button>
+                    <ConfiguratorToolbar
+                        onReset={() => resetConfigurator('sketchbook')}
+                        productLabel="Скетчбук"
+                    />
                     <>
-                        <div className="relative w-full h-[45%] md:absolute md:inset-0 md:w-[75%] md:h-full bg-[#dcdcdc] dark:bg-[#0A0E1A] md:bg-transparent dark:md:bg-transparent">
+                        <div ref={sketchbookCanvasRef} className="relative w-full h-[45%] md:absolute md:inset-0 md:w-[75%] md:h-full bg-[#dcdcdc] dark:bg-[#0A0E1A] md:bg-transparent dark:md:bg-transparent">
                             <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true }}>
                                 {/* Освещение и контролы */}
                                 <ambientLight intensity={0.6} />
@@ -371,6 +427,7 @@ function App() {
                                 <Experience /> {/* В Experience.jsx нужно добавить логику для Sketchbook */}
                             </Canvas>
                             <SceneLoadingOverlay label="Собираем 3D" />
+                            <SceneHints containerRef={sketchbookCanvasRef} />
                         </div>
                         <div className="relative h-[55%] w-full z-10 md:absolute md:top-0 md:right-0 md:h-full md:w-[30%] pointer-events-none md:p-4 md:flex md:flex-col md:justify-center">
                             {/* НОВЫЙ ИНТЕРФЕЙС БЛОКНОТА */}
@@ -404,3 +461,44 @@ function App() {
 }
 
 export default App
+
+const PRODUCT_LABELS = {
+    notebook: 'Ежедневник',
+    sketchbook: 'Скетчбук',
+    thermos: 'Термос',
+    powerbank: 'Повербанк',
+    calendar: 'Календарь',
+};
+const productLabel = (p) => PRODUCT_LABELS[p] ?? 'продукт';
+
+function ConfiguratorToolbar({ onReset, productLabel }) {
+    const [confirmReset, setConfirmReset] = useState(false);
+    return (
+        <>
+            <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
+                <UndoRedoControls />
+                <button
+                    onClick={() => setConfirmReset(true)}
+                    title="Сбросить конфигурацию"
+                    className="h-[42px] px-4 flex items-center gap-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-[9px] border border-black/10 dark:border-white/10 shadow-xl text-[#1a1a1a] dark:text-white text-xs font-bold uppercase tracking-widest hover:bg-white dark:hover:bg-white/10 active:scale-95 transition-all"
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 12a9 9 0 1 0 3-6.7" />
+                        <polyline points="3 4 3 9 8 9" />
+                    </svg>
+                    <span className="hidden sm:inline">Сбросить</span>
+                </button>
+            </div>
+            <ConfirmModal
+                open={confirmReset}
+                title={`Сбросить «${productLabel}»?`}
+                message="Все настройки этого продукта вернутся к исходным. Действие нельзя отменить."
+                confirmLabel="Сбросить"
+                cancelLabel="Оставить"
+                danger
+                onConfirm={() => { onReset(); setConfirmReset(false); }}
+                onCancel={() => setConfirmReset(false)}
+            />
+        </>
+    );
+}
