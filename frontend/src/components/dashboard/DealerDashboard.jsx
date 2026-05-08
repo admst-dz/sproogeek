@@ -12,7 +12,6 @@ import { getUserSecondaryLabel } from '../../utils/user';
 import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { Notebook } from '../shared/Notebook';
-import { Sketchbook } from '../sketchbook/Sketchbook';
 import { Thermos } from '../thermos/Thermos';
 
 const ORDER_STAGES = [

@@ -10,11 +10,10 @@ import { AuthModal } from './components/auth/AuthModal'
 import { ClientDashboard } from './components/dashboard/ClientDashboard'
 import { useConfigurator } from './store'
 import { restoreSession } from './api'
-import { SketchbookInterface } from './components/sketchbook/SketchbookInterface'
 import { ThermosInterface } from './components/thermos/ThermosInterface'
 import { PowerbankInterface } from './components/powerbank/PowerbankInterface'
 import { CookieBanner } from './components/shared/CookieBanner'
-import { FullPageVibeLoader, SceneLoadingOverlay } from './components/shared/VibeLoader'
+import { FullPageVibeLoader, SceneLoadingOverlay, useLoaderCompletionGate } from './components/shared/VibeLoader'
 import { AdminAuth } from './components/auth/AdminAuth'
 import { AdminDashboard } from './components/admin/AdminDashboard'
 import { SceneHints } from './components/shared/SceneHints'
@@ -29,7 +28,6 @@ const SCREEN_TO_PATH = {
     order: '/order',
     dealer: '/dealer',
     client_dashboard: '/dashboard',
-    sketchbook_configurator: '/sketchbook',
     admin_auth: '/borodazaebal',
     admin_dashboard: '/admin',
 };
@@ -101,7 +99,6 @@ function App() {
     const [pendingNavigation, setPendingNavigation] = useState(null);
 
     const configuratorCanvasRef = useRef(null);
-    const sketchbookCanvasRef = useRef(null);
 
     const {
         activeProduct,
@@ -121,8 +118,9 @@ function App() {
         clearCart,
         resetConfigurator,
     } = useConfigurator();
+    const showAuthLoader = useLoaderCompletionGate(authLoading);
 
-    const isConfiguratorScreen = screen === 'configurator' || screen === 'sketchbook_configurator';
+    const isConfiguratorScreen = screen === 'configurator';
     useUndoRedoHotkeys(isConfiguratorScreen);
     const pastLen = useTemporalConfigurator((s) => s.pastStates.length);
     const isDirty = isConfiguratorScreen && pastLen > 0;
@@ -183,7 +181,7 @@ function App() {
         }).finally(() => setAuthLoading(false));
     }, [setCurrentUser, setUserRole, setClientSubRole, setAuthLoading]);
 
-    if (authLoading) {
+    if (showAuthLoader) {
         return <FullPageVibeLoader label="Проверяем вход" />;
     }
 
@@ -407,42 +405,6 @@ function App() {
                 </div>
             )}
 
-            {/* --- ЭКРАН: КОНСТРУКТОР БЛОКНОТА --- */}
-            {screen === 'sketchbook_configurator' && (
-                <div className="app-bg fixed inset-0 w-full h-full overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
-                    <button onClick={() => guardedNavigate('home')} className="absolute top-6 left-6 z-50 px-6 py-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10">
-                        ← В Меню
-                    </button>
-                    <ConfiguratorToolbar
-                        onReset={() => resetConfigurator('sketchbook')}
-                        productLabel="Скетчбук"
-                    />
-                    <>
-                        <div ref={sketchbookCanvasRef} className="app-bg relative w-full h-[45%] md:absolute md:inset-0 md:w-[75%] md:h-full md:bg-transparent dark:md:bg-transparent">
-                            <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true, preserveDrawingBuffer: true, alpha: true, logarithmicDepthBuffer: true }}>
-                                {/* Освещение и контролы */}
-                                <ambientLight intensity={0.6} />
-                                <directionalLight position={[10, 10, 5]} intensity={1.5} />
-                                <directionalLight position={[-10, 5, 2]} intensity={0.5} />
-                                <Experience /> {/* В Experience.jsx нужно добавить логику для Sketchbook */}
-                            </Canvas>
-                            <SceneLoadingOverlay label="Собираем 3D" />
-                            <SceneHints containerRef={sketchbookCanvasRef} />
-                        </div>
-                        <div className="relative h-[55%] w-full z-10 md:absolute md:top-0 md:right-0 md:h-full md:w-[30%] pointer-events-none md:p-4 md:flex md:flex-col md:justify-center">
-                            {/* НОВЫЙ ИНТЕРФЕЙС БЛОКНОТА */}
-                            <SketchbookInterface onFinish={() => {
-                                        if (currentUser) {
-                                            setScreen('client_dashboard');
-                                        } else {
-                                            setShowAuth(true);
-                                        }
-                                    }} />
-                        </div>
-                    </>
-                </div>
-            )}
-
             {screen === 'admin_auth' && (
                 <AdminAuth onSuccess={(user) => {
                     setCurrentUser(user);
@@ -464,7 +426,6 @@ export default App
 
 const PRODUCT_LABELS = {
     notebook: 'Ежедневник',
-    sketchbook: 'Скетчбук',
     thermos: 'Термос',
     powerbank: 'Повербанк',
     calendar: 'Календарь',

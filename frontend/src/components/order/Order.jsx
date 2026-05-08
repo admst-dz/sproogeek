@@ -4,7 +4,6 @@ import { orderApi } from '../../api';
 import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { Notebook } from '../shared/Notebook';
-import { Sketchbook } from '../sketchbook/Sketchbook';
 import { Thermos } from '../thermos/Thermos';
 import { SceneLoadingOverlay } from '../shared/VibeLoader';
 
@@ -104,7 +103,6 @@ export const Order = ({ onBack, onSuccess }) => {
                                     <PresentationControls speed={1.5} global polar={[-0.1, Math.PI / 4]}>
                                         <Stage environment={null} intensity={0} contactShadow={false}>
                                             {activeProduct === 'notebook' && <Notebook />}
-                                            {activeProduct === 'sketchbook' && <Sketchbook />}
                                             {activeProduct === 'thermos' && <Thermos />}
                                         </Stage>
                                     </PresentationControls>

@@ -111,79 +111,53 @@ html.dark, html.dark body, html.dark #root {
   gap: 10px;
 }
 
-.vibe-loader__core {
+.vibe-loader__logo {
   position: relative;
-  width: 132px;
-  height: 132px;
-  display: grid;
-  place-items: center;
-  filter: drop-shadow(0 22px 40px rgba(0, 0, 0, 0.45));
+  width: 178px;
+  height: 98px;
+  filter: drop-shadow(0 20px 34px rgba(0, 0, 0, 0.34));
 }
 
-.vibe-loader--compact .vibe-loader__core {
-  width: 72px;
-  height: 72px;
+.vibe-loader--compact .vibe-loader__logo {
+  width: 86px;
+  height: 47px;
 }
 
-.vibe-loader__ring {
+.vibe-loader__logo-frame {
   position: absolute;
-  inset: 5px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background:
-    conic-gradient(from 120deg, transparent 0 32%, rgba(255, 255, 255, 0.86) 42%, rgba(210, 180, 140, 0.9) 52%, transparent 66% 100%);
-  mask: radial-gradient(circle, transparent 56%, #000 58%);
-  animation: vibe-ring-spin 1.35s linear infinite;
+  left: 50%;
+  top: 50%;
+  height: 100%;
+  max-width: none;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  animation-duration: 1.76s;
+  animation-iteration-count: infinite;
+  animation-timing-function: steps(1, end);
 }
 
-.vibe-loader__stack {
-  position: absolute;
-  width: 64px;
-  height: 86px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  transform-origin: 50% 72%;
-  animation: vibe-stack-float 1.8s ease-in-out infinite;
+.vibe-loader__logo-frame--one {
+  width: 68.65%;
+  animation-name: vibe-logo-frame-one;
 }
 
-.vibe-loader--compact .vibe-loader__stack {
-  width: 34px;
-  height: 46px;
-  border-radius: 5px;
+.vibe-loader__logo-frame--two {
+  width: 63.39%;
+  animation-name: vibe-logo-frame-two;
 }
 
-.vibe-loader__stack--back {
-  transform: translate(-14px, 5px) rotate(-11deg);
-  background: linear-gradient(145deg, #303846, #111827);
-  animation-delay: -0.28s;
+.vibe-loader__logo-frame--three,
+.vibe-loader__logo-frame--four {
+  width: 100%;
 }
 
-.vibe-loader__stack--middle {
-  transform: translate(3px, 0) rotate(6deg);
-  background: linear-gradient(145deg, #f7f3ea, #b9c3d2);
-  animation-delay: -0.12s;
+.vibe-loader__logo-frame--three {
+  animation-name: vibe-logo-frame-three;
 }
 
-.vibe-loader__stack--front {
-  transform: translate(16px, 7px) rotate(14deg);
-  background:
-    linear-gradient(90deg, rgba(255,255,255,0.2), transparent 22%),
-    linear-gradient(145deg, #b60b22, #ff384f 48%, #7d0719);
+.vibe-loader__logo-frame--four {
+  animation-name: vibe-logo-frame-four;
 }
-
-.vibe-loader__spark {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 0 18px rgba(255, 255, 255, 0.75);
-  animation: vibe-spark-orbit 1.9s ease-in-out infinite;
-}
-
-.vibe-loader__spark--a { animation-delay: 0s; }
-.vibe-loader__spark--b { animation-delay: -0.62s; opacity: 0.7; }
-.vibe-loader__spark--c { animation-delay: -1.2s; opacity: 0.5; }
 
 .vibe-loader__meta {
   width: 100%;
@@ -235,20 +209,24 @@ html.dark, html.dark body, html.dark #root {
   to { opacity: 1; }
 }
 
-@keyframes vibe-ring-spin {
-  to { transform: rotate(360deg); }
+@keyframes vibe-logo-frame-one {
+  0%, 12.49%, 87.5%, 100% { opacity: 1; }
+  12.5%, 87.49% { opacity: 0; }
 }
 
-@keyframes vibe-stack-float {
-  0%, 100% { translate: 0 0; }
-  50% { translate: 0 -8px; }
+@keyframes vibe-logo-frame-two {
+  0%, 12.49%, 25%, 74.99%, 87.5%, 100% { opacity: 0; }
+  12.5%, 24.99%, 75%, 87.49% { opacity: 1; }
 }
 
-@keyframes vibe-spark-orbit {
-  0% { transform: rotate(0deg) translateX(58px) scale(0.75); opacity: 0; }
-  18% { opacity: 0.9; }
-  72% { opacity: 0.9; }
-  100% { transform: rotate(360deg) translateX(58px) scale(1.08); opacity: 0; }
+@keyframes vibe-logo-frame-three {
+  0%, 24.99%, 37.5%, 62.49%, 75%, 100% { opacity: 0; }
+  25%, 37.49%, 62.5%, 74.99% { opacity: 1; }
+}
+
+@keyframes vibe-logo-frame-four {
+  0%, 37.49%, 62.5%, 100% { opacity: 0; }
+  37.5%, 62.49% { opacity: 1; }
 }
 
 @keyframes vibe-bar-sheen {

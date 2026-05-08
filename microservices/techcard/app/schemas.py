@@ -28,7 +28,7 @@ class TechCardItem(BaseModel):
     name: str
     quantity: int = 1
     description: str = ""
-    product_kind: str = "notebook"  # notebook | sketchbook | thermos | powerbank | souvenir
+    product_kind: str = "notebook"  # notebook | thermos | powerbank | souvenir
     config: dict[str, Any] = Field(default_factory=dict)
     file_url: Optional[str] = None
 

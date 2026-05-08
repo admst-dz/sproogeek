@@ -17,7 +17,6 @@ log = logging.getLogger(__name__)
 
 _PRODUCT_KIND = {
     "notebook": "notebook",
-    "sketchbook": "sketchbook",
     "thermos": "thermos",
     "powerbank": "powerbank",
 }

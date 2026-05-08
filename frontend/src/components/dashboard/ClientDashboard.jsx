@@ -6,7 +6,6 @@ import { fetchUserOrders, fetchAllProducts, createOrderInDB } from '../../api';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 import { ApprovalPanel } from '../shared/ApprovalPanel';
 import { Notebook } from '../shared/Notebook';
-import { Sketchbook } from '../sketchbook/Sketchbook';
 import { Thermos } from '../thermos/Thermos';
 import { getUserDisplayName, getUserSecondaryLabel } from '../../utils/user';
 import { SceneLoadingOverlay } from '../shared/VibeLoader';
@@ -353,7 +352,6 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                 <PresentationControls speed={1.5} global polar={[-0.1, Math.PI / 4]}>
                                                     <Stage environment={null} intensity={0} contactShadow={false}>
                                                         {activeProduct === 'notebook' && <Notebook />}
-                                                        {activeProduct === 'sketchbook' && <Sketchbook />}
                                                         {activeProduct === 'thermos' && <Thermos />}
                                                     </Stage>
                                                 </PresentationControls>

@@ -24,7 +24,6 @@ router = APIRouter()
 
 BASE_PRICE = {
     "notebook": 1500,
-    "sketchbook": 1000,
     "thermos": 2200,
     "powerbank": 3500,
 }
@@ -72,11 +71,11 @@ class PricingLogo(BaseModel):
 
 
 class PricingRequest(BaseModel):
-    product: str = Field(..., description="notebook | sketchbook | thermos | powerbank")
+    product: str = Field(..., description="notebook | thermos | powerbank")
     quantity: int = Field(1, ge=1, le=10000)
     is_sample: bool = False
 
-    # Notebook/Sketchbook
+    # Notebook
     binding_type: Optional[str] = None
     format: Optional[str] = None
     has_elastic: bool = False

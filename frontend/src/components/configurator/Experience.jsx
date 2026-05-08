@@ -7,7 +7,6 @@ import { useConfigurator, registerWebGLCanvas } from '../../store'
 import { useEffect, useRef, useState } from 'react'
 import { useThree, useFrame } from '@react-three/fiber'
 import { easing } from 'maath'
-import { Sketchbook } from '../sketchbook/Sketchbook'
 
 function CanvasRegistrar() {
     const { gl } = useThree()
@@ -191,7 +190,6 @@ export const Experience = () => {
                     <Stage environment={null} intensity={0} contactShadow={false}>
                         {activeProduct === 'notebook' && <Notebook />}
                         {activeProduct === 'calendar' && <Calendar />}
-                        {activeProduct === 'sketchbook' && <Sketchbook />}
                     </Stage>
                 </PresentationControls>
             )}
