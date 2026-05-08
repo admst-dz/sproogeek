@@ -23,8 +23,9 @@ from app.schemas.user import (
 )
 
 
-ALLOWED_SUB_ROLES = {"PL", "PKL", "KL", "KPR", "PR"}
-SUB_ROLE_ALIASES = {"КЛ": "KL", "КПР": "KPR", "ПР": "PR"}
+DEALER_SUB_ROLE = "TP"
+ALLOWED_SUB_ROLES = {"PL", "PKL", "KL", "KPR", "PR", DEALER_SUB_ROLE}
+SUB_ROLE_ALIASES = {"КЛ": "KL", "КПР": "KPR", "ПР": "PR", "ТИПОГРАФИЯ": DEALER_SUB_ROLE}
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -34,6 +35,14 @@ def _normalize_sub_role(value):
     if value is None:
         return None
     return SUB_ROLE_ALIASES.get(str(value), str(value))
+
+
+def _normalize_role_and_sub_role(role, sub_role):
+    normalized_role = role if role in {"client", "dealer", "manufacturer"} else "client"
+    normalized_sub_role = _normalize_sub_role(sub_role)
+    if normalized_role == "dealer":
+        return normalized_role, DEALER_SUB_ROLE
+    return normalized_role, normalized_sub_role
 
 
 @router.post("/register", response_model=TokenResponse)
@@ -59,7 +68,9 @@ async def register(request: Request, data: UserRegister, db: AsyncSession = Depe
         existing.password_hash = hash_password(data.password)
         if data.display_name:
             existing.display_name = data.display_name
-        sub_role = _normalize_sub_role(data.sub_role)
+        role, sub_role = _normalize_role_and_sub_role(data.role, data.sub_role)
+        if existing.role == "client" and role in {"dealer", "manufacturer"}:
+            existing.role = role
         if sub_role and existing.sub_role is None and sub_role in ALLOWED_SUB_ROLES:
             existing.sub_role = sub_role
 
@@ -81,13 +92,13 @@ async def register(request: Request, data: UserRegister, db: AsyncSession = Depe
         )
         return {"access_token": token, "user": existing}
 
-    sub_role = _normalize_sub_role(data.sub_role)
+    role, sub_role = _normalize_role_and_sub_role(data.role, data.sub_role)
     user = User(
         id=str(uuid.uuid4()),
         email=email,
         password_hash=hash_password(data.password),
         display_name=data.display_name or "",
-        role="client",
+        role=role,
         sub_role=sub_role if sub_role in ALLOWED_SUB_ROLES else None,
         token_balance=0.0,
     )
@@ -266,7 +277,10 @@ async def update_role(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    sub_role = _normalize_sub_role(body.get("sub_role"))
+    role, sub_role = _normalize_role_and_sub_role(body.get("role") or current_user.role, body.get("sub_role"))
+
+    if current_user.role == "client" and role in {"dealer", "manufacturer"}:
+        current_user.role = role
 
     if current_user.sub_role is None and sub_role:
         if sub_role not in ALLOWED_SUB_ROLES:

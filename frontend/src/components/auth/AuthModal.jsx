@@ -3,6 +3,8 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { loginUser, registerUser, updateUserRole } from '../../api';
 import apiClient from '../../api';
 
+const DEALER_ACCOUNT_TYPE = 'TP';
+
 export const AuthModal = ({ onClose, onRoleCreated }) => {
     const [step, setStep] = useState(1);
     const [isRegistering, setIsRegistering] = useState(false);
@@ -82,7 +84,7 @@ export const AuthModal = ({ onClose, onRoleCreated }) => {
 
     const selectRole = (role) => {
         if (role === 'dealer') {
-            finishRegistration(role, null);
+            finishRegistration(role, DEALER_ACCOUNT_TYPE);
         } else {
             setPendingRole(role);
             setStep(3);
