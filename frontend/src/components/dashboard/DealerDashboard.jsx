@@ -4,10 +4,10 @@ import { t } from '../../i18n';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 import { ApprovalPanel } from '../shared/ApprovalPanel';
 import {
-    fetchAllOrders, fetchAdminOrders, updateOrderStatus,
+    fetchAdminOrders, updateOrderStatus,
     fetchDealerProducts, saveProduct, updateProduct, deleteProduct,
     fetchOrderTypes, fetchOrderType, saveOrderType,
-    fetchDealerClients,
+    fetchDealerClients, fetchManufacturerQueue, manufacturerApi,
 } from '../../api';
 import { getUserSecondaryLabel } from '../../utils/user';
 import { Canvas } from '@react-three/fiber';
@@ -17,8 +17,11 @@ import { Thermos } from '../thermos/Thermos';
 
 const ORDER_STAGES = [
     { key: 'new',         textKey: 'statusNew',        color: 'bg-white/10 text-gray-400 border-white/10',            icon: '🕐' },
-    { key: 'production',  textKey: 'statusProduction',  color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30', icon: '🏭' },
+    { key: 'awaiting_signature', textKey: 'statusAwaitingSignature', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30', icon: '✎' },
+    { key: 'awaiting_quotes', textKey: 'statusAwaitingQuotes', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30', icon: '₽' },
+    { key: 'quotes_ready', textKey: 'statusQuotesReady', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', icon: '₽' },
     { key: 'processing',  textKey: 'statusProcessing',  color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',       icon: '⚙️' },
+    { key: 'production',  textKey: 'statusProduction',  color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30', icon: '🏭' },
     { key: 'in_delivery', textKey: 'statusDelivery',    color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: '🚚' },
     { key: 'done',        textKey: 'statusDone',        color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', icon: '✅' },
 ];
@@ -116,7 +119,7 @@ const ColorChip = ({ color, onRemove }) => (
     </div>
 );
 
-const ColorInput = ({ value, onChange, onAdd }) => (
+const ColorInput = ({ value, onChange, onAdd, language }) => (
     <div className="flex gap-2 mt-2 pointer-events-auto">
         <input
             type="color"
@@ -265,7 +268,7 @@ const ProductModal = ({ product, dealerId, onClose, onSaved, language = 'ru' }) 
                                     <ColorChip key={i} color={c} onRemove={() => removeColor('spiralColors', i)} />
                                 ))}
                             </div>
-                            <ColorInput value={spiralColor} onChange={setSpiralColor} onAdd={() => addColor('spiralColors', spiralColor, setSpiralColor)} />
+                            <ColorInput value={spiralColor} onChange={setSpiralColor} onAdd={() => addColor('spiralColors', spiralColor, setSpiralColor)} language={language} />
                         </Section>
                     )}
 
@@ -282,7 +285,7 @@ const ProductModal = ({ product, dealerId, onClose, onSaved, language = 'ru' }) 
                                     <ColorChip key={i} color={c} onRemove={() => removeColor('elasticColors', i)} />
                                 ))}
                             </div>
-                            <ColorInput value={elasticColor} onChange={setElasticColor} onAdd={() => addColor('elasticColors', elasticColor, setElasticColor)} />
+                            <ColorInput value={elasticColor} onChange={setElasticColor} onAdd={() => addColor('elasticColors', elasticColor, setElasticColor)} language={language} />
                         </Section>
                     )}
 
@@ -301,7 +304,7 @@ const ProductModal = ({ product, dealerId, onClose, onSaved, language = 'ru' }) 
                                 <ColorChip key={i} color={c} onRemove={() => removeColor('coverColors', i)} />
                             ))}
                         </div>
-                        <ColorInput value={coverColor} onChange={setCoverColor} onAdd={() => addColor('coverColors', coverColor, setCoverColor)} />
+                        <ColorInput value={coverColor} onChange={setCoverColor} onAdd={() => addColor('coverColors', coverColor, setCoverColor)} language={language} />
                     </Section>
 
                     {/* Pricing */}
@@ -381,6 +384,26 @@ const ProductModal = ({ product, dealerId, onClose, onSaved, language = 'ru' }) 
 
 const getBindingLabel = (binding, language) => ({ hard: t(language, 'bindingHardShort'), spiral: t(language, 'bindingSpiralShort') })[binding] || binding;
 
+const normalizeDashboardOrder = (order) => ({
+    id: String(order.id),
+    product: order.product || order.product_name || '',
+    price: order.price ?? order.total_price ?? 0,
+    status: order.status || 'new',
+    stageHistory: order.stageHistory || order.stage_history || [],
+    date: order.date || (order.created_at ? new Date(order.created_at).toLocaleDateString('ru-RU') : ''),
+    userEmail: order.userEmail || order.user_email || '',
+    createdAt: order.createdAt || (order.created_at ? { seconds: new Date(order.created_at).getTime() / 1000 } : null),
+    approvalStatus: order.approvalStatus || order.approval_status || 'pending',
+    approvalPdfKey: order.approvalPdfKey || order.approval_pdf_key || null,
+    signedApprovalFileKey: order.signedApprovalFileKey || order.signed_approval_file_key || null,
+    dealerConfirmedAt: order.dealerConfirmedAt || order.dealer_confirmed_at || null,
+    manufacturerQuotes: order.manufacturerQuotes || order.manufacturer_quotes || [],
+    selectedManufacturerId: order.selectedManufacturerId || order.selected_manufacturer_id || null,
+    selectedQuoteId: order.selectedQuoteId || order.selected_quote_id || null,
+    quantity: order.quantity || 1,
+    configuration: order.configuration || null,
+});
+
 export const DealerDashboard = ({ onBack }) => {
     const { currentUser, logout, language } = useConfigurator();
     const [activeTab, setActiveTab] = useState('products');
@@ -392,6 +415,7 @@ export const DealerDashboard = ({ onBack }) => {
     const [expandedOrders, setExpandedOrders] = useState(new Set());
     const [statusUpdating, setStatusUpdating] = useState(null);
     const [commentDraft, setCommentDraft] = useState({});
+    const [quoteDraft, setQuoteDraft] = useState({});
 
     const [clients, setClients] = useState([]);
 
@@ -403,12 +427,23 @@ export const DealerDashboard = ({ onBack }) => {
 
     const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'owner';
 
+    const loadOrders = useCallback(() => {
+        if (isAdmin) {
+            return fetchAdminOrders();
+        }
+        return fetchManufacturerQueue().then(data =>
+            data
+                .map(normalizeDashboardOrder)
+                .filter(order => !order.selectedManufacturerId)
+        );
+    }, [isAdmin]);
+
     const handleLiveEvent = useCallback((event) => {
         const data = event?.data;
         if (!data) return;
-        if (event.type === 'order.created' && activeTab === 'orders') {
+        if (event.type?.startsWith('order.') && activeTab === 'orders') {
             // refetch silently to avoid flicker; cheap
-            const request = isAdmin ? fetchAdminOrders() : fetchAllOrders(currentUser?.id);
+            const request = loadOrders();
             request.then(d => {
                 d.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
                 setOrders(d);
@@ -418,7 +453,7 @@ export const DealerDashboard = ({ onBack }) => {
                 ? { ...o, status: data.status || o.status }
                 : o));
         }
-    }, [activeTab, isAdmin, currentUser]);
+    }, [activeTab, loadOrders]);
 
     useEffect(() => {
         if (isAdmin && activeTab === 'products') setActiveTab('orders');
@@ -427,7 +462,7 @@ export const DealerDashboard = ({ onBack }) => {
     useEffect(() => {
         if (activeTab === 'orders') {
             setLoading(true);
-            const request = isAdmin ? fetchAdminOrders() : fetchAllOrders(currentUser?.id);
+            const request = loadOrders();
             request.then(data => {
                 data.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
                 setOrders(data);
@@ -456,7 +491,7 @@ export const DealerDashboard = ({ onBack }) => {
                 setLoading(false);
             }).catch(() => setLoading(false));
         }
-    }, [activeTab, currentUser, isAdmin, selectedOrderType]);
+    }, [activeTab, currentUser, isAdmin, loadOrders, selectedOrderType]);
 
     useEffect(() => {
         if (activeTab === 'orderTypes' && selectedOrderType) {
@@ -468,13 +503,17 @@ export const DealerDashboard = ({ onBack }) => {
                 setOrderTypeError(t(language, 'orderTypeError'));
             });
         }
-    }, [activeTab, selectedOrderType]);
+    }, [activeTab, language, selectedOrderType]);
 
     const handleUpdateStatus = async (orderId, newStatus) => {
         const comment = commentDraft[orderId] || '';
         setStatusUpdating(orderId);
         try {
-            await updateOrderStatus(orderId, newStatus, comment || null);
+            if (isAdmin) {
+                await updateOrderStatus(orderId, newStatus, comment || null);
+            } else {
+                await manufacturerApi.updateStatus(orderId, newStatus, comment || null);
+            }
             const newEntry = { status: newStatus, comment, updated_at: new Date().toISOString() };
             setOrders(prev => prev.map(o =>
                 o.id === orderId
@@ -482,6 +521,31 @@ export const DealerDashboard = ({ onBack }) => {
                     : o
             ));
             setCommentDraft(prev => { const next = { ...prev }; delete next[orderId]; return next; });
+        } finally {
+            setStatusUpdating(null);
+        }
+    };
+
+    const updateQuoteDraft = (orderId, field, value) => {
+        setQuoteDraft(prev => ({
+            ...prev,
+            [orderId]: { ...(prev[orderId] || {}), [field]: value },
+        }));
+    };
+
+    const submitQuote = async (orderId) => {
+        const draft = quoteDraft[orderId] || {};
+        setStatusUpdating(orderId);
+        try {
+            await manufacturerApi.submitQuote(orderId, {
+                price: Number(draft.price || 0),
+                production_days: Number(draft.production_days || 0),
+                comment: draft.comment || null,
+            });
+            setQuoteDraft(prev => { const next = { ...prev }; delete next[orderId]; return next; });
+            const refreshed = await loadOrders();
+            refreshed.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
+            setOrders(refreshed);
         } finally {
             setStatusUpdating(null);
         }
@@ -793,6 +857,8 @@ export const DealerDashboard = ({ onBack }) => {
                                     const isExpanded = expandedOrders.has(order.id);
                                     const isUpdating = statusUpdating === order.id;
                                     const currentStageIdx = STAGE_INDEX[order.status] ?? 0;
+                                    const isQuoteStage = !isAdmin && (order.status === 'awaiting_quotes' || order.status === 'quotes_ready');
+                                    const myQuote = (order.manufacturerQuotes || []).find(q => q.manufacturer_id === currentUser?.id);
                                     return (
                                         <div key={order.id} className={i !== orders.length - 1 ? 'border-b border-white/5' : ''}>
                                             {/* Summary row */}
@@ -836,7 +902,53 @@ export const DealerDashboard = ({ onBack }) => {
                                                         />
                                                     </div>
 
+                                                    {isQuoteStage && (
+                                                        <div className="mt-5 rounded-[12px] border border-cyan-500/20 bg-cyan-500/10 p-4" onClick={e => e.stopPropagation()}>
+                                                            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-300">{t(language, 'quoteSubmitTitle')}</p>
+                                                            {myQuote && (
+                                                                <p className="text-[11px] text-gray-400 mt-1">
+                                                                    {t(language, 'quoteAlreadySent')}: <span className="text-white font-bold">{myQuote.price} {myQuote.currency || 'BYN'}</span> · {myQuote.production_days} {t(language, 'quoteDaysShort')}
+                                                                </p>
+                                                            )}
+                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    step="0.01"
+                                                                    value={quoteDraft[order.id]?.price || ''}
+                                                                    onChange={e => updateQuoteDraft(order.id, 'price', e.target.value)}
+                                                                    placeholder={t(language, 'quotePricePlaceholder')}
+                                                                    className="bg-black/20 border border-white/10 rounded-[10px] px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-white/30"
+                                                                />
+                                                                <input
+                                                                    type="number"
+                                                                    min="1"
+                                                                    step="1"
+                                                                    value={quoteDraft[order.id]?.production_days || ''}
+                                                                    onChange={e => updateQuoteDraft(order.id, 'production_days', e.target.value)}
+                                                                    placeholder={t(language, 'quoteDaysPlaceholder')}
+                                                                    className="bg-black/20 border border-white/10 rounded-[10px] px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-white/30"
+                                                                />
+                                                                <button
+                                                                    onClick={() => submitQuote(order.id)}
+                                                                    disabled={isUpdating || !quoteDraft[order.id]?.price || !quoteDraft[order.id]?.production_days}
+                                                                    className="rounded-[10px] bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-200 text-xs font-bold transition disabled:opacity-50"
+                                                                >
+                                                                    {isUpdating ? '…' : t(language, 'quoteSubmitBtn')}
+                                                                </button>
+                                                            </div>
+                                                            <textarea
+                                                                value={quoteDraft[order.id]?.comment || ''}
+                                                                onChange={e => updateQuoteDraft(order.id, 'comment', e.target.value)}
+                                                                placeholder={t(language, 'quoteCommentPlaceholder')}
+                                                                rows={2}
+                                                                className="w-full mt-2 bg-black/20 border border-white/10 rounded-[10px] px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-white/30 resize-none"
+                                                            />
+                                                        </div>
+                                                    )}
+
                                                     {/* Status controls */}
+                                                    {(!isQuoteStage || isAdmin) && (
                                                     <div className="mt-5 space-y-3">
                                                         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{t(language, 'updateStage')}</p>
 
@@ -876,6 +988,7 @@ export const DealerDashboard = ({ onBack }) => {
                                                             />
                                                         </div>
                                                     </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>

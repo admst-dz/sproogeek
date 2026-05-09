@@ -168,7 +168,7 @@ async def manufacturer_update_status(
     existing = await crud_order.get_order(db, order_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Order not found")
-    if current_user.role == "manufacturer" and existing.selected_manufacturer_id != current_user.id:
+    if current_user.role in {"manufacturer", "dealer"} and existing.selected_manufacturer_id != current_user.id:
         raise HTTPException(status_code=403, detail="Order is assigned to another manufacturer")
     if existing.status in QUOTE_STATUSES:
         raise HTTPException(status_code=409, detail="Client must select a manufacturer before production status changes")

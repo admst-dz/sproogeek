@@ -20,7 +20,7 @@ let _webglCanvas = null
 export const registerWebGLCanvas = (el) => { _webglCanvas = el }
 export const captureRender = () => {
     if (!_webglCanvas) return null
-    try { return _webglCanvas.toDataURL('image/png') } catch (e) { return null }
+    try { return _webglCanvas.toDataURL('image/png') } catch { return null }
 }
 
 // Поля, которые откатываются по Undo/Redo и сравниваются с defaults для "грязного" состояния.
@@ -150,7 +150,12 @@ export const useConfigurator = create(temporal((set, get) => ({
         hasElastic: type === 'hard' ? false : state.hasElastic,
     })),
     setFormat: (fmt) => set({ format: fmt }),
-    setColor: (part, color) => set((state) => ({ ...state, [`${part}Color`]: color })),
+    setColor: (part, color) => set((state) => {
+        if (part === 'thermosBody') {
+            return { ...state, thermosBodyColor: color, thermosCapColor: color };
+        }
+        return { ...state, [`${part}Color`]: color };
+    }),
     setHasElastic: (has) => set({ hasElastic: has }),
     setNotebookOpen: (isOpen) => set({ isNotebookOpen: isOpen }),
     setPaperPattern: (pattern) => set({ paperPattern: pattern, isNotebookOpen: true }),

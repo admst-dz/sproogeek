@@ -529,6 +529,8 @@ export const translations = {
 
         // Feedback (главная страница)
         feedbackCta: "Предложить идею или оценить",
+        feedbackCtaLine1: "Предложить идею",
+        feedbackCtaLine2: "или оценить",
         feedbackTitle: "Оставить отзыв",
         feedbackSubtitle: "Расскажите, что понравилось или что улучшить — мы читаем каждое сообщение.",
         feedbackName: "Имя",
@@ -1077,6 +1079,8 @@ export const translations = {
 
         // Feedback
         feedbackCta: "Suggest an idea or rate us",
+        feedbackCtaLine1: "Suggest an idea",
+        feedbackCtaLine2: "or rate us",
         feedbackTitle: "Leave feedback",
         feedbackSubtitle: "Tell us what you liked or what to improve — we read every message.",
         feedbackName: "Name",
@@ -1625,6 +1629,8 @@ export const translations = {
 
         // Feedback
         feedbackCta: "Прапанаваць ідэю ці ацаніць",
+        feedbackCtaLine1: "Прапанаваць ідэю",
+        feedbackCtaLine2: "ці ацаніць",
         feedbackTitle: "Пакінуць водгук",
         feedbackSubtitle: "Раскажыце, што спадабалася ці што палепшыць — мы чытаем кожны допіс.",
         feedbackName: "Імя",

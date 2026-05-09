@@ -215,18 +215,21 @@ export const FeedbackPanel = ({ language = 'ru' }) => {
     );
 
     return (
-        <section id="feedback" className="w-full max-w-3xl mx-auto mt-16 sm:mt-20 px-4 text-center">
+        <section id="feedback" className="fixed right-3 bottom-24 sm:right-6 sm:bottom-8 z-40 pointer-events-none">
             <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-gray-900 text-white hover:bg-gray-800 dark:bg-white dark:text-[#080B13] dark:hover:bg-gray-100 text-sm font-bold shadow-xl transition-colors"
+                className="pointer-events-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-gray-900 text-white hover:bg-gray-800 dark:bg-white dark:text-[#080B13] dark:hover:bg-gray-100 text-xs sm:text-sm font-bold shadow-2xl transition-colors"
             >
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <svg className="shrink-0" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
                     <path d="M8 9h8" />
                     <path d="M8 13h5" />
                 </svg>
-                {t(language, 'feedbackCta')}
+                <span className="leading-tight text-left">
+                    <span className="block whitespace-nowrap">{t(language, 'feedbackCtaLine1')}</span>
+                    <span className="block whitespace-nowrap">{t(language, 'feedbackCtaLine2')}</span>
+                </span>
             </button>
 
             {open && (

@@ -14,7 +14,7 @@ bearer = HTTPBearer()
 bearer_optional = HTTPBearer(auto_error=False)
 STAFF_ROLES = {"admin", "dealer", "owner", "manufacturer"}
 ADMIN_ROLES = {"admin", "owner"}
-MANUFACTURER_ROLES = {"manufacturer", "admin", "owner"}
+MANUFACTURER_ROLES = {"manufacturer", "dealer", "admin", "owner"}
 
 
 async def get_current_user(

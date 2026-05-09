@@ -40,12 +40,19 @@ async def list_dealer_clients(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Clients linked to this dealer (resolved from orders.configuration.dealerId)."""
+    """Clients linked to this dealer/typography.
+
+    A client becomes visible here after they choose this typography's quote.
+    Older product-owned orders are kept visible for backward compatibility.
+    """
     _ensure_dealer(current_user)
 
     orders = (await db.execute(select(Order))).scalars().all()
     if current_user.role == "dealer":
-        orders = [o for o in orders if _extract_dealer_id(o) == current_user.id]
+        orders = [
+            o for o in orders
+            if o.selected_manufacturer_id == current_user.id or _extract_dealer_id(o) == current_user.id
+        ]
 
     by_user: dict[str, list[Order]] = defaultdict(list)
     for order in orders:
