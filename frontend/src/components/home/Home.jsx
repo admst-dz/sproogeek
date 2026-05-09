@@ -1,4 +1,4 @@
-import { useEffect, Suspense, useMemo, useRef } from 'react';
+import { useEffect, useState, Suspense, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF, Stage } from '@react-three/drei';
 import * as THREE from 'three';
@@ -148,6 +148,84 @@ function PowerbankPreview() {
     );
 }
 
+
+// ─── Mac-dock карточки ──────────────────────────────────────────────────────
+// Идея как в macOS dock: при наведении мыши соседние карточки увеличиваются
+// тем сильнее, чем ближе они к курсору. Реализовано без зависимостей: один
+// общий mouseX на грид + индивидуальный transform на каждой карточке через
+// gaussian falloff. На тач-устройствах эффект отключён (нет hover).
+
+function DockCard({ children, onClick, mouseX, dockEnabled }) {
+    const ref = useRef(null);
+    const [{ scale, lift }, setTransform] = useState({ scale: 1, lift: 0 });
+
+    useEffect(() => {
+        if (!dockEnabled || mouseX === null || !ref.current) {
+            setTransform({ scale: 1, lift: 0 });
+            return;
+        }
+        const el = ref.current;
+        const cardCenter = el.offsetLeft + el.offsetWidth / 2;
+        const distance = Math.abs(mouseX - cardCenter);
+        // sigma подбирается так, чтобы эффект распространялся примерно на
+        // ширину одной карточки, но плавно затухал к третьей.
+        const sigma = el.offsetWidth * 0.85;
+        const proximity = Math.exp(-(distance * distance) / (2 * sigma * sigma));
+        setTransform({
+            scale: 1 + 0.12 * proximity,
+            lift: -14 * proximity,
+        });
+    }, [mouseX, dockEnabled]);
+
+    return (
+        <div
+            ref={ref}
+            onClick={onClick}
+            style={{
+                transform: `translate3d(0, ${lift}px, 0) scale(${scale})`,
+                transition: 'transform 220ms cubic-bezier(0.22, 0.8, 0.36, 1), box-shadow 220ms ease',
+                willChange: 'transform',
+            }}
+            className="cursor-pointer"
+        >
+            {children}
+        </div>
+    );
+}
+
+function ProductDock({ children }) {
+    const wrapperRef = useRef(null);
+    const [mouseX, setMouseX] = useState(null);
+    const [dockEnabled, setDockEnabled] = useState(false);
+
+    useEffect(() => {
+        // hover-эффект бесполезен на тач — определяем поддержку точного указателя.
+        const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
+        const apply = () => setDockEnabled(mq.matches);
+        apply();
+        mq.addEventListener?.('change', apply);
+        return () => mq.removeEventListener?.('change', apply);
+    }, []);
+
+    const onMouseMove = (e) => {
+        if (!wrapperRef.current) return;
+        const rect = wrapperRef.current.getBoundingClientRect();
+        setMouseX(e.clientX - rect.left);
+    };
+
+    return (
+        <div
+            ref={wrapperRef}
+            onMouseMove={dockEnabled ? onMouseMove : undefined}
+            onMouseLeave={() => setMouseX(null)}
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full max-w-5xl"
+        >
+            {children({ mouseX, dockEnabled })}
+        </div>
+    );
+}
+
+
 export const Home = ({ onStart, onAuth, user, logout }) => {
     const {
         setProduct, setFormat, setBindingType, setHasElastic,
@@ -178,9 +256,12 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
     };
 
     return (
-        <div className="app-bg min-h-screen w-full flex flex-col font-sans transition-colors duration-500 text-gray-900 dark:text-white overflow-x-hidden selection:bg-blue-500/30 md:min-h-[100dvh]">
+        // h-full + overflow-y-auto делают саму главную скроллящимся контейнером.
+        // Глобально html/body имеют overflow:hidden (нужно конструктору с 3D-канвасом),
+        // поэтому скролл вешаем здесь, а не на body.
+        <div className="app-bg h-full w-full flex flex-col font-sans transition-colors duration-500 text-gray-900 dark:text-white overflow-y-auto overflow-x-hidden selection:bg-blue-500/30">
 
-            <header className="w-full px-4 sm:px-6 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-3 z-50">
+            <header className="w-full px-4 sm:px-6 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-3 z-50 shrink-0">
                 <div className="flex items-center gap-3 bg-white border border-gray-200 dark:bg-white/5 dark:border-white/10 px-4 py-2 rounded-full backdrop-blur-md shadow-sm dark:shadow-none transition-colors">
                     <img src="/SprooGeek.svg" alt="Spruzhuk logo" className="w-4 h-4 object-contain" />
                     <span className="font-bold text-sm tracking-wide">Spruzhuk</span>
@@ -227,7 +308,7 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
                 </div>
             </header>
 
-            <main className="flex-1 flex flex-col items-center justify-center pt-8 sm:pt-10 pb-12 sm:pb-20 px-4 z-10">
+            <main className="flex-1 flex flex-col items-center pt-6 sm:pt-12 pb-16 sm:pb-24 px-4 z-10">
                 <h1 className="text-[clamp(2.35rem,11vw,4.5rem)] md:text-7xl font-bold text-center leading-[1.05] tracking-tight mb-4 sm:mb-6 text-gray-900 dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-b dark:from-white dark:to-gray-400 drop-shadow-sm dark:drop-shadow-2xl transition-colors">
                     {t(language, 'title1')}<br />{t(language, 'title2')}
                 </h1>
@@ -235,55 +316,75 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
                     {t(language, 'subtitle')}
                 </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full max-w-5xl">
+                <ProductDock>
+                    {({ mouseX, dockEnabled }) => (
+                        <>
+                            {/* Карточка 1: Ежедневник */}
+                            <DockCard
+                                mouseX={mouseX}
+                                dockEnabled={dockEnabled}
+                                onClick={() => handleSelect('notebook', { format: 'A5', bindingType: 'hard', hasElastic: false })}
+                            >
+                                <div className="group relative flex flex-col items-center p-5 md:p-6 rounded-[20px] md:rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-colors duration-500 overflow-hidden">
+                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-blue-500/10 dark:bg-blue-500/20 blur-[60px] group-hover:bg-blue-500/20 dark:group-hover:bg-blue-400/30 transition-colors duration-500"></div>
+                                    <div className="h-40 sm:h-48 lg:h-56 w-full flex items-center justify-center relative z-10">
+                                        <svg width="120" height="160" viewBox="0 0 100 130" fill="none" className="drop-shadow-xl dark:drop-shadow-2xl">
+                                            <rect x="20" y="10" width="60" height="110" rx="3" fill="#151515" stroke="#333" strokeWidth="1" />
+                                            <path d="M76 12 V118 L82 116 V14 Z" fill="#D4AF37" />
+                                            <rect x="20" y="10" width="8" height="110" fill="black" fillOpacity="0.4" />
+                                        </svg>
+                                    </div>
+                                    <div className="text-center relative z-10 mt-2">
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'notebook')}</h3>
+                                        <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
+                                            {t(language, 'openBtn')}
+                                        </button>
+                                    </div>
+                                </div>
+                            </DockCard>
 
-                    {/* Карточка 1: Ежедневник */}
-                    <div onClick={() => handleSelect('notebook', { format: 'A5', bindingType: 'hard', hasElastic: false })} className="group relative flex flex-col items-center p-5 md:p-6 rounded-[20px] md:rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none cursor-pointer dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-all duration-500 overflow-hidden">
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-blue-500/10 dark:bg-blue-500/20 blur-[60px] group-hover:bg-blue-500/20 dark:group-hover:bg-blue-400/30 transition-colors duration-500"></div>
-                        <div className="h-40 sm:h-48 lg:h-56 w-full flex items-center justify-center relative z-10">
-                            <svg width="120" height="160" viewBox="0 0 100 130" fill="none" className="drop-shadow-xl dark:drop-shadow-2xl group-hover:scale-105 transition-transform duration-500">
-                                <rect x="20" y="10" width="60" height="110" rx="3" fill="#151515" stroke="#333" strokeWidth="1" />
-                                <path d="M76 12 V118 L82 116 V14 Z" fill="#D4AF37" />
-                                <rect x="20" y="10" width="8" height="110" fill="black" fillOpacity="0.4" />
-                            </svg>
-                        </div>
-                        <div className="text-center relative z-10 mt-2">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'notebook')}</h3>
-                            <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
-                                {t(language, 'openBtn')}
-                            </button>
-                        </div>
-                    </div>
+                            {/* Карточка 2: Термос */}
+                            <DockCard
+                                mouseX={mouseX}
+                                dockEnabled={dockEnabled}
+                                onClick={() => handleSelect('thermos', {})}
+                            >
+                                <div className="group relative flex flex-col items-center p-5 md:p-6 rounded-[20px] md:rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-colors duration-500 overflow-hidden">
+                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-slate-500/10 dark:bg-slate-400/20 blur-[60px] group-hover:bg-slate-500/20 dark:group-hover:bg-slate-400/30 transition-colors duration-500"></div>
+                                    <div className="h-40 sm:h-48 lg:h-56 w-full relative z-10">
+                                        <ThermosPreview />
+                                    </div>
+                                    <div className="text-center relative z-10 mt-2">
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'thermos')}</h3>
+                                        <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-slate-50 group-hover:text-slate-700 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
+                                            {t(language, 'openBtn')}
+                                        </button>
+                                    </div>
+                                </div>
+                            </DockCard>
 
-                    {/* Карточка 2: Термос */}
-                    <div onClick={() => handleSelect('thermos', {})} className="group relative flex flex-col items-center p-5 md:p-6 rounded-[20px] md:rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none cursor-pointer dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-all duration-500 overflow-hidden">
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-slate-500/10 dark:bg-slate-400/20 blur-[60px] group-hover:bg-slate-500/20 dark:group-hover:bg-slate-400/30 transition-colors duration-500"></div>
-                        <div className="h-40 sm:h-48 lg:h-56 w-full relative z-10">
-                            <ThermosPreview />
-                        </div>
-                        <div className="text-center relative z-10 mt-2">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'thermos')}</h3>
-                            <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-slate-50 group-hover:text-slate-700 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
-                                {t(language, 'openBtn')}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Карточка 3: Повербанк */}
-                    <div onClick={() => handleSelect('powerbank', {})} className="group relative flex flex-col items-center p-5 md:p-6 rounded-[20px] md:rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none cursor-pointer dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-all duration-500 overflow-hidden sm:col-span-2 lg:col-span-1">
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-emerald-500/10 dark:bg-emerald-400/20 blur-[60px] group-hover:bg-emerald-500/20 dark:group-hover:bg-emerald-400/30 transition-colors duration-500"></div>
-                        <div className="h-40 sm:h-48 lg:h-56 w-full relative z-10">
-                            <PowerbankPreview />
-                        </div>
-                        <div className="text-center relative z-10 mt-2">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'powerbank')}</h3>
-                            <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-emerald-50 group-hover:text-emerald-700 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
-                                {t(language, 'openBtn')}
-                            </button>
-                        </div>
-                    </div>
-
-                </div>
+                            {/* Карточка 3: Повербанк */}
+                            <DockCard
+                                mouseX={mouseX}
+                                dockEnabled={dockEnabled}
+                                onClick={() => handleSelect('powerbank', {})}
+                            >
+                                <div className="group relative flex flex-col items-center p-5 md:p-6 rounded-[20px] md:rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-colors duration-500 overflow-hidden sm:col-span-2 lg:col-span-1">
+                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-emerald-500/10 dark:bg-emerald-400/20 blur-[60px] group-hover:bg-emerald-500/20 dark:group-hover:bg-emerald-400/30 transition-colors duration-500"></div>
+                                    <div className="h-40 sm:h-48 lg:h-56 w-full relative z-10">
+                                        <PowerbankPreview />
+                                    </div>
+                                    <div className="text-center relative z-10 mt-2">
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'powerbank')}</h3>
+                                        <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-emerald-50 group-hover:text-emerald-700 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
+                                            {t(language, 'openBtn')}
+                                        </button>
+                                    </div>
+                                </div>
+                            </DockCard>
+                        </>
+                    )}
+                </ProductDock>
 
                 <FeedbackPanel language={language} />
             </main>
