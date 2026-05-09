@@ -70,6 +70,8 @@ export const AuthModal = ({ onClose, onRoleCreated }) => {
             const payload = event.data || {};
             if (payload.type !== 'spruzhuk:yandex-oauth') return;
 
+            console.log('[Yandex] 5. Message received from popup:', payload);
+
             yandexDoneRef.current = true;
             window.clearInterval(yandexPopupTimerRef.current);
             yandexPopupRef.current?.close?.();
@@ -78,24 +80,28 @@ export const AuthModal = ({ onClose, onRoleCreated }) => {
             sessionStorage.removeItem(YANDEX_STATE_KEY);
 
             if (!expectedState || payload.state !== expectedState) {
+                console.error('[Yandex] 6. State mismatch', { expected: expectedState, got: payload.state });
                 setError(t(language, 'authErrYandex'));
                 setLoading(false);
                 return;
             }
             if (payload.error || !payload.code) {
+                console.error('[Yandex] 6. Payload error or missing code', { error: payload.error, code: payload.code });
                 setError(t(language, 'authErrYandexClosed'));
                 setLoading(false);
                 return;
             }
 
+            console.log('[Yandex] 6. State OK, code received — exchanging with backend...');
             setError(null);
             setLoading(true);
             try {
                 const redirectUri = `${window.location.origin}/auth/yandex/callback`;
                 const data = await loginWithYandexCode(payload.code, redirectUri);
+                console.log('[Yandex] 7. Backend exchange success:', data);
                 completeSocialLogin(data);
             } catch (err) {
-                console.error('Yandex Auth Backend Error:', err);
+                console.error('[Yandex] 7. Backend exchange failed:', err?.response?.data ?? err);
                 setError(t(language, 'authErrYandex'));
                 setLoading(false);
             }
@@ -171,6 +177,7 @@ export const AuthModal = ({ onClose, onRoleCreated }) => {
         const state = makeOauthState();
         const redirectUri = `${window.location.origin}/auth/yandex/callback`;
         sessionStorage.setItem(YANDEX_STATE_KEY, state);
+        console.log('[Yandex] 1. Login started', { redirectUri, state });
 
         // Open synchronously — browsers block window.open() called after await
         // (gesture context is lost after any async suspension).
@@ -180,30 +187,37 @@ export const AuthModal = ({ onClose, onRoleCreated }) => {
             'width=520,height=680,menubar=no,toolbar=no,location=no,status=no'
         );
         if (!popup) {
+            console.error('[Yandex] 2. Popup blocked by browser (window.open returned null)');
             sessionStorage.removeItem(YANDEX_STATE_KEY);
             setError(t(language, 'authErrYandexClosed'));
             setLoading(false);
             return;
         }
+        console.log('[Yandex] 2. Popup opened');
 
         yandexPopupRef.current = popup;
 
         try {
+            console.log('[Yandex] 3. Fetching authorize URL from backend...');
             const authorizeUrl = await getYandexAuthorizeUrl(redirectUri, state);
+            console.log('[Yandex] 4. Got authorize URL, navigating popup:', authorizeUrl);
             popup.location.href = authorizeUrl;
 
             yandexPopupTimerRef.current = window.setInterval(() => {
                 if (popup.closed) {
                     window.clearInterval(yandexPopupTimerRef.current);
                     if (!yandexDoneRef.current) {
+                        console.warn('[Yandex] Interval: popup was closed before message received');
                         sessionStorage.removeItem(YANDEX_STATE_KEY);
                         setError(t(language, 'authErrYandexClosed'));
                         setLoading(false);
+                    } else {
+                        console.log('[Yandex] Interval: popup closed, message already handled — OK');
                     }
                 }
             }, 500);
         } catch (err) {
-            console.error('Yandex Auth Start Error:', err);
+            console.error('[Yandex] 3. Failed to fetch authorize URL:', err);
             popup.close();
             sessionStorage.removeItem(YANDEX_STATE_KEY);
             setError(t(language, 'authErrYandex'));

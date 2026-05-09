@@ -10,9 +10,16 @@ export function YandexOAuthCallback() {
             error: params.get('error') || '',
         };
 
+        console.log('[Yandex Callback] URL params:', Object.fromEntries(params.entries()));
+        console.log('[Yandex Callback] Has opener:', !!window.opener);
+        console.log('[Yandex Callback] Message to send:', message);
+
         if (window.opener) {
             window.opener.postMessage(message, window.location.origin);
+            console.log('[Yandex Callback] postMessage sent, closing in 120ms');
             window.setTimeout(() => window.close(), 120);
+        } else {
+            console.error('[Yandex Callback] No window.opener — popup was not opened by the app');
         }
     }, []);
 
