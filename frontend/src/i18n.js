@@ -528,6 +528,7 @@ export const translations = {
         adminJsonSyntaxErr: "JSON заполнен с ошибкой",
 
         // Feedback (главная страница)
+        feedbackCta: "Предложить идею или оценить",
         feedbackTitle: "Оставить отзыв",
         feedbackSubtitle: "Расскажите, что понравилось или что улучшить — мы читаем каждое сообщение.",
         feedbackName: "Имя",
@@ -542,6 +543,7 @@ export const translations = {
         feedbackThanksMsg: "Мы получили ваше сообщение и обязательно его прочитаем.",
         feedbackErrEmpty: "Напишите хотя бы пару слов",
         feedbackErrSend: "Не удалось отправить. Попробуйте ещё раз.",
+        feedbackClose: "Закрыть",
         feedbackOptional: "необязательно",
     },
 
@@ -1074,6 +1076,7 @@ export const translations = {
         adminJsonSyntaxErr: "JSON has a syntax error",
 
         // Feedback
+        feedbackCta: "Suggest an idea or rate us",
         feedbackTitle: "Leave feedback",
         feedbackSubtitle: "Tell us what you liked or what to improve — we read every message.",
         feedbackName: "Name",
@@ -1088,6 +1091,7 @@ export const translations = {
         feedbackThanksMsg: "Your message has been received — we'll read it shortly.",
         feedbackErrEmpty: "Please write at least a couple of words",
         feedbackErrSend: "Failed to send. Please try again.",
+        feedbackClose: "Close",
         feedbackOptional: "optional",
     },
 
@@ -1620,6 +1624,7 @@ export const translations = {
         adminJsonSyntaxErr: "JSON запоўнены з памылкай",
 
         // Feedback
+        feedbackCta: "Прапанаваць ідэю ці ацаніць",
         feedbackTitle: "Пакінуць водгук",
         feedbackSubtitle: "Раскажыце, што спадабалася ці што палепшыць — мы чытаем кожны допіс.",
         feedbackName: "Імя",
@@ -1634,6 +1639,7 @@ export const translations = {
         feedbackThanksMsg: "Мы атрымалі ваша паведамленне і абавязкова прачытаем яго.",
         feedbackErrEmpty: "Напішыце хаця б пару слоў",
         feedbackErrSend: "Не атрымалася адправіць. Паспрабуйце яшчэ раз.",
+        feedbackClose: "Закрыць",
         feedbackOptional: "неабавязкова",
     }
 };
