@@ -8,6 +8,7 @@ import { getUserDisplayName } from '../../utils/user';
 import { SceneLoadingOverlay } from '../shared/VibeLoader';
 import termosModelUrl from '../../assets/termos3.glb?url';
 import powerbankModelUrl from '../../assets/poverbank.glb?url';
+import { FeedbackPanel } from './FeedbackPanel';
 
 function ThermosPreviewScene() {
     const groupRef = useRef();
@@ -283,6 +284,8 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
                     </div>
 
                 </div>
+
+                <FeedbackPanel language={language} />
             </main>
         </div>
     );

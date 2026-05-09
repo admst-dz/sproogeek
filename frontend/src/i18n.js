@@ -523,6 +523,23 @@ export const translations = {
         adminStageHistory: "История статусов",
         adminStatusHistoryUuid: "UUID",
         adminJsonSyntaxErr: "JSON заполнен с ошибкой",
+
+        // Feedback (главная страница)
+        feedbackTitle: "Оставить отзыв",
+        feedbackSubtitle: "Расскажите, что понравилось или что улучшить — мы читаем каждое сообщение.",
+        feedbackName: "Имя",
+        feedbackEmail: "Email",
+        feedbackPhone: "Телефон",
+        feedbackRating: "Оценка",
+        feedbackMessage: "Сообщение",
+        feedbackMessagePlaceholder: "Что хотите сказать?",
+        feedbackSubmit: "Отправить",
+        feedbackSubmitting: "Отправляем…",
+        feedbackThanksTitle: "Спасибо за отзыв!",
+        feedbackThanksMsg: "Мы получили ваше сообщение и обязательно его прочитаем.",
+        feedbackErrEmpty: "Напишите хотя бы пару слов",
+        feedbackErrSend: "Не удалось отправить. Попробуйте ещё раз.",
+        feedbackOptional: "необязательно",
     },
 
     en: {
@@ -1049,6 +1066,23 @@ export const translations = {
         adminStageHistory: "Status history",
         adminStatusHistoryUuid: "UUID",
         adminJsonSyntaxErr: "JSON has a syntax error",
+
+        // Feedback
+        feedbackTitle: "Leave feedback",
+        feedbackSubtitle: "Tell us what you liked or what to improve — we read every message.",
+        feedbackName: "Name",
+        feedbackEmail: "Email",
+        feedbackPhone: "Phone",
+        feedbackRating: "Rating",
+        feedbackMessage: "Message",
+        feedbackMessagePlaceholder: "What's on your mind?",
+        feedbackSubmit: "Send",
+        feedbackSubmitting: "Sending…",
+        feedbackThanksTitle: "Thanks for your feedback!",
+        feedbackThanksMsg: "Your message has been received — we'll read it shortly.",
+        feedbackErrEmpty: "Please write at least a couple of words",
+        feedbackErrSend: "Failed to send. Please try again.",
+        feedbackOptional: "optional",
     },
 
     by: {
@@ -1575,6 +1609,23 @@ export const translations = {
         adminStageHistory: "Гісторыя статусаў",
         adminStatusHistoryUuid: "UUID",
         adminJsonSyntaxErr: "JSON запоўнены з памылкай",
+
+        // Feedback
+        feedbackTitle: "Пакінуць водгук",
+        feedbackSubtitle: "Раскажыце, што спадабалася ці што палепшыць — мы чытаем кожны допіс.",
+        feedbackName: "Імя",
+        feedbackEmail: "Email",
+        feedbackPhone: "Тэлефон",
+        feedbackRating: "Адзнака",
+        feedbackMessage: "Паведамленне",
+        feedbackMessagePlaceholder: "Што хочаце сказаць?",
+        feedbackSubmit: "Адправіць",
+        feedbackSubmitting: "Адпраўляем…",
+        feedbackThanksTitle: "Дзякуй за водгук!",
+        feedbackThanksMsg: "Мы атрымалі ваша паведамленне і абавязкова прачытаем яго.",
+        feedbackErrEmpty: "Напішыце хаця б пару слоў",
+        feedbackErrSend: "Не атрымалася адправіць. Паспрабуйце яшчэ раз.",
+        feedbackOptional: "неабавязкова",
     }
 };
 

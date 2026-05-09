@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api.v1 import admin, auth, dealer, drafts, events, files, manufacturer, orders, pricing, products, users
+from app.api.v1 import admin, auth, dealer, drafts, events, feedback, files, manufacturer, orders, pricing, products, users
 from app.core.cache import close_cache
 from app.core.config import get_settings
 from app.core.event_logger import event_logger
@@ -146,5 +146,6 @@ app.include_router(manufacturer.router, prefix="/api/v1/manufacturer", tags=["Ma
 app.include_router(events.router, prefix="/api/v1/events", tags=["Events"])
 app.include_router(pricing.router, prefix="/api/v1/pricing", tags=["Pricing"])
 app.include_router(drafts.router, prefix="/api/v1/drafts", tags=["Drafts"])
+app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["Feedback"])
 
 add_pagination(app)
