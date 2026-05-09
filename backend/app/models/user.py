@@ -19,7 +19,7 @@ class User(Base):
     token_balance = Column(Float, default=0.0, nullable=True)
     company_name = Column(String, nullable=True)
 
-    orders = relationship("Order", back_populates="user", cascade="all, delete-orphan")
+    orders = relationship("Order", back_populates="user", foreign_keys="Order.user_id", cascade="all, delete-orphan")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=True)
