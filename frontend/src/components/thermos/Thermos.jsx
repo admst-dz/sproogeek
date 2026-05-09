@@ -11,6 +11,7 @@ const THERMOS_NECK_RATIO = 0.1;
 const CAP_SIDE_DISTANCE = 2.75;
 const CAP_ARC_FORWARD_DISTANCE = 1.55;
 const CAP_FINAL_FORWARD_DISTANCE = 0.35;
+const CAP_SEATED_LIFT_RATIO = 0.1;
 const LOGO_SURFACE_OFFSET = 0.006;
 const LOGO_POLYGON_OFFSET = -18;
 
@@ -389,6 +390,7 @@ export function Thermos({ config: configProp, ...props }) {
     const capMatRef = useRef();
     const capGroupRef = useRef();
     const capProgress = useRef(0); // 0 = on bottle, 1 = floating
+    const capSeatedLift = Math.max(bodyRadius * CAP_SEATED_LIFT_RATIO, 0.035);
 
     useFrame((_, delta) => {
         // Cap color smoothly follows body color
@@ -421,7 +423,7 @@ export function Thermos({ config: configProp, ...props }) {
                 [px, py, pz] = quadBezier(moveEase, [0, liftY, 0], clearPoint, side);
             }
 
-            capGroupRef.current.position.set(px, py, pz);
+            capGroupRef.current.position.set(px, py + capSeatedLift, pz);
             // First unscrew vertically, then keep a small settling spin while moving aside.
             capGroupRef.current.rotation.y = (liftEase * 4.5 + moveEase * 1.5) * Math.PI;
         }
@@ -448,7 +450,7 @@ export function Thermos({ config: configProp, ...props }) {
                     </>
                 )}
                 {capGeo && (
-                    <group ref={capGroupRef}>
+                    <group ref={capGroupRef} position={[0, capSeatedLift, 0]}>
                         <ThermosMesh
                             geo={capGeo}
                             matRef={capMatRef}

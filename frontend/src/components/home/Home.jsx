@@ -14,6 +14,20 @@ function ThermosPreviewScene() {
     const groupRef = useRef();
     const { nodes } = useGLTF(termosModelUrl);
     const meshes = Object.entries(nodes).filter(([, n]) => n.geometry);
+    const capMeshName = useMemo(() => {
+        const namedCap = meshes.find(([name]) => {
+            const lower = name.toLowerCase();
+            return lower.includes('cap') || lower.includes('lid') || lower.includes('top') || lower.includes('cover') || lower.includes('крышк');
+        });
+        if (namedCap) return namedCap[0];
+
+        const measured = meshes.map(([name, node]) => {
+            node.geometry.computeBoundingBox();
+            const box = node.geometry.boundingBox;
+            return { name, centerY: (box.max.y + box.min.y) / 2 };
+        });
+        return measured.sort((a, b) => b.centerY - a.centerY)[0]?.name;
+    }, [meshes]);
 
     useFrame((_, delta) => {
         if (groupRef.current) groupRef.current.rotation.y += delta * 0.6;
@@ -22,7 +36,7 @@ function ThermosPreviewScene() {
     return (
         <group ref={groupRef}>
             {meshes.map(([name, node]) => (
-                <mesh key={name} geometry={node.geometry} castShadow receiveShadow>
+                <mesh key={name} geometry={node.geometry} position={name === capMeshName ? [0, 0.07, 0] : undefined} castShadow receiveShadow>
                     <meshStandardMaterial color="#E65405" metalness={0.35} roughness={0.45} />
                 </mesh>
             ))}
