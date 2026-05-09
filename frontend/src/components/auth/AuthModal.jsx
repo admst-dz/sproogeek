@@ -51,6 +51,7 @@ export const AuthModal = ({ onClose, onRoleCreated }) => {
     const [loading, setLoading] = useState(false);
     const yandexPopupRef = useRef(null);
     const yandexPopupTimerRef = useRef(null);
+    const yandexDoneRef = useRef(false);
 
     const completeSocialLogin = (data) => {
         if (data.needs_role_setup) {
@@ -69,10 +70,12 @@ export const AuthModal = ({ onClose, onRoleCreated }) => {
             const payload = event.data || {};
             if (payload.type !== 'spruzhuk:yandex-oauth') return;
 
-            const expectedState = sessionStorage.getItem(YANDEX_STATE_KEY);
-            sessionStorage.removeItem(YANDEX_STATE_KEY);
+            yandexDoneRef.current = true;
             window.clearInterval(yandexPopupTimerRef.current);
             yandexPopupRef.current?.close?.();
+
+            const expectedState = sessionStorage.getItem(YANDEX_STATE_KEY);
+            sessionStorage.removeItem(YANDEX_STATE_KEY);
 
             if (!expectedState || payload.state !== expectedState) {
                 setError(t(language, 'authErrYandex'));
@@ -163,39 +166,45 @@ export const AuthModal = ({ onClose, onRoleCreated }) => {
     const yandexLogin = async () => {
         setError(null);
         setLoading(true);
+        yandexDoneRef.current = false;
+
+        const state = makeOauthState();
+        const redirectUri = `${window.location.origin}/auth/yandex/callback`;
+        sessionStorage.setItem(YANDEX_STATE_KEY, state);
+
+        // Open synchronously — browsers block window.open() called after await
+        // (gesture context is lost after any async suspension).
+        const popup = window.open(
+            'about:blank',
+            'spruzhuk_yandex_oauth',
+            'width=520,height=680,menubar=no,toolbar=no,location=no,status=no'
+        );
+        if (!popup) {
+            sessionStorage.removeItem(YANDEX_STATE_KEY);
+            setError(t(language, 'authErrYandexClosed'));
+            setLoading(false);
+            return;
+        }
+
+        yandexPopupRef.current = popup;
+
         try {
-            const state = makeOauthState();
-            const redirectUri = `${window.location.origin}/auth/yandex/callback`;
-            sessionStorage.setItem(YANDEX_STATE_KEY, state);
-
-            // Open popup synchronously within the user gesture context; browsers block
-            // window.open() called after an await (gesture context is lost).
-            const popup = window.open(
-                'about:blank',
-                'spruzhuk_yandex_oauth',
-                'width=520,height=680,menubar=no,toolbar=no,location=no,status=no'
-            );
-            if (!popup) {
-                sessionStorage.removeItem(YANDEX_STATE_KEY);
-                setError(t(language, 'authErrYandexClosed'));
-                setLoading(false);
-                return;
-            }
-
             const authorizeUrl = await getYandexAuthorizeUrl(redirectUri, state);
             popup.location.href = authorizeUrl;
 
-            yandexPopupRef.current = popup;
             yandexPopupTimerRef.current = window.setInterval(() => {
                 if (popup.closed) {
                     window.clearInterval(yandexPopupTimerRef.current);
-                    sessionStorage.removeItem(YANDEX_STATE_KEY);
-                    setError(t(language, 'authErrYandexClosed'));
-                    setLoading(false);
+                    if (!yandexDoneRef.current) {
+                        sessionStorage.removeItem(YANDEX_STATE_KEY);
+                        setError(t(language, 'authErrYandexClosed'));
+                        setLoading(false);
+                    }
                 }
             }, 500);
         } catch (err) {
             console.error('Yandex Auth Start Error:', err);
+            popup.close();
             sessionStorage.removeItem(YANDEX_STATE_KEY);
             setError(t(language, 'authErrYandex'));
             setLoading(false);
