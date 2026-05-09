@@ -8,10 +8,16 @@ class UserRegister(BaseModel):
     password: str = Field(..., min_length=8, max_length=64)
     # Имя не длиннее 50 символов
     display_name: Optional[str] = Field(None, max_length=50)
-    # Регистрация всегда создаёт обычного клиента. Повышение до dealer/manufacturer
-    # выполняется только администратором — иначе аноним получает доступ к производственному
-    # кабинету и складу через self-service регистрацию.
+    role: Optional[str] = Field("client", max_length=20)
     sub_role: Optional[str] = Field(None, max_length=20)
+
+    @field_validator('role')
+    @classmethod
+    def validate_role(cls, v):
+        allowed = {"client", "dealer"}
+        if v not in allowed:
+            raise ValueError(f'Недопустимая роль. Разрешено: {", ".join(sorted(allowed))}')
+        return v
 
     @field_validator('password')
     @classmethod

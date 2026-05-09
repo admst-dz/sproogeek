@@ -45,7 +45,8 @@ def safe_path_segment(value: str, *, max_length: int = 128) -> str:
 
 # ─── Order status enum (single source of truth) ───────────────────────────────
 ALLOWED_ORDER_STATUSES = frozenset({
-    "draft", "new", "processing", "production", "in_delivery", "done",
+    "draft", "new", "awaiting_signature", "awaiting_quotes", "quotes_ready",
+    "processing", "production", "in_delivery", "done",
     "approved", "rejected", "cancelled",
 })
 

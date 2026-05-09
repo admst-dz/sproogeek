@@ -26,8 +26,11 @@ const TabBtn = ({ active, children, onClick }) => (
 
 const ORDER_STAGE_KEYS = [
     { key: 'new',         labelKey: 'stageNew',        icon: '🕐' },
-    { key: 'production',  labelKey: 'stageProduction',  icon: '🏭' },
+    { key: 'awaiting_signature', labelKey: 'stageAwaitingSignature', icon: '✍️' },
+    { key: 'awaiting_quotes', labelKey: 'stageAwaitingQuotes', icon: '₽' },
+    { key: 'quotes_ready', labelKey: 'stageQuotesReady', icon: '₽' },
     { key: 'processing',  labelKey: 'stageProcessing',  icon: '⚙️' },
+    { key: 'production',  labelKey: 'stageProduction',  icon: '🏭' },
     { key: 'in_delivery', labelKey: 'stageDelivery',    icon: '🚚' },
     { key: 'done',        labelKey: 'stageDone',        icon: '✅' },
 ];
@@ -94,6 +97,9 @@ const OrderProgressBar = ({ status, stageHistory = [], language }) => {
 
 const OrderStatus = ({ status, language }) => {
     const s = {
+        awaiting_signature: { textKey: 'statusAwaitingSignature', color: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' },
+        awaiting_quotes: { textKey: 'statusAwaitingQuotes', color: 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' },
+        quotes_ready: { textKey: 'statusQuotesReady', color: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' },
         processing: { textKey: 'statusProcessing', color: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' },
         production: { textKey: 'statusProduction', color: 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' },
         in_delivery: { textKey: 'statusDelivery', color: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' },
@@ -592,7 +598,18 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                                 order={order}
                                                                 role="client"
                                                                 onChanged={(updated) => setOrders(prev => prev.map(o => o.id === order.id
-                                                                    ? { ...o, ...updated, approvalStatus: updated.approval_status, status: updated.status, stageHistory: updated.stage_history || o.stageHistory }
+                                                                    ? {
+                                                                        ...o,
+                                                                        ...updated,
+                                                                        approvalStatus: updated.approval_status,
+                                                                        signedApprovalFileKey: updated.signed_approval_file_key,
+                                                                        manufacturerQuotes: updated.manufacturer_quotes || o.manufacturerQuotes,
+                                                                        selectedManufacturerId: updated.selected_manufacturer_id,
+                                                                        selectedQuoteId: updated.selected_quote_id,
+                                                                        status: updated.status,
+                                                                        price: updated.total_price ?? o.price,
+                                                                        stageHistory: updated.stage_history || o.stageHistory
+                                                                    }
                                                                     : o))}
                                                             />
                                                         </div>

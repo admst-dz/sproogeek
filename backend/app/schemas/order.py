@@ -4,7 +4,7 @@ from uuid import UUID
 from datetime import datetime
 
 ORDER_STATUSES = (
-    "draft", "new", "processing", "production",
+    "draft", "new", "awaiting_signature", "awaiting_quotes", "quotes_ready", "processing", "production",
     "in_delivery", "done", "approved", "rejected", "cancelled",
 )
 
@@ -21,7 +21,7 @@ class OrderCreate(BaseModel):
 
 
 class OrderStatusUpdate(BaseModel):
-    status: Literal["draft", "new", "processing", "production",
+    status: Literal["draft", "new", "awaiting_signature", "awaiting_quotes", "quotes_ready", "processing", "production",
                     "in_delivery", "done", "approved", "rejected", "cancelled"]
     comment: Optional[str] = Field(None, max_length=1000)
 
@@ -40,9 +40,14 @@ class OrderResponse(BaseModel):
     stage_history: Optional[List[Dict[str, Any]]] = None
     approval_status: Optional[str] = None
     approval_pdf_key: Optional[str] = None
+    signed_approval_file_key: Optional[str] = None
+    signed_approval_uploaded_at: Optional[datetime] = None
     approved_at: Optional[datetime] = None
     approval_comment: Optional[str] = None
     dealer_confirmed_at: Optional[datetime] = None
+    manufacturer_quotes: Optional[List[Dict[str, Any]]] = None
+    selected_manufacturer_id: Optional[str] = None
+    selected_quote_id: Optional[str] = None
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
