@@ -155,6 +155,7 @@ export function Powerbank(props) {
     const backZ = sceneBbox.min.z;
     const centerX = (sceneBbox.min.x + sceneBbox.max.x) / 2;
     const centerY = (sceneBbox.min.y + sceneBbox.max.y) / 2;
+    const centerZ = (sceneBbox.min.z + sceneBbox.max.z) / 2;
     const width = sceneBbox.max.x - sceneBbox.min.x;
     const height = sceneBbox.max.y - sceneBbox.min.y;
 
@@ -164,39 +165,41 @@ export function Powerbank(props) {
 
     return (
         <group {...props} dispose={null}>
-            {meshEntries.map(({ name, geo }, i) => (
-                <mesh key={name} geometry={geo} castShadow receiveShadow>
-                    <meshStandardMaterial
-                        ref={i === 0 ? matRef : undefined}
-                        color={powerbankBodyColor}
-                        normalMap={normalMap}
-                        normalScale={[0.35, 0.35]}
-                        roughness={0.92}
-                        metalness={0.02}
-                    />
-                </mesh>
-            ))}
-            <PowerbankFaceDetails
-                bbox={sceneBbox}
-                frontZ={frontZ}
-                bodyColor={powerbankBodyColor}
-            />
-            {powerbankLogos.map(logo => (
-                <LogoPlane
-                    key={logo.id}
-                    texture={logo.texture}
-                    position={logo.position}
+            <group position={[-centerX, -centerY, -centerZ]}>
+                {meshEntries.map(({ name, geo }, i) => (
+                    <mesh key={name} geometry={geo} castShadow receiveShadow>
+                        <meshStandardMaterial
+                            ref={i === 0 ? matRef : undefined}
+                            color={powerbankBodyColor}
+                            normalMap={normalMap}
+                            normalScale={[0.35, 0.35]}
+                            roughness={0.92}
+                            metalness={0.02}
+                        />
+                    </mesh>
+                ))}
+                <PowerbankFaceDetails
+                    bbox={sceneBbox}
                     frontZ={frontZ}
-                    backZ={backZ}
-                    centerX={centerX}
-                    centerY={centerY}
-                    width={width}
-                    height={height}
-                    side={logo.side ?? 'outer'}
-                    rotation={logo.rotation ?? 0}
-                    scale={logo.scale ?? 0.6}
+                    bodyColor={powerbankBodyColor}
                 />
-            ))}
+                {powerbankLogos.map(logo => (
+                    <LogoPlane
+                        key={logo.id}
+                        texture={logo.texture}
+                        position={logo.position}
+                        frontZ={frontZ}
+                        backZ={backZ}
+                        centerX={centerX}
+                        centerY={centerY}
+                        width={width}
+                        height={height}
+                        side={logo.side ?? 'outer'}
+                        rotation={logo.rotation ?? 0}
+                        scale={logo.scale ?? 0.6}
+                    />
+                ))}
+            </group>
         </group>
     );
 }

@@ -4,13 +4,70 @@ import { Calendar } from '../shared/Calendar'
 import { Thermos } from '../thermos/Thermos'
 import { Powerbank } from '../powerbank/Powerbank'
 import { useConfigurator, registerWebGLCanvas } from '../../store'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useThree, useFrame } from '@react-three/fiber'
+import * as THREE from 'three'
 
-const PINCH_ZOOM_PRODUCTS = new Set(['thermos', 'powerbank'])
+const ORBIT_PRODUCTS = new Set(['thermos', 'powerbank'])
 const MIN_ZOOM = 0.35
 const MAX_ZOOM = 2.5
 const clampZoom = (value) => Math.min(Math.max(value, MIN_ZOOM), MAX_ZOOM)
+
+const ORBIT_VIEW_CONFIG = {
+    thermos: {
+        desktop: {
+            baseDistance: 7.35,
+            minDistance: 2.85,
+            maxDistance: 22,
+            target: [0, 0.12, 0],
+            defaultDirection: [0, 0.08, 1],
+            minPolarAngle: Math.PI * 0.16,
+            maxPolarAngle: Math.PI * 0.86,
+            rotateSpeed: 0.72,
+            zoomSpeed: 0.78,
+        },
+        mobile: {
+            baseDistance: 8.4,
+            minDistance: 3.05,
+            maxDistance: 25,
+            target: [0, 0.08, 0],
+            defaultDirection: [0, 0.06, 1],
+            minPolarAngle: Math.PI * 0.18,
+            maxPolarAngle: Math.PI * 0.84,
+            rotateSpeed: 0.92,
+            zoomSpeed: 0.82,
+        },
+    },
+    powerbank: {
+        desktop: {
+            baseDistance: 5.35,
+            minDistance: 2.2,
+            maxDistance: 16,
+            target: [0, 0, 0],
+            defaultDirection: [0, 0.06, 1],
+            minPolarAngle: Math.PI * 0.18,
+            maxPolarAngle: Math.PI * 0.84,
+            rotateSpeed: 0.76,
+            zoomSpeed: 0.8,
+        },
+        mobile: {
+            baseDistance: 6.2,
+            minDistance: 2.45,
+            maxDistance: 18,
+            target: [0, 0, 0],
+            defaultDirection: [0, 0.05, 1],
+            minPolarAngle: Math.PI * 0.2,
+            maxPolarAngle: Math.PI * 0.82,
+            rotateSpeed: 0.95,
+            zoomSpeed: 0.84,
+        },
+    },
+}
+
+function getOrbitViewConfig(product, isMobile) {
+    const productConfig = ORBIT_VIEW_CONFIG[product] ?? ORBIT_VIEW_CONFIG.thermos
+    return productConfig[isMobile ? 'mobile' : 'desktop']
+}
 
 function CanvasRegistrar() {
     const { gl } = useThree()
@@ -26,179 +83,14 @@ function CameraReset({ activeProduct }) {
     const prevProduct = useRef(activeProduct)
 
     useEffect(() => {
-        if (prevProduct.current === 'thermos' && activeProduct !== 'thermos') {
+        if (ORBIT_PRODUCTS.has(prevProduct.current) && !ORBIT_PRODUCTS.has(activeProduct)) {
+            camera.zoom = 1
             camera.position.set(0, 0, 4.5)
             camera.lookAt(0, 0, 0)
             camera.updateProjectionMatrix()
         }
         prevProduct.current = activeProduct
     }, [activeProduct, camera])
-
-    return null
-}
-
-function WheelZoom({ controlsRef }) {
-    const { camera, gl } = useThree()
-    const { setZoom, activeProduct } = useConfigurator()
-    const activeProductRef = useRef(activeProduct)
-    const lastPinchDistRef = useRef(null)
-    const pinchPointersRef = useRef(new Map())
-    const isPinchingRef = useRef(false)
-    const lockedCameraPoseRef = useRef(null)
-    const enableControlsFrameRef = useRef(null)
-
-    useEffect(() => { activeProductRef.current = activeProduct }, [activeProduct])
-
-    useEffect(() => {
-        const canvas = gl.domElement
-        const previousTouchAction = canvas.style.touchAction
-        canvas.style.touchAction = 'none'
-
-        const isPinchProduct = () => PINCH_ZOOM_PRODUCTS.has(activeProductRef.current)
-
-        const stopGesture = (e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            e.stopImmediatePropagation()
-        }
-
-        const getPinchDistance = () => {
-            const points = Array.from(pinchPointersRef.current.values())
-            if (points.length < 2) return null
-            const dx = points[0].x - points[1].x
-            const dy = points[0].y - points[1].y
-            return Math.sqrt(dx * dx + dy * dy)
-        }
-
-        const setControlsEnabled = (enabled) => {
-            if (controlsRef?.current) controlsRef.current.enabled = enabled
-        }
-
-        const cancelDeferredControlsEnable = () => {
-            if (enableControlsFrameRef.current === null) return
-            window.cancelAnimationFrame(enableControlsFrameRef.current)
-            enableControlsFrameRef.current = null
-        }
-
-        const deferControlsEnable = () => {
-            cancelDeferredControlsEnable()
-            enableControlsFrameRef.current = window.requestAnimationFrame(() => {
-                enableControlsFrameRef.current = null
-                restoreCameraPose()
-                setControlsEnabled(true)
-                lockedCameraPoseRef.current = null
-            })
-        }
-
-        const lockCameraPose = () => {
-            if (lockedCameraPoseRef.current) return
-            lockedCameraPoseRef.current = {
-                position: camera.position.clone(),
-                quaternion: camera.quaternion.clone(),
-                target: controlsRef?.current?.target?.clone() ?? null,
-            }
-        }
-
-        const restoreCameraPose = () => {
-            const pose = lockedCameraPoseRef.current
-            if (!pose) return
-            camera.position.copy(pose.position)
-            camera.quaternion.copy(pose.quaternion)
-            if (pose.target && controlsRef?.current?.target) {
-                controlsRef.current.target.copy(pose.target)
-                controlsRef.current.update()
-            }
-            camera.updateProjectionMatrix()
-        }
-
-        const finishPinch = () => {
-            restoreCameraPose()
-            lastPinchDistRef.current = null
-            isPinchingRef.current = false
-            deferControlsEnable()
-        }
-
-        const handleWheel = (e) => {
-            if (!isPinchProduct()) return
-            e.preventDefault()
-            // ctrlKey=true — тачпад pinch (браузер маскирует под ctrl+wheel)
-            const sensitivity = e.ctrlKey ? 0.008 : 0.001
-            // Читаем актуальный zoom напрямую из store — без stale closure
-            const current = useConfigurator.getState().zoomLevel
-            const next = clampZoom(current - e.deltaY * sensitivity)
-            setZoom(next)
-        }
-
-        const handlePointerDown = (e) => {
-            if (!isPinchProduct() || e.pointerType !== 'touch') return
-            pinchPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-            if (pinchPointersRef.current.size >= 2) {
-                stopGesture(e)
-                if (!isPinchingRef.current) {
-                    cancelDeferredControlsEnable()
-                    lockedCameraPoseRef.current = null
-                }
-                isPinchingRef.current = true
-                lockCameraPose()
-                restoreCameraPose()
-                setControlsEnabled(false)
-                lastPinchDistRef.current = getPinchDistance()
-            }
-        }
-
-        const handlePointerMove = (e) => {
-            if (!isPinchProduct() || e.pointerType !== 'touch') return
-            if (!pinchPointersRef.current.has(e.pointerId)) return
-            pinchPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-            if (pinchPointersRef.current.size < 2) return
-
-            stopGesture(e)
-            isPinchingRef.current = true
-            lockCameraPose()
-            restoreCameraPose()
-            setControlsEnabled(false)
-
-            const dist = getPinchDistance()
-            if (!dist || lastPinchDistRef.current === null) {
-                lastPinchDistRef.current = dist
-                return
-            }
-            const ratio = dist / lastPinchDistRef.current
-            lastPinchDistRef.current = dist
-            const current = useConfigurator.getState().zoomLevel
-            const next = clampZoom(current * ratio)
-            setZoom(next)
-            restoreCameraPose()
-        }
-
-        const handlePointerEnd = (e) => {
-            if (e.pointerType === 'touch') pinchPointersRef.current.delete(e.pointerId)
-            if (isPinchingRef.current) stopGesture(e)
-            if (pinchPointersRef.current.size < 2) finishPinch()
-        }
-
-        canvas.addEventListener('wheel', handleWheel, { passive: false })
-        canvas.addEventListener('pointerdown', handlePointerDown, { capture: true, passive: false })
-        canvas.addEventListener('pointermove', handlePointerMove, { capture: true, passive: false })
-        canvas.addEventListener('pointerup', handlePointerEnd, { capture: true, passive: false })
-        canvas.addEventListener('pointercancel', handlePointerEnd, { capture: true, passive: false })
-
-        return () => {
-            canvas.style.touchAction = previousTouchAction
-            cancelDeferredControlsEnable()
-            restoreCameraPose()
-            lastPinchDistRef.current = null
-            isPinchingRef.current = false
-            lockedCameraPoseRef.current = null
-            setControlsEnabled(true)
-            pinchPointersRef.current.clear()
-            canvas.removeEventListener('wheel', handleWheel)
-            canvas.removeEventListener('pointerdown', handlePointerDown, { capture: true })
-            canvas.removeEventListener('pointermove', handlePointerMove, { capture: true })
-            canvas.removeEventListener('pointerup', handlePointerEnd, { capture: true })
-            canvas.removeEventListener('pointercancel', handlePointerEnd, { capture: true })
-        }
-    }, [camera, controlsRef, gl.domElement, setZoom])
 
     return null
 }
@@ -215,8 +107,64 @@ function CameraUpdater({ targetZoom }) {
     return null
 }
 
+function OrbitCameraRig({ activeProduct, controlsRef, isMobile, zoomLevel }) {
+    const { camera } = useThree()
+    const config = useMemo(() => getOrbitViewConfig(activeProduct, isMobile), [activeProduct, isMobile])
+    const target = useMemo(() => new THREE.Vector3(...config.target), [config])
+    const defaultDirection = useMemo(() => new THREE.Vector3(...config.defaultDirection).normalize(), [config])
+    const desiredDistance = THREE.MathUtils.clamp(
+        config.baseDistance / Math.max(zoomLevel, 0.001),
+        config.minDistance,
+        config.maxDistance
+    )
+
+    useEffect(() => {
+        if (!ORBIT_PRODUCTS.has(activeProduct)) return
+
+        camera.zoom = 1
+        camera.position.copy(target).addScaledVector(defaultDirection, desiredDistance)
+        camera.lookAt(target)
+        camera.updateProjectionMatrix()
+
+        const controls = controlsRef.current
+        if (controls) {
+            controls.target.copy(target)
+            controls.minDistance = config.minDistance
+            controls.maxDistance = config.maxDistance
+            controls.update()
+            controls.saveState()
+        }
+    }, [activeProduct, isMobile])
+
+    useEffect(() => {
+        const controls = controlsRef.current
+        if (!controls) return
+        controls.minDistance = config.minDistance
+        controls.maxDistance = config.maxDistance
+    }, [config, controlsRef])
+
+    useFrame((_, delta) => {
+        if (!ORBIT_PRODUCTS.has(activeProduct)) return
+        const controls = controlsRef.current
+        if (!controls) return
+
+        const targetEase = 1 - Math.exp(-12 * delta)
+        controls.target.lerp(target, targetEase)
+
+        const offset = camera.position.clone().sub(controls.target)
+        const currentDistance = offset.length()
+        const direction = currentDistance > 0.001 ? offset.normalize() : defaultDirection
+        const nextDistance = THREE.MathUtils.damp(currentDistance || desiredDistance, desiredDistance, 16, delta)
+
+        camera.position.copy(controls.target).addScaledVector(direction, nextDistance)
+        controls.update()
+    })
+
+    return null
+}
+
 export const Experience = () => {
-    const { activeProduct, zoomLevel } = useConfigurator()
+    const { activeProduct, zoomLevel, setZoom } = useConfigurator()
     const { active: assetsLoading, progress } = useProgress()
     const readyFrames = useRef(0)
     const orbitControlsRef = useRef(null)
@@ -232,6 +180,23 @@ export const Experience = () => {
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
+    const isOrbitProduct = ORBIT_PRODUCTS.has(activeProduct)
+    const orbitConfig = useMemo(() => getOrbitViewConfig(activeProduct, isMobile), [activeProduct, isMobile])
+
+    const handleOrbitChange = useCallback(() => {
+        const controls = orbitControlsRef.current
+        if (!controls || !ORBIT_PRODUCTS.has(activeProduct)) return
+
+        const distance = controls.getDistance()
+        if (!Number.isFinite(distance) || distance <= 0) return
+
+        const nextZoom = clampZoom(orbitConfig.baseDistance / distance)
+        const currentZoom = useConfigurator.getState().zoomLevel
+        if (Math.abs(nextZoom - currentZoom) > 0.012) {
+            setZoom(nextZoom)
+        }
+    }, [activeProduct, orbitConfig, setZoom])
+
     // Базовый зум (начальный размер)
     // Мобилка требует зум поменьше (камера дальше), десктоп побольше.
     // Notebook побольше, Calendar поменьше.
@@ -240,7 +205,7 @@ export const Experience = () => {
         : (activeProduct === 'calendar' ? 0.8 : activeProduct === 'thermos' ? 0.68 : activeProduct === 'powerbank' ? 0.85 : 1.0);
 
     // Итоговый зум = База * То, что накликали кнопками
-    const finalZoom = baseZoom * zoomLevel;
+    const finalZoom = isOrbitProduct ? 1 : baseZoom * zoomLevel;
 
     useEffect(() => {
         window.__3D_READY__ = false;
@@ -262,7 +227,12 @@ export const Experience = () => {
             <CanvasRegistrar />
             <CameraReset activeProduct={activeProduct} />
             <CameraUpdater targetZoom={finalZoom} />
-            <WheelZoom controlsRef={orbitControlsRef} />
+            <OrbitCameraRig
+                activeProduct={activeProduct}
+                controlsRef={orbitControlsRef}
+                isMobile={isMobile}
+                zoomLevel={zoomLevel}
+            />
 
             <Environment preset="city" />
 
@@ -273,20 +243,35 @@ export const Experience = () => {
             {(activeProduct === 'thermos' || activeProduct === 'powerbank') ? (
                 <>
                     <OrbitControls
+                        key={activeProduct}
                         ref={orbitControlsRef}
-                        target={[0, 0, 0]}
+                        target={orbitConfig.target}
                         enablePan={false}
-                        enableZoom={false}
+                        enableZoom
                         enableDamping
-                        dampingFactor={0.08}
-                        minPolarAngle={Math.PI / 2 - Math.PI / 3}
-                        maxPolarAngle={Math.PI / 2 + Math.PI / 3}
-                        rotateSpeed={isMobile ? 1.5 : 1.0}
+                        dampingFactor={0.055}
+                        minDistance={orbitConfig.minDistance}
+                        maxDistance={orbitConfig.maxDistance}
+                        minPolarAngle={orbitConfig.minPolarAngle}
+                        maxPolarAngle={orbitConfig.maxPolarAngle}
+                        rotateSpeed={orbitConfig.rotateSpeed}
+                        zoomSpeed={orbitConfig.zoomSpeed}
+                        screenSpacePanning={false}
+                        mouseButtons={{
+                            LEFT: THREE.MOUSE.ROTATE,
+                            MIDDLE: THREE.MOUSE.DOLLY,
+                            RIGHT: THREE.MOUSE.ROTATE,
+                        }}
+                        touches={{
+                            ONE: THREE.TOUCH.ROTATE,
+                            TWO: THREE.TOUCH.DOLLY_ROTATE,
+                        }}
+                        onChange={handleOrbitChange}
                     />
-                    <Stage environment={null} intensity={0} contactShadow={false} adjustCamera={false}>
+                    <group>
                         {activeProduct === 'thermos' && <Thermos />}
                         {activeProduct === 'powerbank' && <Powerbank />}
-                    </Stage>
+                    </group>
                 </>
             ) : (
                 <PresentationControls

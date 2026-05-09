@@ -360,7 +360,7 @@ export function Thermos(props) {
                     rimStartRadius: capRadius * 0.48,
                     rimEndRadius: capRadius * 0.84,
                     sealY: cb.min.y + (cb.max.y - cb.min.y) * 0.055,
-                    sealRadius: capRadius * 0.72,
+                    sealRadius: capRadius * 0.60,
                 },
                 radius: capRadius,
                 minY: cb.min.y,
@@ -428,39 +428,41 @@ export function Thermos(props) {
 
     return (
         <group {...props} dispose={null}>
-            {bodyGeo && (
-                <>
-                    <ThermosMesh
-                        geo={bodyGeo}
-                        color={thermosBodyColor}
-                        neckStartY={bodyNeckStartY}
-                        metalness={0}
-                        roughness={0.9}
-                        logos={bodyLogos}
-                        bodyRadius={bodyRadius}
-                        bodyCenterY={bodyCenterY}
-                        bodyMinY={bodyMinY}
-                        bodyTopY={bodyTopY}
-                        bodyNeckStartY={bodyNeckStartY}
-                    />
-                </>
-            )}
-            {capGeo && (
-                <group ref={capGroupRef}>
-                    <ThermosMesh
-                        geo={capGeo}
-                        matRef={capMatRef}
-                        color={thermosBodyColor}
-                        capInner={capInner}
-                        capLogos={capLogos}
-                        capRadius={capLogoRadius}
-                        capMinY={capMinY}
-                        capMaxY={capMaxY}
-                        metalness={0}
-                        roughness={0.9}
-                    />
-                </group>
-            )}
+            <group position={[0, -bodyCenterY, 0]}>
+                {bodyGeo && (
+                    <>
+                        <ThermosMesh
+                            geo={bodyGeo}
+                            color={thermosBodyColor}
+                            neckStartY={bodyNeckStartY}
+                            metalness={0}
+                            roughness={0.9}
+                            logos={bodyLogos}
+                            bodyRadius={bodyRadius}
+                            bodyCenterY={bodyCenterY}
+                            bodyMinY={bodyMinY}
+                            bodyTopY={bodyTopY}
+                            bodyNeckStartY={bodyNeckStartY}
+                        />
+                    </>
+                )}
+                {capGeo && (
+                    <group ref={capGroupRef}>
+                        <ThermosMesh
+                            geo={capGeo}
+                            matRef={capMatRef}
+                            color={thermosBodyColor}
+                            capInner={capInner}
+                            capLogos={capLogos}
+                            capRadius={capLogoRadius}
+                            capMinY={capMinY}
+                            capMaxY={capMaxY}
+                            metalness={0}
+                            roughness={0.9}
+                        />
+                    </group>
+                )}
+            </group>
         </group>
     );
 }

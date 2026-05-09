@@ -392,7 +392,7 @@ function App() {
             )}
 
             {configuratorDraft && screen === 'home' && (
-                <div className={`fixed ${cartRestoredFromCookie ? 'bottom-[11.5rem] sm:bottom-6' : 'bottom-6'} right-6 z-50 max-w-xs w-[calc(100vw-3rem)] sm:w-80 bg-[#142235] border border-white/15 rounded-[20px] p-5 shadow-[0_8px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl animate-fade-in`}>
+                <div className={`fixed ${cartRestoredFromCookie ? 'bottom-[11.5rem]' : 'bottom-6'} left-6 z-50 max-w-xs w-[calc(100vw-3rem)] sm:w-80 bg-[#142235] border border-white/15 rounded-[20px] p-5 shadow-[0_8px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl animate-fade-in`}>
                     <div className="flex items-start gap-3 mb-4">
                         <div className="w-9 h-9 rounded-[12px] bg-white/8 border border-white/10 flex items-center justify-center shrink-0">
                             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
