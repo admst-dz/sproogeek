@@ -98,6 +98,7 @@ typings/
 # Build artifacts
 dist/
 
+.idea
 .claude
 /.venv/
 /spruzhyk_backend/
