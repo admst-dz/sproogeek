@@ -360,7 +360,7 @@ export function Thermos(props) {
                     rimStartRadius: capRadius * 0.48,
                     rimEndRadius: capRadius * 0.84,
                     sealY: cb.min.y + (cb.max.y - cb.min.y) * 0.055,
-                    sealRadius: capRadius * 0.78,
+                    sealRadius: capRadius * 0.72,
                 },
                 radius: capRadius,
                 minY: cb.min.y,

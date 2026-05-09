@@ -249,7 +249,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
     };
 
     return (
-        <div className="app-bg min-h-screen font-sans text-gray-900 dark:text-white overflow-x-hidden flex flex-col">
+        <div className="app-bg h-[100dvh] font-sans text-gray-900 dark:text-white overflow-hidden flex flex-col">
 
             <LiveOrderToasts onEvent={(ev) => {
                 const data = ev?.data;
@@ -293,7 +293,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
             </header>
 
             {/* MAIN */}
-            <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-8">
+            <main className="flex-1 min-h-0 overflow-y-auto custom-scrollbar max-w-6xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-8 pb-24">
 
                 {/* CATALOG TAB */}
                 {activeTab === 'catalog' && (

@@ -59,7 +59,7 @@ export const UserDashboard = ({ onOpenConfigurator }) => {
     };
 
     return (
-        <div className="min-h-screen bg-[#F4F7FB] font-zen text-[#1a1a1a] flex flex-col">
+        <div className="h-[100dvh] bg-[#F4F7FB] font-zen text-[#1a1a1a] flex flex-col overflow-hidden">
 
             {/* --- ШАПКА ПОЛЬЗОВАТЕЛЯ --- */}
             <header className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
@@ -94,7 +94,7 @@ export const UserDashboard = ({ onOpenConfigurator }) => {
             </header>
 
             {/* --- ОСНОВНОЙ КОНТЕНТ --- */}
-            <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-8">
+            <main className="flex-1 min-h-0 overflow-y-auto custom-scrollbar max-w-6xl mx-auto w-full px-6 py-8 pb-24">
 
                 {/* ВКЛАДКА: КАТАЛОГ */}
                 {activeTab === 'catalog' && (

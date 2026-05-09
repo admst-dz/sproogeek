@@ -8,7 +8,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useThree, useFrame } from '@react-three/fiber'
 
 const PINCH_ZOOM_PRODUCTS = new Set(['thermos', 'powerbank'])
-const clampZoom = (value) => Math.min(Math.max(value, 0.5), 2.5)
+const MIN_ZOOM = 0.35
+const MAX_ZOOM = 2.5
+const clampZoom = (value) => Math.min(Math.max(value, MIN_ZOOM), MAX_ZOOM)
 
 function CanvasRegistrar() {
     const { gl } = useThree()
@@ -234,8 +236,8 @@ export const Experience = () => {
     // Мобилка требует зум поменьше (камера дальше), десктоп побольше.
     // Notebook побольше, Calendar поменьше.
     const baseZoom = isMobile
-        ? (activeProduct === 'calendar' ? 0.6 : (activeProduct === 'thermos' || activeProduct === 'powerbank') ? 0.65 : 0.8)
-        : (activeProduct === 'calendar' ? 0.8 : (activeProduct === 'thermos' || activeProduct === 'powerbank') ? 0.85 : 1.0);
+        ? (activeProduct === 'calendar' ? 0.6 : activeProduct === 'thermos' ? 0.5 : activeProduct === 'powerbank' ? 0.65 : 0.8)
+        : (activeProduct === 'calendar' ? 0.8 : activeProduct === 'thermos' ? 0.68 : activeProduct === 'powerbank' ? 0.85 : 1.0);
 
     // Итоговый зум = База * То, что накликали кнопками
     const finalZoom = baseZoom * zoomLevel;

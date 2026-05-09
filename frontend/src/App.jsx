@@ -8,7 +8,7 @@ import { DealerDashboard } from './components/dashboard/DealerDashboard'
 import { ManufacturerDashboard } from './components/dashboard/ManufacturerDashboard'
 import { AuthModal } from './components/auth/AuthModal'
 import { ClientDashboard } from './components/dashboard/ClientDashboard'
-import { useConfigurator } from './store'
+import { ALL_PRODUCT_DEFAULTS, useConfigurator } from './store'
 import { t } from './i18n'
 import { restoreSession } from './api'
 import { ThermosInterface } from './components/thermos/ThermosInterface'
@@ -20,7 +20,7 @@ import { AdminDashboard } from './components/admin/AdminDashboard'
 import { SceneHints } from './components/shared/SceneHints'
 import { ConfirmModal } from './components/shared/ConfirmModal'
 import { UndoRedoControls } from './components/shared/UndoRedoControls'
-import { useUndoRedoHotkeys, useTemporalConfigurator } from './hooks/useTemporalConfigurator'
+import { useUndoRedoHotkeys } from './hooks/useTemporalConfigurator'
 import { CommandPalette } from './components/shared/CommandPalette'
 
 const SCREEN_TO_PATH = {
@@ -32,6 +32,8 @@ const SCREEN_TO_PATH = {
     admin_auth: '/borodazaebal',
     admin_dashboard: '/admin',
 };
+
+const CONFIGURATOR_PRODUCTS = new Set(['notebook', 'calendar', 'thermos', 'powerbank']);
 
 const PATH_TO_SCREEN = Object.fromEntries(
     Object.entries(SCREEN_TO_PATH).map(([k, v]) => [v, k])
@@ -49,12 +51,78 @@ const PATH_TO_TAB = {
     '/dashboard/orders': 'orders',
 };
 
+const METRIKA_COUNTER_ID = 109128387;
+const CONFIGURATOR_DRAFT_KEY = 'spruzhuk_configurator_draft';
+const CONFIGURATOR_DRAFT_FIELDS = ['activeProduct', 'zoomLevel', ...Object.keys(ALL_PRODUCT_DEFAULTS)];
+
+function sendMetrikaHit(url = window.location.href) {
+    if (typeof window === 'undefined' || typeof window.ym !== 'function') return;
+    window.ym(METRIKA_COUNTER_ID, 'hit', url, {
+        referrer: document.referrer,
+        title: document.title,
+    });
+}
+
 function getInitialState() {
     const path = window.location.pathname;
+    if (path.startsWith('/configurator/')) {
+        const product = path.split('/').filter(Boolean)[1];
+        const activeProduct = CONFIGURATOR_PRODUCTS.has(product) ? product : 'notebook';
+        useConfigurator.getState().setProduct(activeProduct);
+        return { screen: 'configurator', tab: null };
+    }
+    if (path === '/configurator') {
+        return { screen: 'configurator', tab: null };
+    }
     if (path.startsWith('/dashboard/')) {
         return { screen: 'client_dashboard', tab: PATH_TO_TAB[path] ?? null };
     }
     return { screen: PATH_TO_SCREEN[path] ?? 'home', tab: null };
+}
+
+function getPathForScreen(screen, activeProduct) {
+    if (screen === 'configurator') {
+        const product = CONFIGURATOR_PRODUCTS.has(activeProduct) ? activeProduct : 'notebook';
+        return `/configurator/${product}`;
+    }
+    return SCREEN_TO_PATH[screen];
+}
+
+function pickConfiguratorDraft(state) {
+    const draft = {};
+    CONFIGURATOR_DRAFT_FIELDS.forEach((key) => {
+        draft[key] = state[key];
+    });
+    return draft;
+}
+
+function readConfiguratorDraft() {
+    if (typeof window === 'undefined') return null;
+    try {
+        const raw = window.localStorage.getItem(CONFIGURATOR_DRAFT_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed?.state ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+
+function writeConfiguratorDraft(state) {
+    if (typeof window === 'undefined') return null;
+    const draft = {
+        version: 1,
+        updatedAt: Date.now(),
+        state: pickConfiguratorDraft(state),
+    };
+    window.localStorage.setItem(CONFIGURATOR_DRAFT_KEY, JSON.stringify(draft));
+    return draft;
+}
+
+function clearConfiguratorDraft() {
+    if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(CONFIGURATOR_DRAFT_KEY);
+    }
 }
 
 function App() {
@@ -97,9 +165,11 @@ function App() {
     const [screen, setScreen] = useState(() => getInitialState().screen);
     const [showAuth, setShowAuth] = useState(false);
     const [pendingSuccessToast, setPendingSuccessToast] = useState(false);
-    const [pendingNavigation, setPendingNavigation] = useState(null);
+    const [configuratorDraft, setConfiguratorDraft] = useState(() => readConfiguratorDraft());
 
     const configuratorCanvasRef = useRef(null);
+    const skipNextDraftSaveRef = useRef(false);
+    const lastMetrikaUrlRef = useRef(typeof window !== 'undefined' ? window.location.href : '');
 
     const {
         activeProduct,
@@ -123,21 +193,37 @@ function App() {
 
     const isConfiguratorScreen = screen === 'configurator';
     useUndoRedoHotkeys(isConfiguratorScreen);
-    const pastLen = useTemporalConfigurator((s) => s.pastStates.length);
-    const isDirty = isConfiguratorScreen && pastLen > 0;
 
     const guardedNavigate = (target) => {
-        if (isDirty) {
-            setPendingNavigation(target);
-        } else {
-            setScreen(target);
-        }
+        setScreen(target);
     };
-    const confirmDiscardAndNavigate = () => {
-        if (pendingNavigation) {
-            try { useConfigurator.temporal.getState().clear(); } catch { /* noop */ }
-            setScreen(pendingNavigation);
-            setPendingNavigation(null);
+
+    const syncConfiguratorDraftState = () => {
+        setConfiguratorDraft(readConfiguratorDraft());
+    };
+
+    const restoreConfiguratorDraft = () => {
+        const draft = readConfiguratorDraft();
+        if (!draft?.state) return;
+        useConfigurator.setState(draft.state);
+        try { useConfigurator.temporal.getState().clear(); } catch { /* noop */ }
+        setConfiguratorDraft(draft);
+        setScreen('configurator');
+    };
+
+    const deleteConfiguratorDraft = () => {
+        clearConfiguratorDraft();
+        setConfiguratorDraft(null);
+    };
+
+    const completeConfiguratorFlow = () => {
+        if (currentUser) {
+            skipNextDraftSaveRef.current = true;
+            clearConfiguratorDraft();
+            setConfiguratorDraft(null);
+            setScreen('client_dashboard');
+        } else {
+            setShowAuth(true);
         }
     };
 
@@ -147,11 +233,65 @@ function App() {
     }, [theme]);
 
     useEffect(() => {
-        const path = SCREEN_TO_PATH[screen];
-        if (path && window.location.pathname !== path) {
-            window.history.pushState({}, '', path);
+        if (screen === 'home') {
+            syncConfiguratorDraftState();
         }
     }, [screen]);
+
+    useEffect(() => {
+        if (screen !== 'configurator') return undefined;
+
+        let saveTimer = null;
+        const saveDraft = () => {
+            const draft = writeConfiguratorDraft(useConfigurator.getState());
+            setConfiguratorDraft(draft);
+        };
+        const scheduleSave = () => {
+            window.clearTimeout(saveTimer);
+            saveTimer = window.setTimeout(saveDraft, 150);
+        };
+
+        saveDraft();
+        const unsubscribe = useConfigurator.subscribe(scheduleSave);
+
+        return () => {
+            window.clearTimeout(saveTimer);
+            if (skipNextDraftSaveRef.current) {
+                skipNextDraftSaveRef.current = false;
+            } else {
+                saveDraft();
+            }
+            unsubscribe();
+        };
+    }, [screen]);
+
+    useEffect(() => {
+        const path = getPathForScreen(screen, activeProduct);
+        if (path && window.location.pathname !== path) {
+            window.history.pushState({}, '', path);
+            const nextUrl = window.location.href;
+            if (lastMetrikaUrlRef.current !== nextUrl) {
+                sendMetrikaHit(nextUrl);
+                lastMetrikaUrlRef.current = nextUrl;
+            }
+        }
+    }, [activeProduct, screen]);
+
+    useEffect(() => {
+        const handlePopState = () => {
+            const next = getInitialState();
+            setScreen(next.screen);
+            window.requestAnimationFrame(() => {
+                const nextUrl = window.location.href;
+                if (lastMetrikaUrlRef.current !== nextUrl) {
+                    sendMetrikaHit(nextUrl);
+                    lastMetrikaUrlRef.current = nextUrl;
+                }
+            });
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
 
     // --- ЛОГИКА: ПРОВЕРКА РОЛИ И РОУТИНГ ---
     useEffect(() => {
@@ -200,16 +340,6 @@ function App() {
                 openAuth={() => setShowAuth(true)}
             />
 
-            <ConfirmModal
-                open={!!pendingNavigation}
-                title={t(language, 'leaveConfirmTitle')}
-                message={t(language, 'leaveConfirmMsg')}
-                confirmLabel={t(language, 'confirmLeaveBtn')}
-                cancelLabel={t(language, 'stayBtn')}
-                onConfirm={confirmDiscardAndNavigate}
-                onCancel={() => setPendingNavigation(null)}
-            />
-
             {/* --- МОДАЛЬНОЕ ОКНО АВТОРИЗАЦИИ --- */}
             {showAuth && (
                 <AuthModal
@@ -256,6 +386,44 @@ function App() {
                             className="px-4 py-2.5 bg-white/5 border border-white/10 hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400 text-gray-400 text-xs font-bold rounded-[12px] transition-all"
                         >
                             {t(language, 'cartDeleteBtn')}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {configuratorDraft && screen === 'home' && (
+                <div className={`fixed ${cartRestoredFromCookie ? 'bottom-[11.5rem] sm:bottom-6' : 'bottom-6'} right-6 z-50 max-w-xs w-[calc(100vw-3rem)] sm:w-80 bg-[#142235] border border-white/15 rounded-[20px] p-5 shadow-[0_8px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl animate-fade-in`}>
+                    <div className="flex items-start gap-3 mb-4">
+                        <div className="w-9 h-9 rounded-[12px] bg-white/8 border border-white/10 flex items-center justify-center shrink-0">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                                <path d="M12 20h9" />
+                                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                            </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="font-bold text-white text-sm leading-tight mb-1">У вас осталась незавершенная модель</p>
+                            <p className="text-gray-400 text-xs truncate">{t(language, configuratorDraft.state.activeProduct) || configuratorDraft.state.activeProduct}</p>
+                        </div>
+                        <button
+                            onClick={deleteConfiguratorDraft}
+                            className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-gray-300 transition-colors shrink-0 mt-0.5"
+                            aria-label="Удалить черновик"
+                        >
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                        </button>
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={restoreConfiguratorDraft}
+                            className="flex-1 py-2.5 bg-white text-black text-xs font-bold uppercase tracking-widest rounded-[12px] hover:bg-gray-100 active:scale-[0.98] transition-all"
+                        >
+                            Продолжить
+                        </button>
+                        <button
+                            onClick={deleteConfiguratorDraft}
+                            className="px-4 py-2.5 bg-white/5 border border-white/10 hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400 text-gray-400 text-xs font-bold rounded-[12px] transition-all"
+                        >
+                            Удалить
                         </button>
                     </div>
                 </div>
@@ -364,33 +532,15 @@ function App() {
                             <div className="relative flex-1 min-h-0 w-full z-10 md:absolute md:top-0 md:right-0 md:h-full md:w-[36%] lg:w-[30%] pointer-events-none md:p-4 md:flex md:flex-col md:justify-center">
                                 {activeProduct === 'thermos' ? (
                                     <ThermosInterface
-                                        onFinish={() => {
-                                            if (currentUser) {
-                                                setScreen('client_dashboard');
-                                            } else {
-                                                setShowAuth(true);
-                                            }
-                                        }}
+                                        onFinish={completeConfiguratorFlow}
                                     />
                                 ) : activeProduct === 'powerbank' ? (
                                     <PowerbankInterface
-                                        onFinish={() => {
-                                            if (currentUser) {
-                                                setScreen('client_dashboard');
-                                            } else {
-                                                setShowAuth(true);
-                                            }
-                                        }}
+                                        onFinish={completeConfiguratorFlow}
                                     />
                                 ) : (
                                     <Interface
-                                        onFinish={() => {
-                                            if (currentUser) {
-                                                setScreen('client_dashboard');
-                                            } else {
-                                                setShowAuth(true);
-                                            }
-                                        }}
+                                        onFinish={completeConfiguratorFlow}
                                         onAuth={() => setShowAuth(true)}
                                         user={currentUser}
                                         logout={logout}
