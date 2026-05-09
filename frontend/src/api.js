@@ -15,6 +15,7 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use((config) => {
     const token = _memoryToken || localStorage.getItem('token') || getCookie(AUTH_COOKIE);
     if (token) config.headers.Authorization = `Bearer ${token}`;
+    if (config.data instanceof FormData) delete config.headers['Content-Type'];
     return config;
 }, (error) => Promise.reject(error));
 
@@ -47,12 +48,34 @@ export const orderApi = {
     approve: (orderId, comment = null) => apiClient.post(`/orders/${encodeURIComponent(orderId)}/approve`, { comment }),
     reject:  (orderId, comment = null) => apiClient.post(`/orders/${encodeURIComponent(orderId)}/reject`, { comment }),
     dealerConfirm: (orderId, comment = null) => apiClient.post(`/orders/${encodeURIComponent(orderId)}/dealer-confirm`, { comment }),
+    uploadSignedApproval: (orderId, file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return apiClient.post(`/orders/${encodeURIComponent(orderId)}/signed-approval`, formData);
+    },
+    selectQuote: (orderId, quoteId) => apiClient.post(`/orders/${encodeURIComponent(orderId)}/select-quote`, { quote_id: quoteId }),
 };
 
 export const adminApi = {
     getOrders: (page = 1, size = 100) => apiClient.get(`/admin/orders?${new URLSearchParams({ page, size })}`),
     updateOrder: (orderId, data) => apiClient.patch(`/admin/orders/${encodeURIComponent(orderId)}`, data),
-    getUsers: () => apiClient.get('/admin/users'),
+
+    getUsers: ({ role = null, search = null } = {}) => {
+        const params = new URLSearchParams();
+        if (role) params.set('role', role);
+        if (search) params.set('search', search);
+        const qs = params.toString();
+        return apiClient.get(qs ? `/admin/users?${qs}` : '/admin/users');
+    },
+    getUser: (userId) => apiClient.get(`/admin/users/${encodeURIComponent(userId)}`),
+    createUser: (data) => apiClient.post('/admin/users', data),
+    updateUser: (userId, data) => apiClient.patch(`/admin/users/${encodeURIComponent(userId)}`, data),
+    resetUserPassword: (userId, password) =>
+        apiClient.post(`/admin/users/${encodeURIComponent(userId)}/reset-password`, { password }),
+    deleteUser: (userId) => apiClient.delete(`/admin/users/${encodeURIComponent(userId)}`),
+
+    getStats: () => apiClient.get('/admin/stats'),
+
     generateTechcard: (orderId) => apiClient.post(`/admin/orders/${encodeURIComponent(orderId)}/techcard`),
     downloadTechcard: (orderId, filename) => apiClient.get(
         `/admin/orders/${encodeURIComponent(orderId)}/techcard.pdf`,
@@ -77,6 +100,7 @@ export const manufacturerApi = {
     stats: () => apiClient.get('/manufacturer/stats'),
     updateStatus: (orderId, status, comment = null) =>
         apiClient.patch(`/manufacturer/orders/${encodeURIComponent(orderId)}/status`, { status, comment }),
+    submitQuote: (orderId, data) => apiClient.post(`/manufacturer/orders/${encodeURIComponent(orderId)}/quote`, data),
     imposition: (orderId) => apiClient.get(`/manufacturer/orders/${encodeURIComponent(orderId)}/imposition`),
     qrUrl: (orderId) => `${(import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '')}/manufacturer/orders/${encodeURIComponent(orderId)}/qr.png`,
     materials: () => apiClient.get('/manufacturer/materials'),
@@ -99,20 +123,6 @@ export const productApi = {
     create: (data) => apiClient.post('/products/', data),
     update: (id, data) => apiClient.put(`/products/${id}`, data),
     delete: (id) => apiClient.delete(`/products/${id}`),
-};
-
-export const aiApi = {
-    generateThermosDesign: ({ prompt, target, bodyColor, capColor, files = [] }) => {
-        const formData = new FormData();
-        formData.append('prompt', prompt || '');
-        formData.append('target', target || 'body');
-        formData.append('body_color', bodyColor || '');
-        formData.append('cap_color', capColor || '');
-        files.slice(0, 4).forEach((file) => formData.append('files', file));
-        return apiClient.post('/ai/thermos-design', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-        });
-    },
 };
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
@@ -179,8 +189,13 @@ const normalizeOrder = (o) => ({
     createdAt: o.created_at ? { seconds: new Date(o.created_at).getTime() / 1000 } : null,
     approvalStatus: o.approval_status || 'pending',
     approvalPdfKey: o.approval_pdf_key || null,
+    signedApprovalFileKey: o.signed_approval_file_key || null,
+    signedApprovalUploadedAt: o.signed_approval_uploaded_at || null,
     approvedAt: o.approved_at || null,
     dealerConfirmedAt: o.dealer_confirmed_at || null,
+    manufacturerQuotes: o.manufacturer_quotes || [],
+    selectedManufacturerId: o.selected_manufacturer_id || null,
+    selectedQuoteId: o.selected_quote_id || null,
     quantity: o.quantity || 1,
     configuration: o.configuration || null,
 });

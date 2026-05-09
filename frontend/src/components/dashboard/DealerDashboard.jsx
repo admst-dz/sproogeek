@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useConfigurator } from "../../store";
+import { t } from '../../i18n';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 import { ApprovalPanel } from '../shared/ApprovalPanel';
 import {
@@ -15,25 +16,25 @@ import { Notebook } from '../shared/Notebook';
 import { Thermos } from '../thermos/Thermos';
 
 const ORDER_STAGES = [
-    { key: 'new',         text: 'Новый',          color: 'bg-white/10 text-gray-400 border-white/10',            icon: '🕐' },
-    { key: 'production',  text: 'В производстве', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30', icon: '🏭' },
-    { key: 'processing',  text: 'В обработке',    color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',       icon: '⚙️' },
-    { key: 'in_delivery', text: 'Доставляется',   color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: '🚚' },
-    { key: 'done',        text: 'Готово',         color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', icon: '✅' },
+    { key: 'new',         textKey: 'statusNew',        color: 'bg-white/10 text-gray-400 border-white/10',            icon: '🕐' },
+    { key: 'production',  textKey: 'statusProduction',  color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30', icon: '🏭' },
+    { key: 'processing',  textKey: 'statusProcessing',  color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',       icon: '⚙️' },
+    { key: 'in_delivery', textKey: 'statusDelivery',    color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: '🚚' },
+    { key: 'done',        textKey: 'statusDone',        color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', icon: '✅' },
 ];
 
 const STAGE_INDEX = Object.fromEntries(ORDER_STAGES.map((s, i) => [s.key, i]));
 
-const StatusBadge = ({ status }) => {
-    const s = ORDER_STAGES.find(x => x.key === status) || { text: status, color: 'bg-white/10 text-gray-400 border-white/10' };
+const StatusBadge = ({ status, language = 'ru' }) => {
+    const s = ORDER_STAGES.find(x => x.key === status) || { textKey: null, color: 'bg-white/10 text-gray-400 border-white/10' };
     return (
         <span className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${s.color}`}>
-            {s.text}
+            {s.textKey ? t(language, s.textKey) : status}
         </span>
     );
 };
 
-const OrderProgressBar = ({ status, stageHistory = [] }) => {
+const OrderProgressBar = ({ status, stageHistory = [], language = 'ru' }) => {
     const currentIdx = STAGE_INDEX[status] ?? 0;
     const historyMap = {};
     stageHistory.forEach(h => { historyMap[h.status] = h; });
@@ -63,12 +64,12 @@ const OrderProgressBar = ({ status, stageHistory = [] }) => {
                             </div>
                             <span className={`text-[8px] font-bold uppercase tracking-wider text-center leading-tight
                                 ${isDone ? 'text-emerald-400' : isCurrent ? 'text-indigo-300' : 'text-gray-600'}`}>
-                                {stage.text}
+                                {t(language, stage.textKey)}
                             </span>
                             {entry && (
                                 <div className="flex flex-col items-center gap-0.5 max-w-[72px]">
                                     <span className="text-[8px] text-gray-500 text-center">
-                                        {new Date(entry.updated_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                                        {new Date(entry.updated_at).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })}
                                     </span>
                                     {entry.comment && (
                                         <span className="text-[8px] text-gray-400 text-center italic leading-tight line-clamp-2">
@@ -132,7 +133,7 @@ const ColorInput = ({ value, onChange, onAdd }) => (
         />
         <input
             type="text"
-            placeholder="Название"
+            placeholder={t(language, 'namePlaceholder')}
             value={value.name}
             onChange={(e) => onChange({ ...value, name: e.target.value })}
             className="flex-1 bg-black/20 border border-white/10 rounded-[12px] px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30"
@@ -156,11 +157,11 @@ const Section = ({ title, children }) => (
 
 // ─── ProductModal ─────────────────────────────────────────────────────────────
 
-const ProductModal = ({ product, dealerId, onClose, onSaved }) => {
+const ProductModal = ({ product, dealerId, onClose, onSaved, language = 'ru' }) => {
     const isEdit = !!product?.id;
 
     const [form, setForm] = useState({
-        name: 'Ежедневник',
+        name: t(language, 'notebook'),
         binding: product?.binding || [],
         spiralColors: product?.spiralColors || [],
         hasElastic: product?.hasElastic ?? false,
@@ -231,7 +232,7 @@ const ProductModal = ({ product, dealerId, onClose, onSaved }) => {
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 shrink-0">
                     <h3 className="font-bold text-white uppercase tracking-widest text-sm">
-                        {isEdit ? 'Редактировать продукт' : 'Добавить продукт'}
+                        {isEdit ? t(language, 'editProduct') : t(language, 'addProduct')}
                     </h3>
                     <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 text-gray-400 hover:text-white transition-all">
                         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
@@ -242,23 +243,23 @@ const ProductModal = ({ product, dealerId, onClose, onSaved }) => {
                 <div className="overflow-y-auto flex-1 px-6 py-6 space-y-7">
 
                     {/* Product type */}
-                    <Section title="Продукт">
+                    <Section title={t(language, 'productSection')}>
                         <div className="bg-white/5 border border-white/10 rounded-[14px] px-4 py-3 text-white font-bold text-sm">
-                            Ежедневник
+                            {t(language, 'notebook')}
                         </div>
                     </Section>
 
                     {/* Binding */}
-                    <Section title="Переплёт">
+                    <Section title={t(language, 'bindingSection')}>
                         <div className="flex flex-col gap-3">
-                            <CheckToggle label="Твёрдый" checked={form.binding.includes('hard')} onChange={() => toggleBinding('hard')} />
-                            <CheckToggle label="На пружине" checked={form.binding.includes('spiral')} onChange={() => toggleBinding('spiral')} />
+                            <CheckToggle label={t(language, 'bindingHardShort')} checked={form.binding.includes('hard')} onChange={() => toggleBinding('hard')} />
+                            <CheckToggle label={t(language, 'bindingSpiralShort')} checked={form.binding.includes('spiral')} onChange={() => toggleBinding('spiral')} />
                         </div>
                     </Section>
 
                     {/* Spiral colors */}
                     {hasSpiralBinding && (
-                        <Section title="Цвет пружины">
+                        <Section title={t(language, 'spiralColorSection')}>
                             <div className="flex flex-wrap gap-2 mb-1">
                                 {form.spiralColors.map((c, i) => (
                                     <ColorChip key={i} color={c} onRemove={() => removeColor('spiralColors', i)} />
@@ -269,13 +270,13 @@ const ProductModal = ({ product, dealerId, onClose, onSaved }) => {
                     )}
 
                     {/* Elastic */}
-                    <Section title="Резинка">
-                        <CheckToggle label="Есть резинка" checked={form.hasElastic} onChange={() => setForm(f => ({ ...f, hasElastic: !f.hasElastic }))} />
+                    <Section title={t(language, 'elasticSection')}>
+                        <CheckToggle label={t(language, 'hasElasticLabel')} checked={form.hasElastic} onChange={() => setForm(f => ({ ...f, hasElastic: !f.hasElastic }))} />
                     </Section>
 
                     {/* Elastic colors */}
                     {form.hasElastic && (
-                        <Section title="Цвет резинки">
+                        <Section title={t(language, 'elasticColorSection')}>
                             <div className="flex flex-wrap gap-2 mb-1">
                                 {form.elasticColors.map((c, i) => (
                                     <ColorChip key={i} color={c} onRemove={() => removeColor('elasticColors', i)} />
@@ -286,7 +287,7 @@ const ProductModal = ({ product, dealerId, onClose, onSaved }) => {
                     )}
 
                     {/* Format */}
-                    <Section title="Формат">
+                    <Section title={t(language, 'formatSection')}>
                         <div className="flex gap-6">
                             <CheckToggle label="A5" checked={form.formats.includes('A5')} onChange={() => toggleFormat('A5')} />
                             <CheckToggle label="A6" checked={form.formats.includes('A6')} onChange={() => toggleFormat('A6')} />
@@ -294,7 +295,7 @@ const ProductModal = ({ product, dealerId, onClose, onSaved }) => {
                     </Section>
 
                     {/* Cover colors */}
-                    <Section title="Цвет обложки">
+                    <Section title={t(language, 'coverColorSection')}>
                         <div className="flex flex-wrap gap-2 mb-1">
                             {form.coverColors.map((c, i) => (
                                 <ColorChip key={i} color={c} onRemove={() => removeColor('coverColors', i)} />
@@ -304,9 +305,9 @@ const ProductModal = ({ product, dealerId, onClose, onSaved }) => {
                     </Section>
 
                     {/* Pricing */}
-                    <Section title="Цена">
+                    <Section title={t(language, 'priceSection')}>
                         <div className="mb-5">
-                            <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-1.5">Розница (BYN / шт)</p>
+                            <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-1.5">{t(language, 'retailPriceDesc')}</p>
                             <input
                                 type="number"
                                 value={form.retailPrice}
@@ -316,14 +317,14 @@ const ProductModal = ({ product, dealerId, onClose, onSaved }) => {
                             />
                         </div>
 
-                        <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-2">Оптовые уровни</p>
+                        <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-2">{t(language, 'wholesaleTiersLabel')}</p>
                         {form.wholesaleTiers.length > 0 && (
                             <div className="mb-3 space-y-2">
                                 {form.wholesaleTiers.map((tier, i) => (
                                     <div key={i} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-[12px] px-4 py-2.5">
-                                        <span className="text-xs text-gray-400">от <span className="text-white font-bold">{tier.minQty}</span> шт.</span>
+                                        <span className="text-xs text-gray-400">{t(language, 'fromLabel')} <span className="text-white font-bold">{tier.minQty}</span> {t(language, 'pcsUnit')}</span>
                                         <span className="text-gray-600">→</span>
-                                        <span className="text-xs text-white font-bold">{tier.pricePerUnit} BYN/шт</span>
+                                        <span className="text-xs text-white font-bold">{tier.pricePerUnit} BYN/{t(language, 'pcsUnit')}</span>
                                         <button
                                             onClick={() => setForm(f => ({ ...f, wholesaleTiers: f.wholesaleTiers.filter((_, j) => j !== i) }))}
                                             className="ml-auto text-gray-600 hover:text-red-400 transition-colors text-sm"
@@ -337,21 +338,21 @@ const ProductModal = ({ product, dealerId, onClose, onSaved }) => {
                                 type="number"
                                 value={tierInput.minQty}
                                 onChange={(e) => setTierInput(t => ({ ...t, minQty: e.target.value }))}
-                                placeholder="От (шт)"
+                                placeholder={t(language, 'fromQtyPlaceholder')}
                                 className="w-28 bg-black/20 border border-white/10 rounded-[12px] px-3 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30"
                             />
                             <input
                                 type="number"
                                 value={tierInput.pricePerUnit}
                                 onChange={(e) => setTierInput(t => ({ ...t, pricePerUnit: e.target.value }))}
-                                placeholder="BYN / шт"
+                                placeholder={t(language, 'pricePerPcsPlaceholder')}
                                 className="w-28 bg-black/20 border border-white/10 rounded-[12px] px-3 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30"
                             />
                             <button
                                 onClick={addTier}
                                 className="px-4 py-2 bg-white/10 border border-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-[12px] transition-all whitespace-nowrap"
                             >
-                                + Уровень
+                                {t(language, 'addTierBtn')}
                             </button>
                         </div>
                     </Section>
@@ -361,14 +362,14 @@ const ProductModal = ({ product, dealerId, onClose, onSaved }) => {
                 {/* Footer */}
                 <div className="flex gap-3 px-6 py-4 border-t border-white/5 shrink-0">
                     <button onClick={onClose} className="flex-1 py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300 text-xs font-bold uppercase tracking-widest rounded-[14px] transition-all">
-                        Отмена
+                        {t(language, 'cancelBtn')}
                     </button>
                     <button
                         onClick={handleSave}
                         disabled={saving}
                         className={`flex-1 py-3 bg-white text-black text-xs font-bold uppercase tracking-widest rounded-[14px] hover:bg-gray-100 transition-all ${saving ? 'opacity-50 cursor-not-allowed' : 'active:scale-[0.98]'}`}
                     >
-                        {saving ? 'Сохранение...' : (isEdit ? 'Сохранить' : 'Добавить')}
+                        {saving ? t(language, 'savingLabel') : (isEdit ? t(language, 'saveLabel') : t(language, 'addLabel'))}
                     </button>
                 </div>
             </div>
@@ -378,10 +379,10 @@ const ProductModal = ({ product, dealerId, onClose, onSaved }) => {
 
 // ─── DealerDashboard ──────────────────────────────────────────────────────────
 
-const BINDING_LABELS = { hard: 'Твёрдый', spiral: 'На пружине' };
+const getBindingLabel = (binding, language) => ({ hard: t(language, 'bindingHardShort'), spiral: t(language, 'bindingSpiralShort') })[binding] || binding;
 
 export const DealerDashboard = ({ onBack }) => {
-    const { currentUser, logout } = useConfigurator();
+    const { currentUser, logout, language } = useConfigurator();
     const [activeTab, setActiveTab] = useState('products');
     const [orders, setOrders] = useState([]);
     const [products, setProducts] = useState([]);
@@ -464,7 +465,7 @@ export const DealerDashboard = ({ onBack }) => {
                 setOrderTypeDraft(JSON.stringify(data, null, 2));
             }).catch(() => {
                 setOrderTypeDraft('');
-                setOrderTypeError('Не удалось загрузить JSON');
+                setOrderTypeError(t(language, 'orderTypeError'));
             });
         }
     }, [activeTab, selectedOrderType]);
@@ -516,7 +517,7 @@ export const DealerDashboard = ({ onBack }) => {
             const saved = await saveOrderType(selectedOrderType, parsed);
             setOrderTypeDraft(JSON.stringify(saved, null, 2));
         } catch (err) {
-            setOrderTypeError(err instanceof SyntaxError ? 'JSON содержит синтаксическую ошибку' : 'Не удалось сохранить JSON');
+            setOrderTypeError(err instanceof SyntaxError ? t(language, 'orderTypeSyntaxError') : t(language, 'orderTypeSaveError'));
         } finally {
             setOrderTypeSaving(false);
         }
@@ -536,6 +537,7 @@ export const DealerDashboard = ({ onBack }) => {
                     dealerId={currentUser?.id}
                     onClose={() => { setShowModal(false); setEditingProduct(null); }}
                     onSaved={handleProductSaved}
+                    language={language}
                 />
             )}
 
@@ -548,15 +550,15 @@ export const DealerDashboard = ({ onBack }) => {
                         </div>
                         <span className="font-bold text-sm tracking-wide">Spruzhuk</span>
                     </div>
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Дилер</p>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{t(language, 'dealerDashTitle')}</p>
                     <p className="text-xs text-gray-400 mt-0.5 truncate">{getUserSecondaryLabel(currentUser)}</p>
                 </div>
 
                 <nav className="flex-1 p-3 space-y-1">
                     {[
-                        ...(isAdmin ? [] : [{ id: 'products', icon: '🗂️', label: 'Мои продукты' }]),
-                        { id: 'orders',   icon: '📦', label: 'Заказы' },
-                        { id: 'clients',  icon: '👥', label: 'Мои клиенты' },
+                        ...(isAdmin ? [] : [{ id: 'products', icon: '🗂️', label: t(language, 'tabProducts') }]),
+                        { id: 'orders',   icon: '📦', label: t(language, 'tabOrders') },
+                        { id: 'clients',  icon: '👥', label: t(language, 'tabClients') },
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -578,7 +580,7 @@ export const DealerDashboard = ({ onBack }) => {
                         onClick={() => { logout(); onBack(); }}
                         className="w-full py-3 px-4 rounded-[14px] text-xs font-bold text-gray-500 hover:bg-white/5 hover:text-red-400 transition-all uppercase tracking-widest text-left"
                     >
-                        Выйти
+                        {t(language, 'logout')}
                     </button>
                 </div>
             </aside>
@@ -589,7 +591,7 @@ export const DealerDashboard = ({ onBack }) => {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                     <span className="font-bold text-sm tracking-wide">Spruzhuk</span>
                 </div>
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">Дилер</span>
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{t(language, 'dealerDashTitle')}</span>
                 <span className="text-xs text-gray-500 truncate ml-auto">{getUserSecondaryLabel(currentUser)}</span>
             </div>
 
@@ -602,13 +604,13 @@ export const DealerDashboard = ({ onBack }) => {
                             onClick={() => setActiveTab('orders')}
                             className={`px-4 py-2 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'orders' ? 'bg-white text-black border-white' : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'}`}
                         >
-                            Заказы
+                            {t(language, 'tabOrders')}
                         </button>
                         <button
                             onClick={() => setActiveTab('orderTypes')}
                             className={`px-4 py-2 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'orderTypes' ? 'bg-white text-black border-white' : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'}`}
                         >
-                            JSON типы заказов
+                            {t(language, 'orderTypesTabLabel')}
                         </button>
                     </div>
                 )}
@@ -618,28 +620,28 @@ export const DealerDashboard = ({ onBack }) => {
                     <div>
                         <div className="flex justify-between items-center mb-6">
                             <div>
-                                <h2 className="text-xl font-bold uppercase tracking-widest text-white">Мои продукты</h2>
-                                <p className="text-xs text-gray-500 mt-1">Каталог и настройки позиций</p>
+                                <h2 className="text-xl font-bold uppercase tracking-widest text-white">{t(language, 'myProductsTitle')}</h2>
+                                <p className="text-xs text-gray-500 mt-1">{t(language, 'productsCatalogDesc')}</p>
                             </div>
                             <button
                                 onClick={openAdd}
                                 className="px-5 py-2.5 bg-white text-black text-xs font-bold uppercase tracking-widest rounded-full hover:bg-gray-100 active:scale-95 transition-all"
                             >
-                                + Добавить продукт
+                                + {t(language, 'addProduct')}
                             </button>
                         </div>
 
                         {loading ? (
                             <div className="py-20 flex flex-col items-center gap-3">
                                 <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                                <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Загрузка...</p>
+                                <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">{t(language, 'loading')}</p>
                             </div>
                         ) : products.length === 0 ? (
                             <div className="py-20 flex flex-col items-center gap-4">
                                 <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10 text-2xl">📦</div>
-                                <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Нет продуктов</p>
+                                <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">{t(language, 'noProducts')}</p>
                                 <button onClick={openAdd} className="px-5 py-2.5 bg-white text-black text-xs font-bold uppercase tracking-widest rounded-full hover:bg-gray-100 active:scale-95 transition-all">
-                                    + Добавить первый
+                                    {t(language, 'addFirstProduct')}
                                 </button>
                             </div>
                         ) : (
@@ -659,10 +661,10 @@ export const DealerDashboard = ({ onBack }) => {
                                                 <span key={f} className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-white/5 text-gray-400 border border-white/5">{f}</span>
                                             ))}
                                             {prod.binding?.map(b => (
-                                                <span key={b} className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20">{BINDING_LABELS[b] || b}</span>
+                                                <span key={b} className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20">{getBindingLabel(b, language)}</span>
                                             ))}
                                             {prod.hasElastic && (
-                                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Резинка</span>
+                                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">{t(language, 'elasticTag')}</span>
                                             )}
                                         </div>
 
@@ -683,7 +685,7 @@ export const DealerDashboard = ({ onBack }) => {
                                             <div className="min-w-0">
                                                 <span className="font-bold text-white text-sm">{prod.retailPrice} BYN</span>
                                                 {prod.wholesaleTiers?.length > 0 && (
-                                                    <span className="text-[10px] text-gray-500 ml-1.5">/ опт {prod.wholesaleTiers[0].pricePerUnit} BYN</span>
+                                                    <span className="text-[10px] text-gray-500 ml-1.5">{t(language, 'wholesalePrefix')} {prod.wholesaleTiers[0].pricePerUnit} BYN</span>
                                                 )}
                                             </div>
                                             <div className="flex gap-2 shrink-0">
@@ -691,13 +693,13 @@ export const DealerDashboard = ({ onBack }) => {
                                                     onClick={() => openEdit(prod)}
                                                     className="px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300 text-[10px] font-bold uppercase tracking-wider rounded-full transition-all"
                                                 >
-                                                    Изменить
+                                                    {t(language, 'editBtn')}
                                                 </button>
                                                 <button
                                                     onClick={() => handleDeleteProduct(prod.id)}
                                                     className="px-3 py-1.5 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 text-[10px] font-bold uppercase tracking-wider rounded-full transition-all"
                                                 >
-                                                    Удалить
+                                                    {t(language, 'deleteBtn')}
                                                 </button>
                                             </div>
                                         </div>
@@ -713,24 +715,24 @@ export const DealerDashboard = ({ onBack }) => {
                     <div>
                         <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
                             <div>
-                                <h2 className="text-xl font-bold uppercase tracking-widest text-white">Типы заказов</h2>
-                                <p className="text-xs text-gray-500 mt-1">Редактирование JSON-файлов, которые описывают доступные типы заказов</p>
+                                <h2 className="text-xl font-bold uppercase tracking-widest text-white">{t(language, 'orderTypesTitle')}</h2>
+                                <p className="text-xs text-gray-500 mt-1">{t(language, 'orderTypesDesc')}</p>
                             </div>
                             <button
                                 onClick={handleSaveOrderType}
                                 disabled={!selectedOrderType || orderTypeSaving}
                                 className="px-5 py-2.5 bg-white text-black text-xs font-bold uppercase tracking-widest rounded-full hover:bg-gray-100 active:scale-95 transition-all disabled:opacity-40"
                             >
-                                {orderTypeSaving ? 'Сохранение...' : 'Сохранить JSON'}
+                                {orderTypeSaving ? t(language, 'savingLabel') : t(language, 'saveJsonBtn')}
                             </button>
                         </div>
 
                         <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4">
                             <div className="bg-white/[0.03] border border-white/10 rounded-[18px] overflow-hidden">
                                 {loading ? (
-                                    <div className="p-5 text-xs text-gray-500 font-bold uppercase tracking-widest">Загрузка...</div>
+                                    <div className="p-5 text-xs text-gray-500 font-bold uppercase tracking-widest">{t(language, 'loading')}</div>
                                 ) : orderTypes.length === 0 ? (
-                                    <div className="p-5 text-xs text-gray-500 font-bold uppercase tracking-widest">Файлы не найдены</div>
+                                    <div className="p-5 text-xs text-gray-500 font-bold uppercase tracking-widest">{t(language, 'orderTypesFilesNotFound')}</div>
                                 ) : (
                                     orderTypes.map(item => (
                                         <button
@@ -766,8 +768,8 @@ export const DealerDashboard = ({ onBack }) => {
                     <div>
                         <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
                             <div>
-                                <h2 className="text-xl font-bold uppercase tracking-widest text-white">Управление заказами</h2>
-                                <p className="text-xs text-gray-500 mt-1">Все входящие заявки от клиентов</p>
+                                <h2 className="text-xl font-bold uppercase tracking-widest text-white">{t(language, 'ordersManagementTitle')}</h2>
+                                <p className="text-xs text-gray-500 mt-1">{t(language, 'ordersManagementDesc')}</p>
                             </div>
                             <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-full">
                                 <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full shadow-[0_0_6px_rgba(52,211,153,0.8)]"></div>
@@ -779,12 +781,12 @@ export const DealerDashboard = ({ onBack }) => {
                             {loading ? (
                                 <div className="py-20 flex flex-col items-center gap-3">
                                     <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Загрузка из БД...</p>
+                                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">{t(language, 'loadingFromDb')}</p>
                                 </div>
                             ) : orders.length === 0 ? (
                                 <div className="py-20 flex flex-col items-center gap-4">
                                     <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10 text-2xl">📭</div>
-                                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Нет заказов</p>
+                                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">{t(language, 'noOrders')}</p>
                                 </div>
                             ) : (
                                 orders.map((order, i) => {
@@ -807,7 +809,7 @@ export const DealerDashboard = ({ onBack }) => {
                                                     <span className="text-xs text-gray-500 truncate block">{order.product} · {order.price} BYN</span>
                                                 </div>
                                                 <div className="flex items-center gap-3 shrink-0">
-                                                    <StatusBadge status={order.status} />
+                                                    <StatusBadge status={order.status} language={language} />
                                                     <svg
                                                         width="14" height="14" viewBox="0 0 14 14" fill="none"
                                                         className={`text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
@@ -821,7 +823,7 @@ export const DealerDashboard = ({ onBack }) => {
                                             {isExpanded && (
                                                 <div className="px-4 md:px-6 pb-6 border-t border-white/5 bg-white/[0.02]">
                                                     {/* Progress bar */}
-                                                    <OrderProgressBar status={order.status} stageHistory={order.stageHistory} />
+                                                    <OrderProgressBar status={order.status} stageHistory={order.stageHistory} language={language} />
 
                                                     {/* Approval review */}
                                                     <div className="mt-4">
@@ -836,7 +838,7 @@ export const DealerDashboard = ({ onBack }) => {
 
                                                     {/* Status controls */}
                                                     <div className="mt-5 space-y-3">
-                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Обновить этап</p>
+                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{t(language, 'updateStage')}</p>
 
                                                         {/* Stage buttons */}
                                                         <div className="flex flex-wrap gap-2">
@@ -856,7 +858,7 @@ export const DealerDashboard = ({ onBack }) => {
                                                                                     : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10 hover:text-white'
                                                                             } ${isUpdating ? 'opacity-40 cursor-not-allowed' : ''}`}
                                                                     >
-                                                                        {stage.icon} {stage.text}
+                                                                        {stage.icon} {t(language, stage.textKey)}
                                                                         {isCurrent && ' ✓'}
                                                                     </button>
                                                                 );
@@ -867,7 +869,7 @@ export const DealerDashboard = ({ onBack }) => {
                                                         <div className="flex gap-2 items-start" onClick={e => e.stopPropagation()}>
                                                             <textarea
                                                                 rows={2}
-                                                                placeholder="Комментарий к этапу (необязательно)..."
+                                                                placeholder={t(language, 'stageCommentOptional')}
                                                                 value={commentDraft[order.id] || ''}
                                                                 onChange={e => setCommentDraft(prev => ({ ...prev, [order.id]: e.target.value }))}
                                                                 className="flex-1 bg-black/20 border border-white/10 rounded-[12px] px-4 py-3 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 resize-none"
@@ -888,30 +890,30 @@ export const DealerDashboard = ({ onBack }) => {
                     <div>
                         <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
                             <div>
-                                <h2 className="text-xl font-bold uppercase tracking-widest text-white">Мои клиенты</h2>
-                                <p className="text-xs text-gray-500 mt-1">Пользователи, которые сделали заказы через вас</p>
+                                <h2 className="text-xl font-bold uppercase tracking-widest text-white">{t(language, 'myClientsTitle')}</h2>
+                                <p className="text-xs text-gray-500 mt-1">{t(language, 'myClientsDesc')}</p>
                             </div>
                         </div>
                         <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[24px] overflow-hidden">
                             {loading ? (
                                 <div className="py-20 flex flex-col items-center gap-3">
                                     <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Загрузка...</p>
+                                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">{t(language, 'loading')}</p>
                                 </div>
                             ) : clients.length === 0 ? (
                                 <div className="py-20 flex flex-col items-center gap-4">
                                     <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10 text-2xl">👥</div>
-                                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Нет клиентов</p>
+                                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">{t(language, 'noClients')}</p>
                                 </div>
                             ) : (
                                 <table className="w-full text-sm">
                                     <thead className="bg-white/5 text-[10px] uppercase tracking-widest text-gray-500">
                                         <tr>
-                                            <th className="text-left px-5 py-3 font-bold">Клиент</th>
-                                            <th className="text-left px-5 py-3 font-bold">Email</th>
-                                            <th className="text-left px-5 py-3 font-bold">Роль</th>
-                                            <th className="text-right px-5 py-3 font-bold">Заказов</th>
-                                            <th className="text-right px-5 py-3 font-bold">Последний</th>
+                                            <th className="text-left px-5 py-3 font-bold">{t(language, 'clientCol')}</th>
+                                            <th className="text-left px-5 py-3 font-bold">{t(language, 'emailLabel')}</th>
+                                            <th className="text-left px-5 py-3 font-bold">{t(language, 'roleCol')}</th>
+                                            <th className="text-right px-5 py-3 font-bold">{t(language, 'ordersCountCol')}</th>
+                                            <th className="text-right px-5 py-3 font-bold">{t(language, 'lastOrderCol')}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -921,7 +923,7 @@ export const DealerDashboard = ({ onBack }) => {
                                             <td className="px-5 py-3 text-gray-300">{c.email}</td>
                                             <td className="px-5 py-3 text-gray-400 text-xs uppercase tracking-wider">{c.role}{c.sub_role ? ` · ${c.sub_role}` : ''}</td>
                                             <td className="px-5 py-3 text-right text-white font-bold">{c.orders_count}</td>
-                                            <td className="px-5 py-3 text-right text-gray-400 text-xs">{c.last_order_at ? new Date(c.last_order_at).toLocaleDateString('ru-RU') : '—'}</td>
+                                            <td className="px-5 py-3 text-right text-gray-400 text-xs">{c.last_order_at ? new Date(c.last_order_at).toLocaleDateString() : '—'}</td>
                                         </tr>
                                     ))}
                                     </tbody>
@@ -935,13 +937,13 @@ export const DealerDashboard = ({ onBack }) => {
             {/* BOTTOM NAV — только на mobile */}
             <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#0B0F19]/95 backdrop-blur-xl border-t border-white/5 flex items-center px-2 pb-safe">
                 {[
-                    { id: 'products', label: 'Продукты', icon: (
+                    { id: 'products', label: t(language, 'tabProducts'), icon: (
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="7" height="7"/><rect x="15" y="3" width="7" height="7"/><rect x="2" y="14" width="7" height="7"/><rect x="15" y="14" width="7" height="7"/></svg>
                     )},
-                    { id: 'orders', label: 'Заказы', icon: (
+                    { id: 'orders', label: t(language, 'tabOrders'), icon: (
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/></svg>
                     )},
-                    { id: 'clients', label: 'Клиенты', icon: (
+                    { id: 'clients', label: t(language, 'tabClients'), icon: (
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                     )},
                 ].map(tab => (
@@ -961,7 +963,7 @@ export const DealerDashboard = ({ onBack }) => {
                     className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-gray-600 hover:text-red-400 transition-colors"
                 >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                    <span className="text-[10px] font-bold uppercase tracking-widest">Выйти</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest">{t(language, 'logout')}</span>
                 </button>
             </nav>
         </div>

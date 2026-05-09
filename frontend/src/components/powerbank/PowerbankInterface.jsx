@@ -1,8 +1,9 @@
 import { useRef } from 'react';
 import { useConfigurator, captureRender } from '../../store';
+import { t } from '../../i18n';
 
 const palette = [
-    { name: 'Серый',        bg: '#75787B' },
+    { bg: '#75787B' },
 ];
 
 export const PowerbankInterface = ({ onFinish }) => {
@@ -13,16 +14,15 @@ export const PowerbankInterface = ({ onFinish }) => {
         addPowerbankLogo, selectPowerbankLogo, removePowerbankLogo,
         resetPowerbankLogoTransform,
         setPowerbankLogoPosition, setPowerbankLogoRotation, setPowerbankLogoScale, setPowerbankLogoSide,
-        zoomLevel, setZoom,
-        addToCart, setRenderSnapshot,
+        addToCart, setRenderSnapshot, language,
     } = useConfigurator();
 
     const handleAddToCart = () => {
         const snapshot = captureRender();
         if (snapshot) setRenderSnapshot(snapshot);
         addToCart({
-            productName: 'Повербанк',
-            design: `Цвет: ${powerbankBodyColor}`,
+            productName: t(language, 'powerbank'),
+            design: `${t(language, 'bodyColor')}: ${powerbankBodyColor}`,
             priceTK: 80,
             priceBYN: 3200,
             activeProduct: 'powerbank',
@@ -37,18 +37,17 @@ export const PowerbankInterface = ({ onFinish }) => {
     return (
         <div className="pointer-events-auto w-full h-full md:h-[95%] custom-gradient backdrop-blur-xl rounded-t-[30px] md:rounded-[9px] shadow-2xl flex flex-col overflow-hidden font-zen border-t md:border border-white/20 relative">
 
-            <div className="flex items-end gap-4 px-8 py-6 shrink-0 z-10 bg-white/5 backdrop-blur-sm">
-                <span className="text-2xl md:text-3xl font-bold leading-none opacity-100">Повербанк</span>
+            <div className="flex items-end gap-4 px-5 md:px-8 py-4 md:py-6 shrink-0 z-10 bg-white/5 backdrop-blur-sm">
+                <span className="text-xl sm:text-2xl md:text-3xl font-bold leading-tight opacity-100">{t(language, 'powerbankTitle')}</span>
             </div>
 
             <div className="px-4 md:px-6 pt-3 pb-3 shrink-0">
                 <div className="glass-panel rounded-[11px] px-4 py-3">
-                    <span className="text-[11px] font-bold uppercase tracking-widest opacity-50 block mb-2">Цвет корпуса</span>
+                    <span className="text-[11px] font-bold uppercase tracking-widest opacity-50 block mb-2">{t(language, 'bodyColor')}</span>
                     <div className="flex flex-wrap gap-2">
                         {palette.map(c => (
                             <button
-                                key={c.name}
-                                title={c.name}
+                                key={c.bg}
                                 onClick={() => setColor('powerbankBody', c.bg)}
                                 className={`w-8 h-8 rounded-full border-2 transition-all active:scale-90 ${powerbankBodyColor === c.bg ? 'border-white scale-110 shadow-lg' : 'border-white/20 hover:border-white/60'}`}
                                 style={{ backgroundColor: c.bg }}
@@ -70,22 +69,23 @@ export const PowerbankInterface = ({ onFinish }) => {
                     setLogoRotation={setPowerbankLogoRotation}
                     setLogoScale={setPowerbankLogoScale}
                     setLogoSide={setPowerbankLogoSide}
+                    language={language}
                 />
             </div>
 
             <div className="absolute bottom-0 left-0 w-full p-4 md:p-6 z-20 border-t border-white/10 bg-[#0E2235]/85 dark:bg-[#0E2235]/85 backdrop-blur-xl">
                 <button
                     onClick={handleAddToCart}
-                    className="w-full py-4 bg-white text-[#1a1a1a] rounded-[11px] text-xl font-black tracking-[0.2em] uppercase hover:bg-gray-100 transition-all shadow-lg active:scale-[0.98]"
+                    className="w-full py-3.5 md:py-4 bg-white text-[#1a1a1a] rounded-[11px] text-base sm:text-lg md:text-xl font-black tracking-[0.08em] sm:tracking-[0.14em] md:tracking-[0.2em] uppercase hover:bg-gray-100 transition-all shadow-lg active:scale-[0.98]"
                 >
-                    Оформить заказ
+                    {t(language, 'placeOrder')}
                 </button>
             </div>
         </div>
     );
 };
 
-const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide }) => {
+const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide, language }) => {
     const selected = logos.find(l => l.id === selectedLogoId) || null;
     const rotStart = useRef(0);
     const rotStartX = useRef(null);
@@ -102,10 +102,10 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
 
     return (
         <div className="glass-panel rounded-[11px] p-5">
-            <h3 className="text-xl font-bold tracking-wide mb-4">Логотип</h3>
+            <h3 className="text-lg md:text-xl font-bold tracking-wide mb-4">{t(language, 'logoLabel')}</h3>
 
             <label className="block w-full py-3 bg-white/10 rounded-[6px] text-center cursor-pointer border border-white/20 text-sm font-bold mb-4 hover:bg-white/20 transition-colors">
-                + ДОБАВИТЬ ЛОГОТИП
+                {t(language, 'addLogo')}
                 <input
                     type="file"
                     accept="image/*"
@@ -119,7 +119,7 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
                     {logos.map(logo => (
                         <div key={logo.id} className={`flex items-center rounded-[6px] border ${logo.id === selectedLogoId ? 'bg-white/30 border-white/40' : 'bg-white/10 border-white/10'}`}>
                             <button onClick={() => selectLogo(logo.id)} className="flex-1 py-2 px-3 text-left text-sm font-bold truncate hover:opacity-80 transition-opacity">{logo.filename}</button>
-                            <button onClick={() => removeLogo(logo.id)} className="px-3 py-2 text-white/40 hover:text-white/90 text-lg leading-none transition-colors shrink-0" title="Удалить">×</button>
+                            <button onClick={() => removeLogo(logo.id)} className="px-3 py-2 text-white/40 hover:text-white/90 text-lg leading-none transition-colors shrink-0" title={t(language, 'deleteTooltip')}>×</button>
                         </div>
                     ))}
                 </div>
@@ -128,11 +128,11 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
             {selected && (
                 <div className="flex flex-col gap-4 mt-1">
                     <div className="flex flex-col gap-1.5">
-                        <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">Сторона нанесения</span>
+                        <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">{t(language, 'applicationSide')}</span>
                         <div className="grid grid-cols-2 gap-1.5">
                             {[
-                                { value: 'outer', label: 'Внешняя' },
-                                { value: 'charging', label: 'Зарядки' },
+                                { value: 'outer', label: t(language, 'outerSide') },
+                                { value: 'charging', label: t(language, 'chargingSide') },
                             ].map(opt => (
                                 <button
                                     key={opt.value}
@@ -145,15 +145,15 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
                         </div>
                         <p className="text-[10px] opacity-35 leading-tight mt-0.5">
                             {(selected.side ?? 'outer') === 'charging'
-                                ? 'Сторона с кольцом и индикаторами'
-                                : 'Противоположная плоская сторона'}
+                                ? t(language, 'chargingSideDesc')
+                                : t(language, 'outerSideDesc')}
                         </p>
                     </div>
 
                     <div className="flex flex-col gap-1">
                         <div className="flex items-center justify-between mb-1">
-                            <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">Позиция</span>
-                            <button onClick={resetLogoTransform} className="text-[10px] font-bold opacity-40 hover:opacity-80 transition-opacity uppercase tracking-wider border border-white/20 px-2 py-0.5 rounded-[5px] hover:border-white/40">↺ По центру</button>
+                            <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">{t(language, 'position')}</span>
+                            <button onClick={resetLogoTransform} className="text-[10px] font-bold opacity-40 hover:opacity-80 transition-opacity uppercase tracking-wider border border-white/20 px-2 py-0.5 rounded-[5px] hover:border-white/40">{t(language, 'centerBtn')}</button>
                         </div>
                         <div
                             className="relative w-full aspect-[3/4] bg-white/8 rounded-[10px] border border-white/15 cursor-crosshair touch-none select-none overflow-hidden"
@@ -181,7 +181,7 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
 
                     <div className="flex flex-col gap-1.5">
                         <div className="flex justify-between items-center">
-                            <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">Поворот</span>
+                            <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">{t(language, 'rotation')}</span>
                             <span className="text-xs font-bold opacity-80">{Math.round((selected.rotation ?? 0) * 180 / Math.PI)}°</span>
                         </div>
                         <div
@@ -205,7 +205,7 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
 
                     <div className="flex flex-col gap-1">
                         <div className="flex justify-between items-center">
-                            <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">Размер</span>
+                            <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">{t(language, 'size')}</span>
                             <span className="text-xs font-bold opacity-80">{Math.round((selected.scale ?? 0.6) * 100)}%</span>
                         </div>
                         <input

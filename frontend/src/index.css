@@ -15,6 +15,18 @@ html, body, #root {
   transition: background 0.4s ease;
 }
 
+* {
+  box-sizing: border-box;
+}
+
+button, input, textarea, select {
+  min-width: 0;
+}
+
+img, canvas, svg {
+  max-width: 100%;
+}
+
 @media (max-width: 768px) {
   html, body, #root {
     overflow-y: auto;
@@ -33,6 +45,43 @@ html.dark, html.dark body, html.dark #root {
 }
 .dark .app-bg {
   background: linear-gradient(180deg, #132B3F 0%, #4A3839 100%);
+}
+
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.pt-safe {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+
+.touch-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar,
+.touch-scroll-x::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb,
+.touch-scroll-x::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.24);
+}
+
+@media (max-width: 640px) {
+  .mobile-tight-track {
+    letter-spacing: 0.08em;
+  }
 }
 
 /* === ВАШИ НОВЫЕ СТИЛИ === */
@@ -112,34 +161,13 @@ html.dark, html.dark body, html.dark #root {
 }
 
 .vibe-loader__logo {
-  position: relative;
-  width: 178px;
-  height: 98px;
-  filter: drop-shadow(0 20px 34px rgba(0, 0, 0, 0.34));
+  width: 200px;
+  height: 200px;
 }
 
 .vibe-loader--compact .vibe-loader__logo {
-  width: 86px;
-  height: 47px;
-}
-
-.vibe-loader__logo-frame {
-  --frame-step: 0.5s;
-  --frame-duration: 0.42s;
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  opacity: 0;
-  transform: scale(0.985);
-  animation: vibe-logo-frame-flow var(--frame-duration) ease-out forwards;
-  animation-delay: calc(var(--frame-index) * var(--frame-step));
-}
-
-.vibe-loader__logo-frame--final {
-  animation-name: vibe-logo-frame-hold;
+  width: 96px;
+  height: 96px;
 }
 
 .vibe-loader__meta {
@@ -190,17 +218,6 @@ html.dark, html.dark body, html.dark #root {
 @keyframes scene-loader-fade {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-
-@keyframes vibe-logo-frame-flow {
-  0% { opacity: 1; transform: scale(1); }
-  72% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.015); }
-}
-
-@keyframes vibe-logo-frame-hold {
-  0% { opacity: 1; transform: scale(1); }
-  100% { opacity: 1; transform: scale(1); }
 }
 
 @keyframes vibe-bar-sheen {

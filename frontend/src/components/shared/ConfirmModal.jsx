@@ -2,10 +2,10 @@ import { useEffect } from 'react';
 
 export const ConfirmModal = ({
     open,
-    title = 'Подтвердите действие',
+    title = 'Confirm',
     message,
-    confirmLabel = 'Подтвердить',
-    cancelLabel = 'Отмена',
+    confirmLabel = 'Confirm',
+    cancelLabel = 'Cancel',
     danger = false,
     onConfirm,
     onCancel,

@@ -1,27 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useProgress } from '@react-three/drei';
-import loaderFrame01 from '../../assets/loader/logo-loader-01.svg';
-import loaderFrame02 from '../../assets/loader/logo-loader-02.svg';
-import loaderFrame03 from '../../assets/loader/logo-loader-03.svg';
-import loaderFrame04 from '../../assets/loader/logo-loader-04.svg';
-import loaderFrame05 from '../../assets/loader/logo-loader-05.svg';
-import loaderFrame06 from '../../assets/loader/logo-loader-06.svg';
-import loaderFrame07 from '../../assets/loader/logo-loader-07.svg';
-import loaderFrame08 from '../../assets/loader/logo-loader-08.svg';
+import Lottie from 'lottie-react';
+import animationData from '../../assets/loader/loader.json';
 
 const clampProgress = (value) => Math.max(0, Math.min(100, Math.round(value || 0)));
 const LOGO_ANIMATION_MS = 4000;
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
-const loaderFrames = [
-    loaderFrame01,
-    loaderFrame02,
-    loaderFrame03,
-    loaderFrame04,
-    loaderFrame05,
-    loaderFrame06,
-    loaderFrame07,
-    loaderFrame08,
-];
 
 export function useLoaderCompletionGate(loading, duration = LOGO_ANIMATION_MS) {
     const [visible, setVisible] = useState(loading);
@@ -46,21 +30,18 @@ export function useLoaderCompletionGate(loading, duration = LOGO_ANIMATION_MS) {
     return visible;
 }
 
-export function VibeLoader({ progress = 0, label = 'Собираем сцену', compact = false, className = '' }) {
+export function VibeLoader({ progress = 0, label = 'Loading...', compact = false, className = '' }) {
     const pct = clampProgress(progress);
 
     return (
         <div className={`vibe-loader ${compact ? 'vibe-loader--compact' : ''} ${className}`}>
             <div className="vibe-loader__logo" aria-hidden="true">
-                {loaderFrames.map((frame, index) => (
-                    <img
-                        key={frame}
-                        src={frame}
-                        alt=""
-                        className={`vibe-loader__logo-frame ${index === loaderFrames.length - 1 ? 'vibe-loader__logo-frame--final' : ''}`}
-                        style={{ '--frame-index': String(index) }}
-                    />
-                ))}
+                <Lottie
+                    animationData={animationData}
+                    loop
+                    autoplay
+                    style={{ width: '100%', height: '100%' }}
+                />
             </div>
             {!compact && (
                 <div className="vibe-loader__meta">
@@ -109,7 +90,7 @@ export function SceneLoadingOverlay({ label, compact = false }) {
     );
 }
 
-export function FullPageVibeLoader({ label = 'Загружаем' }) {
+export function FullPageVibeLoader({ label = 'Loading...' }) {
     return (
         <div className="app-bg fixed inset-0 flex items-center justify-center">
             <VibeLoader progress={72} label={label} />

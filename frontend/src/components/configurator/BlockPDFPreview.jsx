@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { useConfigurator } from '../../store';
+import { t } from '../../i18n';
 import * as pdfjsLib from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -15,6 +17,7 @@ export function BlockPDFPreview({ pattern }) {
     const canvasRef = useRef(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(false);
+    const { language } = useConfigurator();
 
     useEffect(() => {
         const pdfUrl = PATTERN_PDF[pattern];
@@ -69,7 +72,7 @@ export function BlockPDFPreview({ pattern }) {
             )}
             {error && (
                 <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm">
-                    Предпросмотр недоступен
+                    {t(language, 'previewUnavailable')}
                 </div>
             )}
             <canvas ref={canvasRef} className="w-full block" />

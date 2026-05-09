@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Command } from 'cmdk';
 import { useConfigurator } from '../../store';
+import { t } from '../../i18n';
 
 export const CommandPalette = ({ navigate, screen, onClose, openAuth }) => {
     const [open, setOpen] = useState(false);
@@ -8,7 +9,7 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth }) => {
 
     const {
         currentUser, userRole, theme, toggleTheme, logout,
-        activeProduct, setProduct, resetConfigurator,
+        activeProduct, setProduct, resetConfigurator, language,
     } = useConfigurator();
 
     useEffect(() => {
@@ -51,58 +52,58 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth }) => {
 
     const items = useMemo(() => {
         const list = [];
-        // Навигация
-        list.push({ group: 'Навигация', id: 'nav-home', label: 'Главная', shortcut: 'G H', onSelect: () => go('home') });
+        const nav = t(language, 'cmdGroupNav');
+        const cfg = t(language, 'cmdGroupCfg');
+        const actions = t(language, 'cmdGroupActions');
+        list.push({ group: nav, id: 'nav-home', label: t(language, 'cmdHome'), shortcut: 'G H', onSelect: () => go('home') });
         if (currentUser) {
             if (userRole === 'client' || !userRole) {
-                list.push({ group: 'Навигация', id: 'nav-dashboard', label: 'Личный кабинет', onSelect: () => go('client_dashboard') });
+                list.push({ group: nav, id: 'nav-dashboard', label: t(language, 'cmdDashboard'), onSelect: () => go('client_dashboard') });
             }
             if (userRole === 'dealer') {
-                list.push({ group: 'Навигация', id: 'nav-dealer', label: 'Кабинет дилера', onSelect: () => go('dealer') });
+                list.push({ group: nav, id: 'nav-dealer', label: t(language, 'cmdDealerCab'), onSelect: () => go('dealer') });
             }
             if (userRole === 'manufacturer') {
-                list.push({ group: 'Навигация', id: 'nav-manufacturer', label: 'Кабинет производства', onSelect: () => go('manufacturer') });
+                list.push({ group: nav, id: 'nav-manufacturer', label: t(language, 'cmdManufacturerCab'), onSelect: () => go('manufacturer') });
             }
             if (userRole === 'admin' || userRole === 'owner') {
-                list.push({ group: 'Навигация', id: 'nav-admin', label: 'Админ-панель', onSelect: () => go('admin_dashboard') });
+                list.push({ group: nav, id: 'nav-admin', label: t(language, 'cmdAdminPanel'), onSelect: () => go('admin_dashboard') });
             }
         }
-        // Конструктор
-        list.push({ group: 'Конструктор', id: 'cfg-notebook', label: 'Ежедневник', onSelect: () => goConfigurator('notebook') });
-        list.push({ group: 'Конструктор', id: 'cfg-thermos', label: 'Термос', onSelect: () => goConfigurator('thermos') });
-        list.push({ group: 'Конструктор', id: 'cfg-powerbank', label: 'Повербанк', onSelect: () => goConfigurator('powerbank') });
-        // Действия
+        list.push({ group: cfg, id: 'cfg-notebook', label: t(language, 'notebook'), onSelect: () => goConfigurator('notebook') });
+        list.push({ group: cfg, id: 'cfg-thermos', label: t(language, 'thermos'), onSelect: () => goConfigurator('thermos') });
+        list.push({ group: cfg, id: 'cfg-powerbank', label: t(language, 'powerbank'), onSelect: () => goConfigurator('powerbank') });
         list.push({
-            group: 'Действия',
+            group: actions,
             id: 'act-theme',
-            label: theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему',
+            label: theme === 'dark' ? t(language, 'cmdLightTheme') : t(language, 'cmdDarkTheme'),
             onSelect: () => { toggleTheme(); close(); },
         });
         if (screen === 'configurator') {
             list.push({
-                group: 'Действия',
+                group: actions,
                 id: 'act-reset',
-                label: `Сбросить конфигуратор (${activeProduct})`,
+                label: `${t(language, 'cmdResetConfigurator')} (${activeProduct})`,
                 onSelect: () => { resetConfigurator(activeProduct); close(); },
             });
         }
         if (currentUser) {
             list.push({
-                group: 'Действия',
+                group: actions,
                 id: 'act-logout',
-                label: 'Выйти из аккаунта',
+                label: t(language, 'cmdLogoutAccount'),
                 onSelect: () => { logout(); close(); navigate?.('home'); },
             });
         } else {
             list.push({
-                group: 'Действия',
+                group: actions,
                 id: 'act-login',
-                label: 'Войти',
+                label: t(language, 'cmdLoginAction'),
                 onSelect: () => { close(); openAuth?.(); },
             });
         }
         return list;
-    }, [currentUser, userRole, theme, screen, activeProduct]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [currentUser, userRole, theme, screen, activeProduct, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (!open) return null;
 
@@ -117,7 +118,7 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth }) => {
             onClick={close}
         >
             <Command
-                label="Командное меню"
+                label={t(language, 'cmdPaletteLabel')}
                 shouldFilter
                 className="w-[92vw] max-w-[560px] bg-white dark:bg-[#10172A] border border-black/10 dark:border-white/10 rounded-[16px] shadow-2xl overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
@@ -128,14 +129,14 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth }) => {
                         autoFocus
                         value={query}
                         onValueChange={setQuery}
-                        placeholder="Куда идём, что делаем?"
+                        placeholder={t(language, 'cmdPlaceholder')}
                         className="flex-1 bg-transparent outline-none text-[15px] text-black dark:text-white placeholder-black/40 dark:placeholder-white/30"
                     />
                     <kbd className="hidden sm:inline text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md bg-black/5 dark:bg-white/10 text-black/50 dark:text-white/50">Esc</kbd>
                 </div>
                 <Command.List className="max-h-[60vh] overflow-y-auto p-2">
                     <Command.Empty className="text-center text-sm text-black/40 dark:text-white/40 py-8">
-                        Ничего не найдено
+                        {t(language, 'cmdEmpty')}
                     </Command.Empty>
                     {Object.entries(grouped).map(([group, list]) => (
                         <Command.Group
@@ -160,8 +161,8 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth }) => {
                     ))}
                 </Command.List>
                 <div className="flex items-center justify-between px-4 py-2 border-t border-black/10 dark:border-white/10 text-[10px] font-bold uppercase tracking-widest text-black/40 dark:text-white/40">
-                    <span>↑ ↓ — навигация</span>
-                    <span>↵ — выбрать</span>
+                    <span>{t(language, 'cmdNavHint')}</span>
+                    <span>{t(language, 'cmdSelectHint')}</span>
                 </div>
             </Command>
         </div>
