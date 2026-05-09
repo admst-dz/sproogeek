@@ -24,6 +24,10 @@ apiClient.interceptors.request.use((config) => {
 export const authApi = {
     register: (data) => apiClient.post('/auth/register', data),
     login: (data) => apiClient.post('/auth/login', data),
+    google: (google_code) => apiClient.post('/auth/google', { google_code }),
+    yandexAuthorizeUrl: (redirect_uri, state) =>
+        apiClient.get('/auth/yandex/authorize-url', { params: { redirect_uri, state } }),
+    yandex: (yandex_code, redirect_uri) => apiClient.post('/auth/yandex', { yandex_code, redirect_uri }),
     adminBackdoor: (data) => apiClient.post('/auth/admin-backdoor', data),
     me: () => apiClient.get('/auth/me'),
     updateRole: (role, sub_role) => apiClient.patch('/auth/me/role', { role, sub_role }),
@@ -127,14 +131,18 @@ export const productApi = {
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
 
+const saveAuthToken = (token) => {
+    if (hasCookieConsent()) {
+        localStorage.setItem('token', token);
+        setCookie(AUTH_COOKIE, token, 30);
+    } else {
+        _memoryToken = token;
+    }
+};
+
 export const loginUser = async (email, password) => {
     const { data } = await authApi.login({ email, password });
-    if (hasCookieConsent()) {
-        localStorage.setItem('token', data.access_token);
-        setCookie(AUTH_COOKIE, data.access_token, 30);
-    } else {
-        _memoryToken = data.access_token;
-    }
+    saveAuthToken(data.access_token);
     return data.user;
 };
 
@@ -146,13 +154,25 @@ export const registerUser = async (email, password, displayName, role, subRole) 
         role,
         sub_role: subRole || null,
     });
-    if (hasCookieConsent()) {
-        localStorage.setItem('token', data.access_token);
-        setCookie(AUTH_COOKIE, data.access_token, 30);
-    } else {
-        _memoryToken = data.access_token;
-    }
+    saveAuthToken(data.access_token);
     return data.user;
+};
+
+export const loginWithGoogleCode = async (googleCode) => {
+    const { data } = await authApi.google(googleCode);
+    saveAuthToken(data.access_token);
+    return data;
+};
+
+export const getYandexAuthorizeUrl = async (redirectUri, state) => {
+    const { data } = await authApi.yandexAuthorizeUrl(redirectUri, state);
+    return data.authorize_url;
+};
+
+export const loginWithYandexCode = async (yandexCode, redirectUri) => {
+    const { data } = await authApi.yandex(yandexCode, redirectUri);
+    saveAuthToken(data.access_token);
+    return data;
 };
 
 export const updateUserRole = async (role, subRole) => {
