@@ -71,6 +71,15 @@ class Settings(BaseSettings):
     redis_url: str = Field("redis://redis:6379/0", alias="REDIS_URL")
     cache_default_ttl: int = Field(300, alias="CACHE_DEFAULT_TTL")
 
+    # ─── Email (отправка отзывов с главной) ───────────────────────────────
+    smtp_host: str = Field("", alias="SMTP_HOST")
+    smtp_port: int = Field(587, alias="SMTP_PORT")
+    smtp_username: str = Field("", alias="SMTP_USERNAME")
+    smtp_password: str = Field("", alias="SMTP_PASSWORD")
+    smtp_use_tls: bool = Field(True, alias="SMTP_USE_TLS")
+    smtp_from: str = Field("", alias="SMTP_FROM")
+    feedback_to: str = Field("info@sproogeek.com", alias="FEEDBACK_TO")
+
     @field_validator("allowed_hosts", "allowed_origins", mode="before")
     @classmethod
     def split_csv(cls, value):
