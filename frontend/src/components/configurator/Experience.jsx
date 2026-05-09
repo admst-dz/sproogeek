@@ -6,7 +6,6 @@ import { Powerbank } from '../powerbank/Powerbank'
 import { useConfigurator, registerWebGLCanvas } from '../../store'
 import { useEffect, useRef, useState } from 'react'
 import { useThree, useFrame } from '@react-three/fiber'
-import { easing } from 'maath'
 
 const PINCH_ZOOM_PRODUCTS = new Set(['thermos', 'powerbank'])
 const clampZoom = (value) => Math.min(Math.max(value, 0.5), 2.5)
@@ -205,12 +204,9 @@ function WheelZoom({ controlsRef }) {
 function CameraUpdater({ targetZoom }) {
     const { camera } = useThree()
 
-    useFrame((_, delta) => {
-        // Плавная интерполяция зума (damp)
-        // camera.zoom меняется от текущего к targetZoom
-        easing.damp(camera, 'zoom', targetZoom, 0.25, delta)
-
-        // Обязательно обновляем матрицу камеры, иначе зум не применится визуально
+    useFrame(() => {
+        if (Math.abs(camera.zoom - targetZoom) < 0.001) return
+        camera.zoom = targetZoom
         camera.updateProjectionMatrix()
     })
 

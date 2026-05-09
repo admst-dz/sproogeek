@@ -164,9 +164,9 @@ function CapLogoPlane({ texture, target = 'capTop', position, rotation = 0, scal
 function CapInnerSeal({ capInner, capRadius }) {
     if (!capInner) return null;
 
-    const sealRadius = Math.max(capInner.rimEndRadius * 0.82, capRadius * 0.42);
+    const sealRadius = capInner.sealRadius ?? Math.max(capInner.rimEndRadius * 0.88, capRadius * 0.46);
     const tubeRadius = Math.max(capRadius * 0.045, 0.012);
-    const y = capInner.bottomLimitY + tubeRadius * 0.25;
+    const y = capInner.sealY ?? capInner.bottomLimitY;
 
     return (
         <mesh position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]} renderOrder={28}>
@@ -359,6 +359,8 @@ export function Thermos(props) {
                     bottomLimitY: cb.min.y + (cb.max.y - cb.min.y) * 0.34,
                     rimStartRadius: capRadius * 0.48,
                     rimEndRadius: capRadius * 0.84,
+                    sealY: cb.min.y + (cb.max.y - cb.min.y) * 0.055,
+                    sealRadius: capRadius * 0.78,
                 },
                 radius: capRadius,
                 minY: cb.min.y,
@@ -431,6 +433,7 @@ export function Thermos(props) {
                     <ThermosMesh
                         geo={bodyGeo}
                         color={thermosBodyColor}
+                        neckStartY={bodyNeckStartY}
                         metalness={0}
                         roughness={0.9}
                         logos={bodyLogos}
