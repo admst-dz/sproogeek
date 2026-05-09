@@ -1,7 +1,5 @@
 import { useRef, useState } from 'react';
 import { useConfigurator, captureRender } from '../../store';
-import { aiApi } from '../../api';
-import { normalizeImageFile } from '../../utils/images';
 import { t } from '../../i18n';
 
 const palette = [
@@ -14,22 +12,6 @@ const palette = [
     { bg: '#1B365D' },
 ];
 
-const dataUrlToPngFile = async (dataUrl, filename) => {
-    const response = await fetch(dataUrl);
-    const blob = await response.blob();
-    const basename = filename.replace(/\.[^.]+$/, '') || 'reference';
-    return new File([blob], `${basename}.png`, { type: 'image/png' });
-};
-
-const normalizeAiReferenceFiles = async (files) => {
-    const normalized = [];
-    for (const file of files.slice(0, 4)) {
-        const dataUrl = await normalizeImageFile(file);
-        normalized.push(await dataUrlToPngFile(dataUrl, file.name));
-    }
-    return normalized;
-};
-
 export const ThermosInterface = ({ onFinish }) => {
     const [logoArea, setLogoArea] = useState('body');
     const [capLogoTarget, setCapLogoTarget] = useState('capTop');
@@ -37,7 +19,7 @@ export const ThermosInterface = ({ onFinish }) => {
         thermosBodyColor, thermosCapColor, thermosCapVisible,
         setColor, toggleThermosCap,
         thermosLogos, selectedThermosLogoId,
-        addThermosLogo, addGeneratedThermosLogo, selectThermosLogo, removeThermosLogo,
+        addThermosLogo, selectThermosLogo, removeThermosLogo,
         resetThermosLogoTransform, setThermosLogoPosition,
         setThermosLogoRotation, setThermosLogoScale,
         addToCart, setRenderSnapshot, language,
@@ -107,10 +89,7 @@ export const ThermosInterface = ({ onFinish }) => {
                     capLogoTarget={capLogoTarget}
                     setCapLogoTarget={setCapLogoTarget}
                     activeLogoTarget={activeLogoTarget}
-                    thermosBodyColor={thermosBodyColor}
-                    thermosCapColor={thermosCapColor}
                     addLogo={addThermosLogo}
-                    addGeneratedLogo={addGeneratedThermosLogo}
                     selectLogo={selectThermosLogo}
                     removeLogo={removeThermosLogo}
                     resetLogoTransform={resetThermosLogoTransform}
@@ -135,12 +114,7 @@ export const ThermosInterface = ({ onFinish }) => {
 
 // --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
 
-const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLogoTarget, setCapLogoTarget, activeLogoTarget, thermosBodyColor, thermosCapColor, addLogo, addGeneratedLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, language }) => {
-    const [aiPrompt, setAiPrompt] = useState('');
-    const [aiFiles, setAiFiles] = useState([]);
-    const [aiPreparingFiles, setAiPreparingFiles] = useState(false);
-    const [aiLoading, setAiLoading] = useState(false);
-    const [aiError, setAiError] = useState('');
+const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLogoTarget, setCapLogoTarget, activeLogoTarget, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, language }) => {
     const visibleLogos = logos.filter(l => (l.target ?? 'body') === activeLogoTarget);
     const selected = visibleLogos.find(l => l.id === selectedLogoId) || null;
     const rotStart = useRef(0);
@@ -154,34 +128,6 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLog
         const ny = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
         setLogoPosition((nx * 2 - 1) * xRange, -(ny * 2 - 1) * yRange);
     };
-
-    const handleAiGenerate = async () => {
-        if (aiLoading || aiPreparingFiles) return;
-        if (!aiPrompt.trim() && aiFiles.length === 0) {
-            setAiError(t(language, 'errAddLogoOrDescribe'));
-            return;
-        }
-
-        setAiLoading(true);
-        setAiError('');
-        try {
-            const { data } = await aiApi.generateThermosDesign({
-                prompt: aiPrompt,
-                target: activeLogoTarget,
-                bodyColor: thermosBodyColor,
-                capColor: thermosCapColor,
-                files: aiFiles,
-            });
-            addGeneratedLogo(data.image, data.filename, data.target);
-            setAiPrompt('');
-            setAiFiles([]);
-        } catch (error) {
-            setAiError(error.response?.data?.detail || t(language, 'errGenerate'));
-        } finally {
-            setAiLoading(false);
-        }
-    };
-
 
     return (
         <div className="glass-panel rounded-[11px] p-5">
@@ -228,61 +174,25 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, logoArea, setLogoArea, capLog
                 </div>
                 <div className="flex items-center justify-between gap-3 mb-2">
                     <span className="text-[11px] font-bold uppercase tracking-widest opacity-50">{activeLogoTarget === 'body' ? t(language, 'aiWrap') : t(language, 'aiDesign')}</span>
-                    {aiFiles.length > 0 && (
-                        <span className="text-[10px] font-bold opacity-50">{aiFiles.length}/4</span>
-                    )}
+                    <span className="text-[10px] font-bold opacity-50">0/4</span>
                 </div>
                 <textarea
-                    value={aiPrompt}
-                    onChange={(e) => setAiPrompt(e.target.value)}
                     placeholder={activeLogoTarget === 'body' ? t(language, 'aiBodyPlaceholder') : t(language, 'aiCapPlaceholder')}
                     rows={3}
-                    className="w-full resize-none rounded-[8px] border border-white/10 bg-black/15 px-3 py-2 text-sm outline-none placeholder:text-white/30 focus:border-white/35"
+                    disabled
+                    className="w-full resize-none rounded-[8px] border border-white/10 bg-black/15 px-3 py-2 text-sm outline-none placeholder:text-white/30 disabled:opacity-75"
                 />
                 <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
-                    <label className="min-w-0 px-3 py-2 rounded-[7px] border border-white/15 bg-white/10 text-center text-[11px] font-bold uppercase tracking-wider cursor-pointer hover:bg-white/15 transition-colors truncate">
+                    <div className="min-w-0 px-3 py-2 rounded-[7px] border border-white/15 bg-white/10 text-center text-[11px] font-bold uppercase tracking-wider truncate">
                         {t(language, 'references')}
-                        <input
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            onChange={async (e) => {
-                                setAiError('');
-                                setAiPreparingFiles(true);
-                                try {
-                                    setAiFiles(await normalizeAiReferenceFiles(Array.from(e.target.files || [])));
-                                } catch {
-                                    setAiError(t(language, 'errFile'));
-                                } finally {
-                                    setAiPreparingFiles(false);
-                                }
-                                e.target.value = '';
-                            }}
-                            className="hidden"
-                        />
-                    </label>
+                    </div>
                     <button
-                        onClick={handleAiGenerate}
-                        disabled={aiLoading || aiPreparingFiles}
+                        disabled
                         className="px-4 py-2 rounded-[7px] bg-white text-[#1a1a1a] text-[11px] font-black uppercase tracking-wider disabled:opacity-50 disabled:cursor-wait hover:bg-gray-100 transition-colors"
                     >
-                        {aiLoading ? '...' : aiPreparingFiles ? t(language, 'fileLoading') : t(language, 'create')}
+                        {t(language, 'create')}
                     </button>
                 </div>
-                {aiFiles.length > 0 && (
-                    <div className="mt-2 flex flex-col gap-1">
-                        {aiFiles.map((file) => (
-                            <div key={`${file.name}-${file.size}`} className="text-[11px] opacity-60 truncate">
-                                {file.name}
-                            </div>
-                        ))}
-                    </div>
-                )}
-                {aiError && (
-                    <div className="mt-2 text-[11px] font-bold text-red-200">
-                        {aiError}
-                    </div>
-                )}
             </div>
             {visibleLogos.length > 0 && (
                 <div className="flex flex-col gap-2 mb-4">

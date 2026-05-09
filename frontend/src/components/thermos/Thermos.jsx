@@ -13,8 +13,6 @@ const CAP_ARC_FORWARD_DISTANCE = 1.55;
 const CAP_FINAL_FORWARD_DISTANCE = 0.35;
 const LOGO_SURFACE_OFFSET = 0.006;
 const LOGO_POLYGON_OFFSET = -18;
-const STAINLESS_COLOR = '#d8d8d2';
-const THERMOS_INSIDE_COLOR = '#080808';
 
 // ─── Bezier arc for cap animation ─────────────────────────────────────────────
 function quadBezier(t, p0, p1, p2) {
@@ -163,46 +161,28 @@ function CapLogoPlane({ texture, target = 'capTop', position, rotation = 0, scal
     );
 }
 
-function NeckDetails({ topY, neckRadius, bodyRadius }) {
-    const safeNeckRadius = Math.max(neckRadius || bodyRadius * 0.5, bodyRadius * 0.32);
-    const innerRadius = safeNeckRadius * 0.66;
-    const cavityDepth = Math.max(bodyRadius * 0.38, 0.18);
-    const ringTube = Math.max(bodyRadius * 0.018, 0.012);
-    const ringRadius = safeNeckRadius * 1.01;
-    const ringStartY = topY - cavityDepth * 0.72;
-    const ringGap = cavityDepth * 0.2;
+function CapInnerSeal({ capInner, capRadius }) {
+    if (!capInner) return null;
+
+    const sealRadius = Math.max(capInner.rimEndRadius * 0.82, capRadius * 0.42);
+    const tubeRadius = Math.max(capRadius * 0.045, 0.012);
+    const y = capInner.bottomLimitY + tubeRadius * 0.25;
 
     return (
-        <group>
-            <mesh position={[0, topY - cavityDepth / 2 - 0.012, 0]}>
-                <cylinderGeometry args={[innerRadius, innerRadius * 0.96, cavityDepth, 96, 1, true]} />
-                <meshStandardMaterial
-                    color={THERMOS_INSIDE_COLOR}
-                    roughness={0.82}
-                    metalness={0.04}
-                    side={THREE.DoubleSide}
-                />
-            </mesh>
-            <mesh position={[0, topY - 0.018, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                <ringGeometry args={[innerRadius * 0.92, safeNeckRadius * 0.92, 96]} />
-                <meshStandardMaterial
-                    color={THERMOS_INSIDE_COLOR}
-                    roughness={0.78}
-                    metalness={0.02}
-                    side={THREE.DoubleSide}
-                />
-            </mesh>
-            {[0, 1, 2, 3].map((i) => (
-                <mesh key={i} position={[0, ringStartY + i * ringGap, 0]} rotation={[Math.PI / 2, 0, 0]}>
-                    <torusGeometry args={[ringRadius, ringTube, 12, 96]} />
-                    <meshStandardMaterial
-                        color={STAINLESS_COLOR}
-                        roughness={0.18}
-                        metalness={0.9}
-                    />
-                </mesh>
-            ))}
-        </group>
+        <mesh position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]} renderOrder={28}>
+            <torusGeometry args={[sealRadius, tubeRadius, 24, 128]} />
+            <meshStandardMaterial
+                color="#cfd5da"
+                transparent
+                opacity={0.68}
+                roughness={0.28}
+                metalness={0.02}
+                depthWrite={false}
+                polygonOffset
+                polygonOffsetFactor={-10}
+                polygonOffsetUnits={-10}
+            />
+        </mesh>
     );
 }
 
@@ -270,6 +250,7 @@ function ThermosMesh({ geo, matRef, color, neckStartY = null, capInner = null, c
                     position={logo.position} rotation={logo.rotation ?? 0} scale={logo.scale ?? 0.32}
                     capRadius={capRadius} capMinY={capMinY} capMaxY={capMaxY} />
             ))}
+            <CapInnerSeal capInner={capInner} capRadius={capRadius} />
         </mesh>
     );
 }
@@ -282,8 +263,8 @@ export function Thermos(props) {
     const bodyLogos = thermosLogos.filter(logo => (logo.target ?? 'body') === 'body');
     const capLogos = thermosLogos.filter(logo => ['capTop', 'capSide'].includes(logo.target));
 
-    const { bodyGeo, capGeo, capInner, capLogoRadius, capMinY, capMaxY, bodyRadius, bodyCenterY, bodyMinY, bodyTopY, bodyNeckStartY, bodyNeckRadius, capFloatX, capFloatY } = useMemo(() => {
-        const fallback = { bodyGeo: null, capGeo: null, capInner: null, capLogoRadius: 0.4, capMinY: 0, capMaxY: 1, bodyRadius: 0.4, bodyCenterY: 0, bodyMinY: -2.5, bodyTopY: 5, bodyNeckStartY: 4.25, bodyNeckRadius: 0.22, capFloatX: 1.8, capFloatY: -2 };
+    const { bodyGeo, capGeo, capInner, capLogoRadius, capMinY, capMaxY, bodyRadius, bodyCenterY, bodyMinY, bodyTopY, bodyNeckStartY, capFloatX, capFloatY } = useMemo(() => {
+        const fallback = { bodyGeo: null, capGeo: null, capInner: null, capLogoRadius: 0.4, capMinY: 0, capMaxY: 1, bodyRadius: 0.4, bodyCenterY: 0, bodyMinY: -2.5, bodyTopY: 5, bodyNeckStartY: 4.25, capFloatX: 1.8, capFloatY: -2 };
         if (!nodes) return fallback;
 
         const entries = Object.entries(nodes)
@@ -313,7 +294,6 @@ export function Thermos(props) {
                 bodyMinY: b.min.y,
                 bodyTopY: b.max.y,
                 bodyNeckStartY: neckStart,
-                bodyNeckRadius: r * 0.48,
                 capFloatX: r * CAP_SIDE_DISTANCE,
                 capFloatY: cy - b.max.y,
             };
@@ -371,15 +351,6 @@ export function Thermos(props) {
         const radius = Math.max(Math.abs(bb.max.x), Math.abs(bb.min.x), Math.abs(bb.max.z), Math.abs(bb.min.z)) || 0.4;
         const centerY = (bb.max.y + bb.min.y) / 2;
         const neckStartY = bb.max.y - (bb.max.y - bb.min.y) * THERMOS_NECK_RATIO;
-        const position = bodyEntry.geo.attributes.position;
-        let neckRadius = 0;
-        if (position) {
-            for (let i = 0; i < position.count; i++) {
-                const y = position.getY(i);
-                if (y >= neckStartY) neckRadius = Math.max(neckRadius, Math.hypot(position.getX(i), position.getZ(i)));
-            }
-        }
-        if (!neckRadius) neckRadius = radius * 0.48;
         const capConfig = capEntry ? (() => {
             const cb = capEntry.bbox;
             const capRadius = Math.max(Math.abs(cb.max.x), Math.abs(cb.min.x), Math.abs(cb.max.z), Math.abs(cb.min.z)) || radius * 0.6;
@@ -407,7 +378,6 @@ export function Thermos(props) {
             bodyMinY: bb.min.y,
             bodyTopY: bb.max.y,
             bodyNeckStartY: neckStartY,
-            bodyNeckRadius: neckRadius,
             capFloatX: radius * CAP_SIDE_DISTANCE + (capConfig?.radius ?? radius * 0.58) * 0.35,
             capFloatY: centerY - ((capConfig?.minY ?? 0) + (capConfig?.maxY ?? 1)) / 2,
         };
@@ -427,16 +397,30 @@ export function Thermos(props) {
 
             const t = easeInOut(Math.max(0, Math.min(1, capProgress.current)));
 
-            // Bezier arc: on-bottle -> lift & orbit -> side display position
-            const liftY = bodyRadius * 0.9;
-            const p0 = [0, 0, 0];
-            const p1 = [capFloatX * 0.45, liftY, bodyRadius * CAP_ARC_FORWARD_DISTANCE];
-            const p2 = [capFloatX, capFloatY, bodyRadius * CAP_FINAL_FORWARD_DISTANCE];
+            const liftT = Math.min(t / 0.42, 1);
+            const moveT = Math.max((t - 0.42) / 0.58, 0);
+            const liftEase = easeInOut(liftT);
+            const moveEase = easeInOut(moveT);
+            const liftY = bodyRadius * 1.35;
+            const lifted = [0, liftY * liftEase, 0];
+            const side = [capFloatX, capFloatY, bodyRadius * CAP_FINAL_FORWARD_DISTANCE];
 
-            const [px, py, pz] = quadBezier(t, p0, p1, p2);
+            let px = lifted[0];
+            let py = lifted[1];
+            let pz = lifted[2];
+
+            if (moveT > 0) {
+                const clearPoint = [
+                    capFloatX * 0.42,
+                    liftY * 1.08,
+                    bodyRadius * CAP_ARC_FORWARD_DISTANCE,
+                ];
+                [px, py, pz] = quadBezier(moveEase, [0, liftY, 0], clearPoint, side);
+            }
+
             capGroupRef.current.position.set(px, py, pz);
-            // Spin 3 full turns as it unscrews
-            capGroupRef.current.rotation.y = t * Math.PI * 6;
+            // First unscrew vertically, then keep a small settling spin while moving aside.
+            capGroupRef.current.rotation.y = (liftEase * 4.5 + moveEase * 1.5) * Math.PI;
         }
     });
 
@@ -447,7 +431,6 @@ export function Thermos(props) {
                     <ThermosMesh
                         geo={bodyGeo}
                         color={thermosBodyColor}
-                        neckStartY={bodyNeckStartY}
                         metalness={0}
                         roughness={0.9}
                         logos={bodyLogos}
@@ -456,11 +439,6 @@ export function Thermos(props) {
                         bodyMinY={bodyMinY}
                         bodyTopY={bodyTopY}
                         bodyNeckStartY={bodyNeckStartY}
-                    />
-                    <NeckDetails
-                        topY={bodyTopY}
-                        neckRadius={bodyNeckRadius}
-                        bodyRadius={bodyRadius}
                     />
                 </>
             )}

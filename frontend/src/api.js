@@ -117,20 +117,6 @@ export const productApi = {
     delete: (id) => apiClient.delete(`/products/${id}`),
 };
 
-export const aiApi = {
-    generateThermosDesign: ({ prompt, target, bodyColor, capColor, files = [] }) => {
-        const formData = new FormData();
-        formData.append('prompt', prompt || '');
-        formData.append('target', target || 'body');
-        formData.append('body_color', bodyColor || '');
-        formData.append('cap_color', capColor || '');
-        files.slice(0, 4).forEach((file) => formData.append('files', file));
-        return apiClient.post('/ai/thermos-design', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-        });
-    },
-};
-
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
 
 export const loginUser = async (email, password) => {

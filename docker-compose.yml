@@ -62,10 +62,6 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost,http://127.0.0.1}
       RENDERER_URL: ${RENDERER_URL:-http://renderer:3000}
       TECHCARD_URL: ${TECHCARD_URL:-http://techcard:8000}
-      ABACUS_API_KEY: ${ABACUS_API_KEY:-}
-      ABACUS_BASE_URL: ${ABACUS_BASE_URL:-https://routellm.abacus.ai/v1}
-      ABACUS_IMAGE_MODEL: ${ABACUS_IMAGE_MODEL:-nano_banana}
-      ABACUS_TIMEOUT_SECONDS: ${ABACUS_TIMEOUT_SECONDS:-120}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
       S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-${MINIO_ROOT_USER:-spruzhyk}}
