@@ -23,7 +23,7 @@ function ThermosPreviewScene() {
         <group ref={groupRef}>
             {meshes.map(([name, node]) => (
                 <mesh key={name} geometry={node.geometry} castShadow receiveShadow>
-                    <meshStandardMaterial color={'#C0C0C0'} metalness={0.8} roughness={0.2} />
+                    <meshStandardMaterial color="#E65405" metalness={0.35} roughness={0.45} />
                 </mesh>
             ))}
         </group>
@@ -157,24 +157,22 @@ function PowerbankPreview() {
 
 function DockCard({ children, onClick, mouseX, dockEnabled }) {
     const ref = useRef(null);
-    const [{ scale, lift }, setTransform] = useState({ scale: 1, lift: 0 });
 
     useEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+
         if (!dockEnabled || mouseX === null || !ref.current) {
-            setTransform({ scale: 1, lift: 0 });
+            el.style.transform = 'translate3d(0, 0, 0) scale(1)';
             return;
         }
-        const el = ref.current;
         const cardCenter = el.offsetLeft + el.offsetWidth / 2;
         const distance = Math.abs(mouseX - cardCenter);
         // sigma подбирается так, чтобы эффект распространялся примерно на
         // ширину одной карточки, но плавно затухал к третьей.
         const sigma = el.offsetWidth * 0.85;
         const proximity = Math.exp(-(distance * distance) / (2 * sigma * sigma));
-        setTransform({
-            scale: 1 + 0.12 * proximity,
-            lift: -14 * proximity,
-        });
+        el.style.transform = `translate3d(0, ${-14 * proximity}px, 0) scale(${1 + 0.12 * proximity})`;
     }, [mouseX, dockEnabled]);
 
     return (
@@ -182,7 +180,6 @@ function DockCard({ children, onClick, mouseX, dockEnabled }) {
             ref={ref}
             onClick={onClick}
             style={{
-                transform: `translate3d(0, ${lift}px, 0) scale(${scale})`,
                 transition: 'transform 220ms cubic-bezier(0.22, 0.8, 0.36, 1), box-shadow 220ms ease',
                 willChange: 'transform',
             }}
