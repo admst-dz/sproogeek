@@ -2,11 +2,13 @@ import os
 import uuid
 from typing import Optional
 
+import aiofiles
 import httpx
 import sentry_sdk
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi_pagination import Page, paginate
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.config import get_settings
 from app.core.deps import get_current_user, request_id
@@ -31,7 +33,15 @@ router = APIRouter()
 settings = get_settings()
 
 RENDER_DIR = "uploads/renders"
+SIGNED_APPROVAL_DIR = "uploads/approvals"
 os.makedirs(RENDER_DIR, exist_ok=True)
+os.makedirs(SIGNED_APPROVAL_DIR, exist_ok=True)
+
+SIGNED_APPROVAL_TYPES = {
+    "application/pdf": ("pdf", lambda content: content.startswith(b"%PDF")),
+    "image/png": ("png", lambda content: content.startswith(b"\x89PNG\r\n\x1a\n")),
+    "image/jpeg": ("jpg", lambda content: content.startswith(b"\xff\xd8\xff")),
+}
 
 
 def _extract_dealer_id(order: Order) -> Optional[str]:
@@ -277,12 +287,20 @@ class ApprovalDecision(BaseModel):
     comment: str | None = PField(None, max_length=1000)
 
 
+class QuoteSelection(BaseModel):
+    quote_id: str = PField(..., min_length=1, max_length=80)
+
+
 def _can_view_order(order: Order, current_user) -> bool:
     if current_user.role in {"admin", "owner", "manufacturer"}:
         return True
     if current_user.role == "dealer":
         return _extract_dealer_id(order) == current_user.id
     return order.user_id == current_user.id
+
+
+async def _append_order_status(db: AsyncSession, order: Order, status: str, comment: str) -> Order:
+    return await crud_order.update_status(db, str(order.id), status, comment)
 
 
 @router.post("/{order_id}/approval-pdf")
@@ -364,8 +382,9 @@ async def client_approve_order(
     order.approval_status = "approved"
     order.approval_comment = payload.comment
     order.approved_at = datetime.now(timezone.utc)
-    if order.status in {None, "draft", "new"}:
-        order.status = "processing"
+    next_status = "awaiting_quotes" if order.signed_approval_file_key else "awaiting_signature"
+    if order.status in {None, "draft", "new", "processing"}:
+        order.status = next_status
     await crud_order.update_status(db, order_id, order.status, payload.comment or "Подтверждено клиентом")
 
     event_logger.log(
@@ -384,6 +403,125 @@ async def client_approve_order(
         "product_name": order.product_name,
         "status": order.status,
         "dealer_id": _extract_dealer_id(order),
+    })
+    return order
+
+
+@router.post("/{order_id}/signed-approval", response_model=OrderResponse)
+async def upload_signed_approval(
+    request: Request,
+    order_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Upload the client-signed approval file and open the order for manufacturer quotes."""
+    safe_id = safe_path_segment(order_id)
+    order = await crud_order.get_order(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.user_id != current_user.id and current_user.role not in {"admin", "owner"}:
+        raise HTTPException(status_code=403, detail="Only the order owner can upload signed approval")
+    if order.approval_status != "approved":
+        raise HTTPException(status_code=409, detail="Order must be approved before uploading signed approval")
+
+    file_meta = SIGNED_APPROVAL_TYPES.get(file.content_type or "")
+    if not file_meta:
+        raise HTTPException(status_code=400, detail="Upload PDF, PNG or JPG")
+
+    extension, validate_signature = file_meta
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="File is empty")
+    if not validate_signature(content):
+        raise HTTPException(status_code=400, detail="File content does not match declared type")
+
+    order_dir = os.path.join(SIGNED_APPROVAL_DIR, safe_id)
+    os.makedirs(order_dir, exist_ok=True)
+    filename = f"signed-approval-{uuid.uuid4().hex}.{extension}"
+    file_path = os.path.join(order_dir, filename)
+    async with aiofiles.open(file_path, "wb") as out_file:
+        await out_file.write(content)
+
+    order.signed_approval_file_key = f"/uploads/approvals/{safe_id}/{filename}"
+    order.signed_approval_uploaded_at = datetime.now(timezone.utc)
+    if order.status in {None, "draft", "new", "processing", "awaiting_signature"}:
+        await _append_order_status(db, order, "awaiting_quotes", "Подписанное согласование загружено, заказ отправлен типографиям на расчет")
+    else:
+        await db.commit()
+        await db.refresh(order)
+
+    event_logger.log(
+        "ORDER_SIGNED_APPROVAL_UPLOADED",
+        "Client uploaded signed approval file",
+        direction="user->backend",
+        actor_type=current_user.role, actor_id=current_user.id, actor_email=current_user.email,
+        entity_type="order", entity_id=str(order.id),
+        request_id=request_id(request),
+        details={"file": order.signed_approval_file_key, "size": len(content), "content_type": file.content_type},
+    )
+    await event_hub.publish("order.signed_approval_uploaded", {
+        "order_id": str(order.id),
+        "user_id": order.user_id,
+        "user_email": order.user_email,
+        "product_name": order.product_name,
+        "status": order.status,
+    })
+    return order
+
+
+@router.post("/{order_id}/select-quote", response_model=OrderResponse)
+async def select_manufacturer_quote(
+    request: Request,
+    order_id: str,
+    payload: QuoteSelection,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    safe_path_segment(order_id)
+    order = await crud_order.get_order(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.user_id != current_user.id and current_user.role not in {"admin", "owner"}:
+        raise HTTPException(status_code=403, detail="Only the order owner can select manufacturer quote")
+    if order.status not in {"awaiting_quotes", "quotes_ready"}:
+        raise HTTPException(status_code=409, detail="Order is not waiting for quotes")
+
+    quotes = list(order.manufacturer_quotes or [])
+    selected = next((quote for quote in quotes if str(quote.get("id")) == payload.quote_id), None)
+    if not selected:
+        raise HTTPException(status_code=404, detail="Quote not found")
+
+    selected["selected_at"] = datetime.now(timezone.utc).isoformat()
+    order.manufacturer_quotes = quotes
+    order.selected_quote_id = payload.quote_id
+    order.selected_manufacturer_id = selected.get("manufacturer_id")
+    order.total_price = selected.get("price")
+    flag_modified(order, "manufacturer_quotes")
+    await _append_order_status(
+        db,
+        order,
+        "processing",
+        f"Клиент выбрал типографию: {selected.get('manufacturer_name') or selected.get('manufacturer_id')}",
+    )
+
+    event_logger.log(
+        "ORDER_QUOTE_SELECTED",
+        "Client selected manufacturer quote",
+        direction="user->backend",
+        actor_type=current_user.role, actor_id=current_user.id, actor_email=current_user.email,
+        entity_type="order", entity_id=str(order.id),
+        request_id=request_id(request),
+        details={"quote_id": payload.quote_id, "manufacturer_id": order.selected_manufacturer_id},
+    )
+    await event_hub.publish("order.quote_selected", {
+        "order_id": str(order.id),
+        "user_id": order.user_id,
+        "user_email": order.user_email,
+        "product_name": order.product_name,
+        "status": order.status,
+        "manufacturer_id": order.selected_manufacturer_id,
+        "quote_id": payload.quote_id,
     })
     return order
 

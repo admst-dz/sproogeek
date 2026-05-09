@@ -23,9 +23,14 @@ class Order(Base):
 
     approval_status = Column(String, default="pending", nullable=True, index=True)  # pending|approved|rejected
     approval_pdf_key = Column(String, nullable=True)
+    signed_approval_file_key = Column(String, nullable=True)
+    signed_approval_uploaded_at = Column(DateTime(timezone=True), nullable=True)
     approved_at = Column(DateTime(timezone=True), nullable=True)
     approval_comment = Column(String, nullable=True)
     dealer_confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    manufacturer_quotes = Column(JSONB, default=list, nullable=True)
+    selected_manufacturer_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    selected_quote_id = Column(String, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=True)

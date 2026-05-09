@@ -52,6 +52,14 @@ const ROLE_LABEL = {
 };
 const ADMIN_MANAGED_ROLES = ['client', 'dealer', 'manufacturer', 'admin'];
 const ADMIN_MANAGED_SUB_ROLES = ['', 'PL', 'PKL', 'KL', 'KPR', 'PR', 'TP'];
+const SUB_ROLE_LABEL = {
+    PL:  'Пользователь (ПЛ)',
+    PKL: 'Пользователь-клиент (ПКЛ)',
+    KL:  'Клиент (КЛ)',
+    PR:  'Передатчик (ПР)',
+    KPR: 'Клиент-передатчик (КПР)',
+    TP:  'Дилер (ДЛ)',
+};
 
 function formatApiError(error, lang = 'ru') {
     const detail = error?.response?.data?.detail;
@@ -544,7 +552,7 @@ function CreateUserDialog({ initialRole = 'dealer', onClose, onCreated }) {
                             className="bg-black/30 border border-white/10 rounded-[8px] px-3 py-2 text-sm text-white outline-none focus:border-white/30"
                         >
                             {ADMIN_MANAGED_SUB_ROLES.map(s => (
-                                <option key={s || 'none'} value={s}>{s || '— нет —'}</option>
+                                <option key={s || 'none'} value={s}>{s ? SUB_ROLE_LABEL[s] || s : '— нет —'}</option>
                             ))}
                         </select>
                     </label>
@@ -817,7 +825,7 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
                         <ValueRow label="Email" value={user.email} />
                         <ValueRow label="Имя" value={user.display_name} />
                         <ValueRow label="Роль" value={ROLE_LABEL[user.role] || user.role} />
-                        <ValueRow label="Sub-роль" value={user.sub_role} />
+                        <ValueRow label="Sub-роль" value={user.sub_role ? (SUB_ROLE_LABEL[user.sub_role] || user.sub_role) : null} />
                         <ValueRow label="Компания" value={user.company_name} />
                         <ValueRow label="Баланс" value={`${user.token_balance ?? 0}`} />
                         <ValueRow label="Заказов" value={`${user.orders_count ?? 0}`} />
@@ -957,7 +965,7 @@ function UsersTab({ initialFilter = null }) {
                                         {ROLE_LABEL[u.role] || u.role}
                                     </span>
                                 </td>
-                                <td className="px-4 py-2.5 text-xs text-white/45">{u.sub_role || '—'}</td>
+                                <td className="px-4 py-2.5 text-xs text-white/45">{u.sub_role ? (SUB_ROLE_LABEL[u.sub_role] || u.sub_role) : '—'}</td>
                                 <td className="px-4 py-2.5 text-sm text-white/45">{u.company_name || '—'}</td>
                                 <td className="px-4 py-2.5 text-sm text-white/60">{u.orders_count ?? 0}</td>
                                 <td className="px-4 py-2.5 text-xs">

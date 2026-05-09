@@ -7,7 +7,8 @@ import { getUserSecondaryLabel } from '../../utils/user';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 
 const PRODUCTION_STAGES = [
-    { key: 'new',         textKey: 'statusNew',        color: 'bg-white/10 text-gray-400 border-white/10',                      icon: '🕐' },
+    { key: 'awaiting_quotes', textKey: 'statusAwaitingQuotes', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30', icon: '₽' },
+    { key: 'quotes_ready', textKey: 'statusQuotesReady', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', icon: '₽' },
     { key: 'processing',  textKey: 'statusProcessing',  color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',                icon: '⚙️' },
     { key: 'production',  textKey: 'statusProduction',  color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',          icon: '🏭' },
     { key: 'in_delivery', textKey: 'statusDelivery',    color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',          icon: '🚚' },
@@ -78,6 +79,7 @@ export const ManufacturerDashboard = ({ onBack }) => {
     const [updating, setUpdating] = useState(null);
     const [techcardBusy, setTechcardBusy] = useState(null);
     const [commentDraft, setCommentDraft] = useState({});
+    const [quoteDraft, setQuoteDraft] = useState({});
 
     const reload = useCallback(async () => {
         setLoading(true);
@@ -127,6 +129,29 @@ export const ManufacturerDashboard = ({ onBack }) => {
         }
     };
 
+    const updateQuoteDraft = (orderId, field, value) => {
+        setQuoteDraft(prev => ({
+            ...prev,
+            [orderId]: { ...(prev[orderId] || {}), [field]: value },
+        }));
+    };
+
+    const submitQuote = async (orderId) => {
+        const draft = quoteDraft[orderId] || {};
+        setUpdating(orderId);
+        try {
+            await manufacturerApi.submitQuote(orderId, {
+                price: Number(draft.price || 0),
+                production_days: Number(draft.production_days || 0),
+                comment: draft.comment || null,
+            });
+            setQuoteDraft(prev => { const next = { ...prev }; delete next[orderId]; return next; });
+            await reload();
+        } finally {
+            setUpdating(null);
+        }
+    };
+
     const downloadTechcard = async (orderId) => {
         setTechcardBusy(orderId);
         try {
@@ -158,6 +183,7 @@ export const ManufacturerDashboard = ({ onBack }) => {
         total: stats.total || 0,
         new: stats.by_status?.new || 0,
         processing: stats.by_status?.processing || 0,
+        awaitingQuotes: (stats.by_status?.awaiting_quotes || 0) + (stats.by_status?.quotes_ready || 0),
         production: stats.by_status?.production || 0,
         in_delivery: stats.by_status?.in_delivery || 0,
         done: stats.by_status?.done || 0,
@@ -228,7 +254,7 @@ export const ManufacturerDashboard = ({ onBack }) => {
                 {/* STATS */}
                 <div className="flex flex-wrap gap-3 mb-6">
                     <StatCard label={t(language, 'totalOrders')} value={summary.total} />
-                    <StatCard label={t(language, 'statusNew')} value={summary.new} accent="border-white/10" />
+                    <StatCard label={t(language, 'statusAwaitingQuotes')} value={summary.awaitingQuotes} accent="border-cyan-500/20" />
                     <StatCard label={t(language, 'statusProcessing')} value={summary.processing} accent="border-blue-500/20" />
                     <StatCard label={t(language, 'statusProduction')} value={summary.production} accent="border-indigo-500/30" />
                     <StatCard label={t(language, 'statusDelivery')} value={summary.in_delivery} accent="border-yellow-500/20" />
@@ -331,6 +357,8 @@ export const ManufacturerDashboard = ({ onBack }) => {
                             const isUpdating = updating === orderId;
                             const isTcBusy = techcardBusy === orderId;
                             const currentStageIdx = STAGE_INDEX[order.status] ?? 0;
+                            const isQuoteStage = order.status === 'awaiting_quotes' || order.status === 'quotes_ready';
+                            const myQuote = (order.manufacturer_quotes || []).find(q => q.manufacturer_id === currentUser?.id);
                             return (
                                 <div key={orderId} className={i !== orders.length - 1 ? 'border-b border-white/5' : ''}>
                                     {/* Summary row */}
@@ -366,36 +394,87 @@ export const ManufacturerDashboard = ({ onBack }) => {
 
                                             <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
                                                 <div className="md:col-span-2 space-y-3">
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{t(language, 'updateStage')}</p>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {PRODUCTION_STAGES.map((stage, idx) => {
-                                                            const isCurrent = stage.key === order.status;
-                                                            const isPast = idx < currentStageIdx;
-                                                            return (
+                                                    {isQuoteStage ? (
+                                                        <div className="rounded-[12px] border border-cyan-500/20 bg-cyan-500/10 p-4">
+                                                            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-300">{t(language, 'quoteSubmitTitle')}</p>
+                                                            {myQuote && (
+                                                                <p className="text-[11px] text-gray-400 mt-1">
+                                                                    {t(language, 'quoteAlreadySent')}: <span className="text-white font-bold">{myQuote.price} {myQuote.currency || 'BYN'}</span> · {myQuote.production_days} {t(language, 'quoteDaysShort')}
+                                                                </p>
+                                                            )}
+                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    step="0.01"
+                                                                    value={quoteDraft[orderId]?.price || ''}
+                                                                    onClick={e => e.stopPropagation()}
+                                                                    onChange={e => updateQuoteDraft(orderId, 'price', e.target.value)}
+                                                                    placeholder={t(language, 'quotePricePlaceholder')}
+                                                                    className="bg-black/20 border border-white/10 rounded-[10px] px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-white/30"
+                                                                />
+                                                                <input
+                                                                    type="number"
+                                                                    min="1"
+                                                                    step="1"
+                                                                    value={quoteDraft[orderId]?.production_days || ''}
+                                                                    onClick={e => e.stopPropagation()}
+                                                                    onChange={e => updateQuoteDraft(orderId, 'production_days', e.target.value)}
+                                                                    placeholder={t(language, 'quoteDaysPlaceholder')}
+                                                                    className="bg-black/20 border border-white/10 rounded-[10px] px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-white/30"
+                                                                />
                                                                 <button
-                                                                    key={stage.key}
-                                                                    disabled={isCurrent || isUpdating}
-                                                                    onClick={(e) => { e.stopPropagation(); setStage(orderId, stage.key); }}
-                                                                    className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all
-                                                                        ${isCurrent
-                                                                            ? `${stage.color} cursor-default opacity-100 ring-1 ring-white/20`
-                                                                            : isPast
-                                                                                ? 'bg-white/5 text-gray-600 border-white/5 hover:bg-white/10 hover:text-gray-400'
-                                                                                : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10 hover:text-white'
-                                                                        } ${isUpdating ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                                                    onClick={(e) => { e.stopPropagation(); submitQuote(orderId); }}
+                                                                    disabled={isUpdating || !quoteDraft[orderId]?.price || !quoteDraft[orderId]?.production_days}
+                                                                    className="rounded-[10px] bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-200 text-xs font-bold transition disabled:opacity-50"
                                                                 >
-                                                                    {stage.icon} {t(language, stage.textKey)}{isCurrent && ' ✓'}
+                                                                    {isUpdating ? '…' : t(language, 'quoteSubmitBtn')}
                                                                 </button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                    <textarea
-                                                        value={commentDraft[orderId] || ''}
-                                                        onChange={(e) => setCommentDraft(prev => ({ ...prev, [orderId]: e.target.value }))}
-                                                        placeholder={t(language, 'stageCommentPlaceholder')}
-                                                        rows={2}
-                                                        className="w-full mt-1 bg-white/5 border border-white/10 rounded-[10px] px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-white/30 resize-none"
-                                                    />
+                                                            </div>
+                                                            <textarea
+                                                                value={quoteDraft[orderId]?.comment || ''}
+                                                                onClick={e => e.stopPropagation()}
+                                                                onChange={e => updateQuoteDraft(orderId, 'comment', e.target.value)}
+                                                                placeholder={t(language, 'quoteCommentPlaceholder')}
+                                                                rows={2}
+                                                                className="w-full mt-2 bg-black/20 border border-white/10 rounded-[10px] px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-white/30 resize-none"
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{t(language, 'updateStage')}</p>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {PRODUCTION_STAGES.filter(stage => !['awaiting_quotes', 'quotes_ready'].includes(stage.key)).map((stage, idx) => {
+                                                                    const productionIdx = Math.max(0, idx);
+                                                                    const isCurrent = stage.key === order.status;
+                                                                    const isPast = productionIdx < Math.max(0, currentStageIdx - 2);
+                                                                    return (
+                                                                        <button
+                                                                            key={stage.key}
+                                                                            disabled={isCurrent || isUpdating}
+                                                                            onClick={(e) => { e.stopPropagation(); setStage(orderId, stage.key); }}
+                                                                            className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all
+                                                                                ${isCurrent
+                                                                                    ? `${stage.color} cursor-default opacity-100 ring-1 ring-white/20`
+                                                                                    : isPast
+                                                                                        ? 'bg-white/5 text-gray-600 border-white/5 hover:bg-white/10 hover:text-gray-400'
+                                                                                        : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10 hover:text-white'
+                                                                                } ${isUpdating ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                                                        >
+                                                                            {stage.icon} {t(language, stage.textKey)}{isCurrent && ' ✓'}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                            <textarea
+                                                                value={commentDraft[orderId] || ''}
+                                                                onChange={(e) => setCommentDraft(prev => ({ ...prev, [orderId]: e.target.value }))}
+                                                                placeholder={t(language, 'stageCommentPlaceholder')}
+                                                                rows={2}
+                                                                className="w-full mt-1 bg-white/5 border border-white/10 rounded-[10px] px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-white/30 resize-none"
+                                                            />
+                                                        </>
+                                                    )}
                                                 </div>
 
                                                 <div className="space-y-3">

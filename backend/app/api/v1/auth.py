@@ -71,13 +71,17 @@ async def register(request: Request, data: UserRegister, db: AsyncSession = Depe
         )
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    sub_role = _client_sub_role(data.sub_role)
+    role = data.role or "client"
+    if role == "dealer":
+        sub_role = _normalize_sub_role(data.sub_role)
+    else:
+        sub_role = _client_sub_role(data.sub_role)
     user = User(
         id=str(uuid.uuid4()),
         email=email,
         password_hash=hash_password(data.password),
         display_name=data.display_name or "",
-        role="client",
+        role=role,
         sub_role=sub_role,
         token_balance=0.0,
     )

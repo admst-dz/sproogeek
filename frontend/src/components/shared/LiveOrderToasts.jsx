@@ -54,7 +54,7 @@ export function LiveOrderToasts({ enabled = true, onEvent }) {
                             </p>
                             <p className="text-[11px] opacity-70 mt-0.5 truncate">
                                 {data.user_email || ''}
-                                {data.status && ` · ${({ new: t(language, 'statusNew'), processing: t(language, 'statusProcessing'), production: t(language, 'statusProduction'), in_delivery: t(language, 'statusDelivery'), done: t(language, 'statusDone') })[data.status] || data.status}`}
+                                {data.status && ` · ${({ new: t(language, 'statusNew'), awaiting_signature: t(language, 'statusAwaitingSignature'), awaiting_quotes: t(language, 'statusAwaitingQuotes'), quotes_ready: t(language, 'statusQuotesReady'), processing: t(language, 'statusProcessing'), production: t(language, 'statusProduction'), in_delivery: t(language, 'statusDelivery'), done: t(language, 'statusDone') })[data.status] || data.status}`}
                             </p>
                             {data.comment && (
                                 <p className="text-[11px] opacity-60 mt-1 italic line-clamp-2">{data.comment}</p>
