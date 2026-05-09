@@ -4,9 +4,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field as PField
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.client_ip import slowapi_key
 from app.core.config import get_settings
 from app.core.deps import get_current_user, request_id
 from app.core.event_logger import event_logger
@@ -39,7 +39,7 @@ ALLOWED_SUB_ROLES = {"PL", "PKL", "KL", "KPR", "PR", DEALER_SUB_ROLE}
 ALLOWED_CLIENT_SUB_ROLES = {"PL", "PKL", "KL", "KPR", "PR"}
 SUB_ROLE_ALIASES = {"КЛ": "KL", "КПР": "KPR", "ПР": "PR", "ТИПОГРАФИЯ": DEALER_SUB_ROLE}
 
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=slowapi_key)
 router = APIRouter()
 
 

@@ -12,8 +12,8 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 
+from app.core.client_ip import get_client_ip, slowapi_key
 from app.core.config import get_settings
 from app.core.deps import request_id
 from app.core.email import is_email_configured, send_email
@@ -21,7 +21,7 @@ from app.core.event_logger import event_logger
 
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=slowapi_key)
 
 
 class FeedbackRequest(BaseModel):
@@ -59,7 +59,7 @@ async def submit_feedback(
     background: BackgroundTasks,
 ):
     settings = get_settings()
-    ip = get_remote_address(request) or "unknown"
+    ip = get_client_ip(request)
     user_agent = request.headers.get("user-agent", "—")
 
     # Сохраняем отзыв в event log сразу — это «несгорающая» копия на случай
