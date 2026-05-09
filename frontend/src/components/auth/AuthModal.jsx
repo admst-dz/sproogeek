@@ -167,9 +167,11 @@ export const AuthModal = ({ onClose, onRoleCreated }) => {
             const state = makeOauthState();
             const redirectUri = `${window.location.origin}/auth/yandex/callback`;
             sessionStorage.setItem(YANDEX_STATE_KEY, state);
-            const authorizeUrl = await getYandexAuthorizeUrl(redirectUri, state);
+
+            // Open popup synchronously within the user gesture context; browsers block
+            // window.open() called after an await (gesture context is lost).
             const popup = window.open(
-                authorizeUrl,
+                'about:blank',
                 'spruzhuk_yandex_oauth',
                 'width=520,height=680,menubar=no,toolbar=no,location=no,status=no'
             );
@@ -179,6 +181,9 @@ export const AuthModal = ({ onClose, onRoleCreated }) => {
                 setLoading(false);
                 return;
             }
+
+            const authorizeUrl = await getYandexAuthorizeUrl(redirectUri, state);
+            popup.location.href = authorizeUrl;
 
             yandexPopupRef.current = popup;
             yandexPopupTimerRef.current = window.setInterval(() => {
