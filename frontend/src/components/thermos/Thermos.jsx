@@ -256,8 +256,9 @@ function ThermosMesh({ geo, matRef, color, neckStartY = null, capInner = null, c
 }
 
 // ─── Main component ────────────────────────────────────────────────────────────
-export function Thermos(props) {
-    const { thermosBodyColor, thermosCapVisible, thermosLogos } = useConfigurator();
+export function Thermos({ config: configProp, ...props }) {
+    const store = useConfigurator();
+    const { thermosBodyColor, thermosCapVisible, thermosLogos } = configProp || store;
     const { nodes } = useGLTF(termosModelUrl);
 
     const bodyLogos = thermosLogos.filter(logo => (logo.target ?? 'body') === 'body');

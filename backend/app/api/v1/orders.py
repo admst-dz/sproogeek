@@ -295,7 +295,7 @@ def _can_view_order(order: Order, current_user) -> bool:
     if current_user.role in {"admin", "owner", "manufacturer"}:
         return True
     if current_user.role == "dealer":
-        return _extract_dealer_id(order) == current_user.id
+        return _extract_dealer_id(order) == current_user.id or order.selected_manufacturer_id == current_user.id
     return order.user_id == current_user.id
 
 

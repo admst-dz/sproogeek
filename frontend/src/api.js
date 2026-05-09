@@ -92,11 +92,17 @@ export const adminApi = {
 
 export const dealerApi = {
     listClients: () => apiClient.get('/dealer/clients'),
+    listOrders: () => apiClient.get('/dealer/orders'),
 };
 
 export const fetchDealerClients = async () => {
     const { data } = await dealerApi.listClients();
     return data || [];
+};
+
+export const fetchDealerSelectedOrders = async () => {
+    const { data } = await dealerApi.listOrders();
+    return (data || []).map(normalizeOrder);
 };
 
 export const manufacturerApi = {
@@ -105,6 +111,11 @@ export const manufacturerApi = {
     updateStatus: (orderId, status, comment = null) =>
         apiClient.patch(`/manufacturer/orders/${encodeURIComponent(orderId)}/status`, { status, comment }),
     submitQuote: (orderId, data) => apiClient.post(`/manufacturer/orders/${encodeURIComponent(orderId)}/quote`, data),
+    generateTechcard: (orderId) => apiClient.post(`/manufacturer/orders/${encodeURIComponent(orderId)}/techcard`),
+    downloadTechcard: (orderId, filename) => apiClient.get(
+        `/manufacturer/orders/${encodeURIComponent(orderId)}/techcard.pdf`,
+        { params: { filename }, responseType: 'blob' }
+    ),
     imposition: (orderId) => apiClient.get(`/manufacturer/orders/${encodeURIComponent(orderId)}/imposition`),
     qrUrl: (orderId) => `${(import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '')}/manufacturer/orders/${encodeURIComponent(orderId)}/qr.png`,
     materials: () => apiClient.get('/manufacturer/materials'),

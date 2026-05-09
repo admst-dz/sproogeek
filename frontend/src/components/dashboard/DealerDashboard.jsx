@@ -7,13 +7,14 @@ import {
     fetchAdminOrders, updateOrderStatus,
     fetchDealerProducts, saveProduct, updateProduct, deleteProduct,
     fetchOrderTypes, fetchOrderType, saveOrderType,
-    fetchDealerClients, fetchManufacturerQueue, manufacturerApi,
+    fetchDealerSelectedOrders, fetchManufacturerQueue, manufacturerApi,
 } from '../../api';
 import { getUserSecondaryLabel } from '../../utils/user';
 import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { Notebook } from '../shared/Notebook';
 import { Thermos } from '../thermos/Thermos';
+import { downloadBlob } from '../../utils/download';
 
 const ORDER_STAGES = [
     { key: 'new',         textKey: 'statusNew',        color: 'bg-white/10 text-gray-400 border-white/10',            icon: '🕐' },
@@ -404,6 +405,190 @@ const normalizeDashboardOrder = (order) => ({
     configuration: order.configuration || null,
 });
 
+const getOrderConfig = (order) => order.configuration?.productConfig || order.configuration || {};
+const getOrderContact = (order) => order.configuration?.contact || {};
+const getProductType = (order) => {
+    const cfg = getOrderConfig(order);
+    const product = `${order.product || ''}`.toLowerCase();
+    if (cfg.activeProduct) return cfg.activeProduct;
+    if (cfg.type) return cfg.type;
+    if (product.includes('термос') || product.includes('thermos')) return 'thermos';
+    if (product.includes('powerbank') || product.includes('повербанк')) return 'powerbank';
+    return 'notebook';
+};
+
+const ColorValue = ({ color }) => color ? (
+    <span className="inline-flex items-center gap-2 justify-end">
+        <span className="w-3 h-3 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: color }} />
+        <span className="uppercase font-black">{color}</span>
+    </span>
+) : '—';
+
+const DetailRow = ({ label, value }) => (
+    <div className="flex items-center justify-between gap-3 rounded-[10px] bg-white/[0.03] border border-white/8 px-3 py-2">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 min-w-0">{label}</span>
+        <span className="text-xs font-bold text-white text-right min-w-0 break-words">{value || '—'}</span>
+    </div>
+);
+
+const DealerOrder3DPreview = ({ order }) => {
+    const cfg = getOrderConfig(order);
+    const type = getProductType(order);
+
+    if (!['notebook', 'calendar', 'thermos'].includes(type)) {
+        return (
+            <div className="h-52 rounded-[16px] bg-white/[0.03] border border-white/8 flex items-center justify-center">
+                <span className="text-[10px] text-gray-600 font-bold uppercase tracking-widest">3D</span>
+            </div>
+        );
+    }
+
+    return (
+        <div className="relative h-52 rounded-[16px] bg-[#0A0E1A] border border-white/8 overflow-hidden">
+            <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true }}>
+                <Environment preset="city" />
+                <ambientLight intensity={0.6} />
+                <directionalLight position={[10, 10, 5]} intensity={1.5} />
+                <PresentationControls speed={1.5} global polar={[-0.1, Math.PI / 4]}>
+                    <Stage environment={null} intensity={0} contactShadow={false}>
+                        {(type === 'notebook' || type === 'calendar') && <Notebook config={cfg} />}
+                        {type === 'thermos' && <Thermos config={cfg} />}
+                    </Stage>
+                </PresentationControls>
+            </Canvas>
+        </div>
+    );
+};
+
+const DealerOrderDetails = ({ order, language, full = false }) => {
+    const cfg = getOrderConfig(order);
+    const contact = getOrderContact(order);
+    const type = getProductType(order);
+    const selectedQuote = (order.manufacturerQuotes || []).find(q => q.id === order.selectedQuoteId);
+    const thermosColor = cfg.thermosBodyColor || cfg.thermosCapColor;
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
+            <DealerOrder3DPreview order={order} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 content-start">
+                <DetailRow label={t(language, 'productLabel')} value={order.product} />
+                <DetailRow label={t(language, 'quantityLabel')} value={`${order.quantity || 1} ${t(language, 'pcsUnit')}`} />
+                {type === 'thermos' ? (
+                    <>
+                        <DetailRow label={t(language, 'bodyLabel')} value={<ColorValue color={thermosColor} />} />
+                        <DetailRow label={t(language, 'capLabel')} value={<ColorValue color={thermosColor} />} />
+                    </>
+                ) : (
+                    <>
+                        <DetailRow label={t(language, 'formatLabel')} value={cfg.format} />
+                        <DetailRow label={t(language, 'bindingLabel')} value={cfg.bindingType ? getBindingLabel(cfg.bindingType, language) : null} />
+                        <DetailRow label={t(language, 'coverLabel')} value={<ColorValue color={cfg.coverColor} />} />
+                        {cfg.hasElastic && <DetailRow label={t(language, 'elasticLabel')} value={<ColorValue color={cfg.elasticColor} />} />}
+                        {cfg.bindingType === 'spiral' && <DetailRow label={t(language, 'spiralLabel')} value={<ColorValue color={cfg.spiralColor} />} />}
+                        <DetailRow label={t(language, 'patternLabel')} value={cfg.paperPattern} />
+                    </>
+                )}
+                {full && (
+                    <>
+                        <DetailRow label={t(language, 'clientCol')} value={contact.name || contact.contactPerson || order.userEmail} />
+                        <DetailRow label={t(language, 'emailLabel')} value={order.userEmail || contact.email} />
+                        <DetailRow label={t(language, 'orderPhone')} value={contact.phone} />
+                        <DetailRow label={t(language, 'orderAddress')} value={contact.address} />
+                        {selectedQuote && <DetailRow label={t(language, 'quotePricePlaceholder')} value={`${selectedQuote.price} ${selectedQuote.currency || 'BYN'}`} />}
+                        {selectedQuote && <DetailRow label={t(language, 'quoteDaysPlaceholder')} value={`${selectedQuote.production_days} ${t(language, 'quoteDaysShort')}`} />}
+                        {contact.comment && <DetailRow label={t(language, 'orderComment')} value={contact.comment} />}
+                    </>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const ProductionPacket = ({
+    order,
+    language,
+    imposition,
+    techcardBusy,
+    onDownloadTechcard,
+    onPrint,
+    onChanged,
+}) => {
+    const orderId = order.id;
+
+    return (
+        <div className="mt-5 grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4">
+            <div className="space-y-3">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{t(language, 'docsTracking')}</p>
+                <ApprovalPanel
+                    order={order}
+                    role="dealer"
+                    onChanged={onChanged}
+                />
+            </div>
+            <div className="space-y-3">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{t(language, 'docsTracking')}</p>
+                <button
+                    type="button"
+                    onClick={() => onDownloadTechcard(orderId)}
+                    disabled={techcardBusy}
+                    className="w-full py-2.5 px-4 rounded-[10px] bg-white/10 hover:bg-white/15 text-xs font-bold transition disabled:opacity-50 text-left"
+                >
+                    {techcardBusy ? t(language, 'approvalGenerating') : t(language, 'techcardPdf')}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => onPrint(orderId)}
+                    className="w-full py-2.5 px-4 rounded-[10px] bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/25 text-emerald-200 text-xs font-bold transition text-left"
+                >
+                    {t(language, 'printProductionPacket')}
+                </button>
+                {order.configuration?.server_render_url && (
+                    <a
+                        href={order.configuration.server_render_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="w-full block py-2.5 px-4 rounded-[10px] bg-white/10 hover:bg-white/15 text-xs font-bold transition text-left"
+                    >
+                        {t(language, 'renderPreview')}
+                    </a>
+                )}
+                {order.signedApprovalFileKey && (
+                    <a
+                        href={order.signedApprovalFileKey}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="w-full block py-2.5 px-4 rounded-[10px] bg-white/10 hover:bg-white/15 text-xs font-bold transition text-left"
+                    >
+                        {t(language, 'approvalSignedUploaded')}
+                    </a>
+                )}
+                <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-[10px] p-3">
+                    <img src={manufacturerApi.qrUrl(orderId)} alt="QR" className="w-20 h-20 rounded-[6px] bg-white p-1" />
+                    <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{t(language, 'orderQRLabel')}</p>
+                        <p className="text-[10px] text-gray-400 mt-1 truncate">spruzhyk://order/{orderId.substring(0, 8)}...</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">{t(language, 'qrScanHint')}</p>
+                    </div>
+                </div>
+                {imposition?.ok && (
+                    <div className="bg-white/5 border border-white/10 rounded-[10px] p-3 text-[11px] text-gray-300">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">{t(language, 'impositionSRA3')}</p>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                            <span className="text-gray-500">{t(language, 'impositionItems')}</span><span className="text-white font-bold">{imposition.layout.items_per_sheet}</span>
+                            <span className="text-gray-500">{t(language, 'impositionGrid')}</span><span>{imposition.layout.cols}x{imposition.layout.rows} {imposition.layout.orientation === 'landscape' ? 'landscape' : 'portrait'}</span>
+                            <span className="text-gray-500">{t(language, 'impositionSheets')}</span><span className="text-white font-bold">{imposition.totals.sheets_required}</span>
+                            <span className="text-gray-500">{t(language, 'impositionWaste')}</span><span>{imposition.totals.waste_per_sheet}</span>
+                        </div>
+                    </div>
+                )}
+                {imposition && !imposition.ok && (
+                    <p className="text-[11px] text-red-400 italic">{imposition.reason}</p>
+                )}
+            </div>
+        </div>
+    );
+};
+
 export const DealerDashboard = ({ onBack }) => {
     const { currentUser, logout, language } = useConfigurator();
     const [activeTab, setActiveTab] = useState('products');
@@ -416,8 +601,10 @@ export const DealerDashboard = ({ onBack }) => {
     const [statusUpdating, setStatusUpdating] = useState(null);
     const [commentDraft, setCommentDraft] = useState({});
     const [quoteDraft, setQuoteDraft] = useState({});
+    const [techcardBusy, setTechcardBusy] = useState(null);
+    const [impositionMap, setImpositionMap] = useState({});
 
-    const [clients, setClients] = useState([]);
+    const [clientOrders, setClientOrders] = useState([]);
 
     const [orderTypes, setOrderTypes] = useState([]);
     const [selectedOrderType, setSelectedOrderType] = useState(null);
@@ -486,8 +673,21 @@ export const DealerDashboard = ({ onBack }) => {
         }
         if (activeTab === 'clients') {
             setLoading(true);
-            fetchDealerClients().then(data => {
-                setClients(data);
+            fetchDealerSelectedOrders().then(orderData => {
+                orderData.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
+                setClientOrders(orderData);
+                Promise.allSettled(orderData.map(order =>
+                    manufacturerApi.imposition(order.id).then(({ data }) => [order.id, data])
+                )).then(results => {
+                    const next = {};
+                    results.forEach(result => {
+                        if (result.status === 'fulfilled') {
+                            const [orderId, data] = result.value;
+                            next[orderId] = data;
+                        }
+                    });
+                    setImpositionMap(prev => ({ ...prev, ...next }));
+                });
                 setLoading(false);
             }).catch(() => setLoading(false));
         }
@@ -549,6 +749,49 @@ export const DealerDashboard = ({ onBack }) => {
         } finally {
             setStatusUpdating(null);
         }
+    };
+
+    const downloadTechcard = async (orderId) => {
+        setTechcardBusy(orderId);
+        try {
+            const { data: meta } = await manufacturerApi.generateTechcard(orderId);
+            const filename = (meta?.s3_key || '').split('/').pop() || `techcard-${orderId}.pdf`;
+            const { data: blob } = await manufacturerApi.downloadTechcard(orderId, filename);
+            downloadBlob(blob, filename);
+        } finally {
+            setTechcardBusy(null);
+        }
+    };
+
+    const printProductionPacket = (orderId) => {
+        const node = document.getElementById(`dealer-production-order-${orderId}`);
+        if (!node) {
+            window.print();
+            return;
+        }
+        const printWindow = window.open('', '_blank', 'width=1100,height=800');
+        if (!printWindow) {
+            window.print();
+            return;
+        }
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Order ${orderId}</title>
+                    <style>
+                        body { margin: 24px; font-family: Arial, sans-serif; background: #fff; color: #111; }
+                        * { box-sizing: border-box; }
+                        button { display: none !important; }
+                        a { color: #111; text-decoration: none; }
+                        canvas, img { max-width: 100%; }
+                    </style>
+                </head>
+                <body>${node.innerHTML}</body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
     };
 
     const toggleOrderExpand = (orderId) => {
@@ -902,6 +1145,11 @@ export const DealerDashboard = ({ onBack }) => {
                                                         />
                                                     </div>
 
+                                                    <div className="mt-5">
+                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">{t(language, 'orderParams')}</p>
+                                                        <DealerOrderDetails order={order} language={language} />
+                                                    </div>
+
                                                     {isQuoteStage && (
                                                         <div className="mt-5 rounded-[12px] border border-cyan-500/20 bg-cyan-500/10 p-4" onClick={e => e.stopPropagation()}>
                                                             <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-300">{t(language, 'quoteSubmitTitle')}</p>
@@ -1013,34 +1261,52 @@ export const DealerDashboard = ({ onBack }) => {
                                     <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
                                     <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">{t(language, 'loading')}</p>
                                 </div>
-                            ) : clients.length === 0 ? (
+                            ) : clientOrders.length === 0 ? (
                                 <div className="py-20 flex flex-col items-center gap-4">
                                     <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10 text-2xl">👥</div>
                                     <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">{t(language, 'noClients')}</p>
                                 </div>
                             ) : (
-                                <table className="w-full text-sm">
-                                    <thead className="bg-white/5 text-[10px] uppercase tracking-widest text-gray-500">
-                                        <tr>
-                                            <th className="text-left px-5 py-3 font-bold">{t(language, 'clientCol')}</th>
-                                            <th className="text-left px-5 py-3 font-bold">{t(language, 'emailLabel')}</th>
-                                            <th className="text-left px-5 py-3 font-bold">{t(language, 'roleCol')}</th>
-                                            <th className="text-right px-5 py-3 font-bold">{t(language, 'ordersCountCol')}</th>
-                                            <th className="text-right px-5 py-3 font-bold">{t(language, 'lastOrderCol')}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                    {clients.map((c, i) => (
-                                        <tr key={c.id} className={i !== clients.length - 1 ? 'border-b border-white/5' : ''}>
-                                            <td className="px-5 py-3 text-white font-bold">{c.display_name || c.company_name || '—'}</td>
-                                            <td className="px-5 py-3 text-gray-300">{c.email}</td>
-                                            <td className="px-5 py-3 text-gray-400 text-xs uppercase tracking-wider">{c.role}{c.sub_role ? ` · ${c.sub_role}` : ''}</td>
-                                            <td className="px-5 py-3 text-right text-white font-bold">{c.orders_count}</td>
-                                            <td className="px-5 py-3 text-right text-gray-400 text-xs">{c.last_order_at ? new Date(c.last_order_at).toLocaleDateString() : '—'}</td>
-                                        </tr>
-                                    ))}
-                                    </tbody>
-                                </table>
+                                <div className="divide-y divide-white/5">
+                                    {clientOrders.map(order => {
+                                        const contact = getOrderContact(order);
+                                        const selectedQuote = (order.manufacturerQuotes || []).find(q => q.id === order.selectedQuoteId);
+                                        return (
+                                            <div key={order.id} id={`dealer-production-order-${order.id}`} className="p-4 md:p-6">
+                                                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+                                                    <div className="min-w-0">
+                                                        <p className="font-bold text-white text-sm truncate">
+                                                            {contact.name || contact.contactPerson || order.userEmail || '—'}
+                                                        </p>
+                                                        <p className="text-xs text-gray-500 mt-1 truncate">
+                                                            #{order.id.substring(0, 6).toUpperCase()} · {order.product} · {order.date}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex flex-wrap sm:justify-end gap-2">
+                                                        <StatusBadge status={order.status} language={language} />
+                                                        {selectedQuote && (
+                                                            <span className="px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-cyan-500/10 text-cyan-300 border-cyan-500/30">
+                                                                {selectedQuote.price} {selectedQuote.currency || 'BYN'} · {selectedQuote.production_days} {t(language, 'quoteDaysShort')}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <DealerOrderDetails order={order} language={language} full />
+                                                <ProductionPacket
+                                                    order={order}
+                                                    language={language}
+                                                    imposition={impositionMap[order.id]}
+                                                    techcardBusy={techcardBusy === order.id}
+                                                    onDownloadTechcard={downloadTechcard}
+                                                    onPrint={printProductionPacket}
+                                                    onChanged={(updated) => setClientOrders(prev => prev.map(o => String(o.id) === String(order.id)
+                                                        ? { ...o, status: updated.status || o.status, approvalStatus: updated.approval_status || o.approvalStatus, dealerConfirmedAt: updated.dealer_confirmed_at || o.dealerConfirmedAt, stageHistory: updated.stage_history || o.stageHistory }
+                                                        : o))}
+                                                />
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             )}
                         </div>
                     </div>

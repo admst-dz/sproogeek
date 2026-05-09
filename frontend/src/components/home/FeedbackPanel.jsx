@@ -234,7 +234,7 @@ export const FeedbackPanel = ({ language = 'ru' }) => {
 
             {open && (
                 <div
-                    className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 bg-black/50 dark:bg-black/70 backdrop-blur-sm"
+                    className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center px-4 py-6 bg-black/50 dark:bg-black/70 backdrop-blur-sm"
                     role="presentation"
                     onMouseDown={closeModal}
                 >
