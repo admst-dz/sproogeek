@@ -9,7 +9,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi_pagination import add_pagination
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -17,6 +16,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.v1 import admin, auth, dealer, drafts, events, feedback, files, manufacturer, orders, pricing, products, users
 from app.core.cache import close_cache
+from app.core.client_ip import slowapi_key
 from app.core.config import get_settings
 from app.core.event_logger import event_logger
 from app.core.kafka import kafka_producer
@@ -50,7 +50,7 @@ if settings.sentry_dsn:
     )
 
 
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=slowapi_key)
 
 app = FastAPI(title=settings.app_title, version=settings.app_version, lifespan=lifespan)
 app.state.limiter = limiter

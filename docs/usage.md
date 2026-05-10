@@ -75,6 +75,7 @@ logs/events_YYYYMMDD_0002.csv
 | `ORDER_TYPES_DIR` | кастомная директория JSON типов заказов |
 | `ORDER_TYPE_FILE_MAX_BYTES` | максимальный размер одного JSON-файла |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | OAuth Google |
+| `YANDEX_CLIENT_ID`, `YANDEX_CLIENT_SECRET` | OAuth Yandex ID |
 | `KAFKA_BOOTSTRAP_SERVERS` | адрес Kafka |
 
 ## Безопасная эксплуатация
@@ -85,4 +86,3 @@ logs/events_YYYYMMDD_0002.csv
 - Выдавайте роли `admin`, `owner`, `dealer` только через доверенный внутренний процесс.
 - Регулярно выгружайте и архивируйте `logs`, если сервер работает под высокой нагрузкой.
 - Для загрузки логотипов разрешены только PNG, JPEG и WEBP; SVG/EPS не принимаются из-за риска активного содержимого.
-

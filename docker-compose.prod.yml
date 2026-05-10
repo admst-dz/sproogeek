@@ -9,7 +9,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5433:5432"
+      # Биндим только на 127.0.0.1 — Postgres не должен торчать в интернет.
+      # Из контейнеров (backend/pgbouncer) доступ идёт через docker-сеть, а не через
+      # этот хост-маппинг. Локальный DBeaver может цепляться через SSH-туннель.
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -92,6 +95,8 @@ services:
       APP_ENV: ${APP_ENV:-production}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID:-}
+      YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET:-}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SENTRY_DSN: ${SENTRY_DSN:-}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
@@ -149,7 +154,10 @@ services:
     container_name: spruzhuk_app
     restart: unless-stopped
     ports:
-      - "8080:80"
+      # Только 127.0.0.1: Caddy на хосте проксирует с 443 на этот порт.
+      # Прямой доступ снаружи закрыт — иначе Cloudflare можно обойти, попав
+      # на origin по IP:8080 в обход CDN/WAF.
+      - "127.0.0.1:8080:80"
     depends_on:
       - backend
     networks:

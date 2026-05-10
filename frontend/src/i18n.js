@@ -41,6 +41,7 @@ export const translations = {
         authSignIn: "Войти",
         authOr: "или",
         authGoogleBtn: "Войти через Google",
+        authYandexBtn: "Войти через Яндекс",
         authHaveAccount: "Уже есть аккаунт?",
         authNoAccount: "Нет аккаунта?",
         authRegisterLink: "Зарегистрироваться",
@@ -57,6 +58,8 @@ export const translations = {
         authErrGeneric: "Произошла ошибка. Попробуйте снова.",
         authErrGoogle: "Ошибка входа через Google. Попробуйте снова.",
         authErrGoogleClosed: "Ошибка входа через Google. Окно было закрыто.",
+        authErrYandex: "Ошибка входа через Яндекс. Попробуйте снова.",
+        authErrYandexClosed: "Ошибка входа через Яндекс. Окно было закрыто.",
         authErrEmailExists: "Этот Email уже зарегистрирован.",
         authErrRegister: "Ошибка при регистрации. Попробуйте снова.",
         adminAccessTitle: "Административный доступ",
@@ -253,6 +256,7 @@ export const translations = {
         myOrders: "Мои заказы",
         view3d: "3D Макет",
         orderParams: "Параметры заказа",
+        printProductionPacket: "Печать производственного пакета",
         orderStatusLabel: "Статус выполнения",
         editInEditor: "← Допилить в редакторе",
         orderAccepted: "Заказ принят системой",
@@ -525,6 +529,9 @@ export const translations = {
         adminJsonSyntaxErr: "JSON заполнен с ошибкой",
 
         // Feedback (главная страница)
+        feedbackCta: "Предложить идею или оценить",
+        feedbackCtaLine1: "Предложить идею",
+        feedbackCtaLine2: "или оценить",
         feedbackTitle: "Оставить отзыв",
         feedbackSubtitle: "Расскажите, что понравилось или что улучшить — мы читаем каждое сообщение.",
         feedbackName: "Имя",
@@ -539,6 +546,7 @@ export const translations = {
         feedbackThanksMsg: "Мы получили ваше сообщение и обязательно его прочитаем.",
         feedbackErrEmpty: "Напишите хотя бы пару слов",
         feedbackErrSend: "Не удалось отправить. Попробуйте ещё раз.",
+        feedbackClose: "Закрыть",
         feedbackOptional: "необязательно",
     },
 
@@ -584,6 +592,7 @@ export const translations = {
         authSignIn: "Sign in",
         authOr: "or",
         authGoogleBtn: "Sign in with Google",
+        authYandexBtn: "Sign in with Yandex",
         authHaveAccount: "Already have an account?",
         authNoAccount: "No account?",
         authRegisterLink: "Register",
@@ -600,6 +609,8 @@ export const translations = {
         authErrGeneric: "An error occurred. Please try again.",
         authErrGoogle: "Google sign-in error. Please try again.",
         authErrGoogleClosed: "Google sign-in error. Window was closed.",
+        authErrYandex: "Yandex sign-in error. Please try again.",
+        authErrYandexClosed: "Yandex sign-in error. Window was closed.",
         authErrEmailExists: "This email is already registered.",
         authErrRegister: "Registration error. Please try again.",
         adminAccessTitle: "Admin Access",
@@ -796,6 +807,7 @@ export const translations = {
         myOrders: "My orders",
         view3d: "3D Layout",
         orderParams: "Order parameters",
+        printProductionPacket: "Print production packet",
         orderStatusLabel: "Execution status",
         editInEditor: "← Edit in editor",
         orderAccepted: "Order accepted",
@@ -1068,6 +1080,9 @@ export const translations = {
         adminJsonSyntaxErr: "JSON has a syntax error",
 
         // Feedback
+        feedbackCta: "Suggest an idea or rate us",
+        feedbackCtaLine1: "Suggest an idea",
+        feedbackCtaLine2: "or rate us",
         feedbackTitle: "Leave feedback",
         feedbackSubtitle: "Tell us what you liked or what to improve — we read every message.",
         feedbackName: "Name",
@@ -1082,6 +1097,7 @@ export const translations = {
         feedbackThanksMsg: "Your message has been received — we'll read it shortly.",
         feedbackErrEmpty: "Please write at least a couple of words",
         feedbackErrSend: "Failed to send. Please try again.",
+        feedbackClose: "Close",
         feedbackOptional: "optional",
     },
 
@@ -1127,6 +1143,7 @@ export const translations = {
         authSignIn: "Увайсці",
         authOr: "або",
         authGoogleBtn: "Увайсці праз Google",
+        authYandexBtn: "Увайсці праз Яндэкс",
         authHaveAccount: "Ужо ёсць акаўнт?",
         authNoAccount: "Няма акаўнта?",
         authRegisterLink: "Зарэгістравацца",
@@ -1143,6 +1160,8 @@ export const translations = {
         authErrGeneric: "Адбылася памылка. Паспрабуйце зноў.",
         authErrGoogle: "Памылка ўваходу праз Google. Паспрабуйце зноў.",
         authErrGoogleClosed: "Памылка ўваходу праз Google. Акно было зачынена.",
+        authErrYandex: "Памылка ўваходу праз Яндэкс. Паспрабуйце зноў.",
+        authErrYandexClosed: "Памылка ўваходу праз Яндэкс. Акно было зачынена.",
         authErrEmailExists: "Гэты Email ужо зарэгістраваны.",
         authErrRegister: "Памылка пры рэгістрацыі. Паспрабуйце зноў.",
         adminAccessTitle: "Адміністрацыйны доступ",
@@ -1339,6 +1358,7 @@ export const translations = {
         myOrders: "Мае замовы",
         view3d: "3D Макет",
         orderParams: "Параметры замовы",
+        printProductionPacket: "Друк вытворчага пакета",
         orderStatusLabel: "Статус выканання",
         editInEditor: "← Дапрацаваць у рэдактары",
         orderAccepted: "Замова прынята сістэмай",
@@ -1611,6 +1631,9 @@ export const translations = {
         adminJsonSyntaxErr: "JSON запоўнены з памылкай",
 
         // Feedback
+        feedbackCta: "Прапанаваць ідэю ці ацаніць",
+        feedbackCtaLine1: "Прапанаваць ідэю",
+        feedbackCtaLine2: "ці ацаніць",
         feedbackTitle: "Пакінуць водгук",
         feedbackSubtitle: "Раскажыце, што спадабалася ці што палепшыць — мы чытаем кожны допіс.",
         feedbackName: "Імя",
@@ -1625,6 +1648,7 @@ export const translations = {
         feedbackThanksMsg: "Мы атрымалі ваша паведамленне і абавязкова прачытаем яго.",
         feedbackErrEmpty: "Напішыце хаця б пару слоў",
         feedbackErrSend: "Не атрымалася адправіць. Паспрабуйце яшчэ раз.",
+        feedbackClose: "Закрыць",
         feedbackOptional: "неабавязкова",
     }
 };

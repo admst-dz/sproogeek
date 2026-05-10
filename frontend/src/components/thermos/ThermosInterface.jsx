@@ -16,7 +16,7 @@ export const ThermosInterface = ({ onFinish }) => {
     const [logoArea, setLogoArea] = useState('body');
     const [capLogoTarget, setCapLogoTarget] = useState('capTop');
     const {
-        thermosBodyColor, thermosCapColor, thermosCapVisible,
+        thermosBodyColor, thermosCapVisible,
         setColor, toggleThermosCap,
         thermosLogos, selectedThermosLogoId,
         addThermosLogo, selectThermosLogo, removeThermosLogo,
@@ -32,12 +32,12 @@ export const ThermosInterface = ({ onFinish }) => {
         // Поля на верхнем уровне — applyRenderConfig мёрджит их напрямую в store
         const newItem = {
             productName: t(language, 'thermos'),
-            design: `${t(language, 'thermosBodyPart')}: ${thermosBodyColor}, ${t(language, 'thermosCapPart')}: ${thermosCapColor}`,
+            design: `${t(language, 'thermosBodyPart')}: ${thermosBodyColor}, ${t(language, 'thermosCapPart')}: ${thermosBodyColor}`,
             priceTK: 50,
             priceBYN: 2000,
             activeProduct: 'thermos',
             thermosBodyColor,
-            thermosCapColor,
+            thermosCapColor: thermosBodyColor,
             thermosLogos,
             status: 'draft',
             rendersGenerated: 0,

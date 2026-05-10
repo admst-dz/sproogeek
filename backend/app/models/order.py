@@ -35,4 +35,4 @@ class Order(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=True)
 
-    user = relationship("User", back_populates="orders")
+    user = relationship("User", back_populates="orders", foreign_keys=[user_id])

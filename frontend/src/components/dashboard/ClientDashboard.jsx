@@ -120,8 +120,19 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
         currentUser, logout, cartItem, clearCart,
         activeProduct, coverColor, elasticColor, hasElastic,
         paperPattern, bindingType, spiralColor, format,
-        thermosBodyColor, thermosCapColor, language,
+        thermosBodyColor, language,
     } = useConfigurator();
+    const savedThermosColor = cartItem?.thermosBodyColor || cartItem?.thermosCapColor || thermosBodyColor;
+    const cartProductConfig = cartItem?.activeProduct === 'thermos'
+        ? {
+            ...cartItem,
+            thermosBodyColor: savedThermosColor,
+            thermosCapColor: savedThermosColor,
+            design: `${t(language, 'thermosBodyPart')}: ${savedThermosColor}, ${t(language, 'thermosCapPart')}: ${savedThermosColor}`,
+        }
+        : cartItem;
+    const cartProductType = cartProductConfig?.activeProduct || activeProduct;
+    const cartThermosColor = cartProductConfig?.thermosBodyColor || cartProductConfig?.thermosCapColor || thermosBodyColor;
     const [activeTab, setActiveTab] = useState(initialTab ?? (cartItem ? 'cart' : 'orders'));
 
     const changeTab = useCallback((tab) => {
@@ -211,7 +222,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                 user_email: currentUser?.email || '',
                 product_name: cartItem.productName,
                 configuration: {
-                    productConfig: cartItem,
+                    productConfig: cartProductConfig,
                     clientType,
                     contact: { ...formData },
                     isSample,
@@ -225,7 +236,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
             const newOrder = {
                 id,
                 product: cartItem.productName,
-                design: cartItem.design || '',
+                design: cartProductConfig.design || '',
                 price: 0,
                 status: 'new',
                 stageHistory: [{
@@ -236,7 +247,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                 date: new Date().toLocaleDateString('ru-RU'),
                 quantity,
                 configuration: {
-                    productConfig: cartItem,
+                    productConfig: cartProductConfig,
                     clientType,
                     contact: { ...formData },
                     isSample,
@@ -372,10 +383,10 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                         {/* Параметры */}
                                         <div className="p-5 space-y-2 border-t border-white/5">
                                             <CartRow label={t(language, 'productLabel')} value={cartItem.productName} />
-                                            {activeProduct === 'thermos' ? (
+                                            {cartProductType === 'thermos' ? (
                                                 <>
-                                                    <CartRow label={t(language, 'bodyLabel')} value={<ColorDot color={thermosBodyColor} />} />
-                                                    <CartRow label={t(language, 'capLabel')} value={<ColorDot color={thermosCapColor} />} />
+                                                    <CartRow label={t(language, 'bodyLabel')} value={<ColorDot color={cartThermosColor} />} />
+                                                    <CartRow label={t(language, 'capLabel')} value={<ColorDot color={cartThermosColor} />} />
                                                 </>
                                             ) : (
                                                 <>

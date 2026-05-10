@@ -14,13 +14,14 @@ from datetime import datetime, timezone
 
 from app.core.deps import get_manufacturer_user
 from app.core.event_logger import event_logger
-from app.core.security_utils import safe_path_segment, validate_status
+from app.core.security_utils import safe_filename, safe_path_segment, validate_status
 from app.crud import order as crud_order
 from app.database import get_db
 from app.models.order import Order
 from app.schemas.order import OrderResponse
 from app.services.event_hub import event_hub
 from app.services.imposition import plan_for_order, qr_png_bytes
+from app.services.techcard_client import fetch_techcard_pdf, generate_techcard
 from app.services.warehouse import deduct_for_order, list_materials, low_stock, topup
 
 
@@ -168,7 +169,7 @@ async def manufacturer_update_status(
     existing = await crud_order.get_order(db, order_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Order not found")
-    if current_user.role == "manufacturer" and existing.selected_manufacturer_id != current_user.id:
+    if current_user.role in {"manufacturer", "dealer"} and existing.selected_manufacturer_id != current_user.id:
         raise HTTPException(status_code=403, detail="Order is assigned to another manufacturer")
     if existing.status in QUOTE_STATUSES:
         raise HTTPException(status_code=409, detail="Client must select a manufacturer before production status changes")
@@ -285,11 +286,14 @@ async def _cached_materials_low(db: AsyncSession):
 async def order_imposition_plan(
     order_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_manufacturer_user),
 ):
     safe_path_segment(order_id)
     order = await crud_order.get_order(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    if not _visible_for_manufacturer(order, current_user):
+        raise HTTPException(status_code=403, detail="Access denied")
     return plan_for_order(order)
 
 
@@ -297,15 +301,76 @@ async def order_imposition_plan(
 async def order_qr(
     order_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_manufacturer_user),
 ):
     safe_path_segment(order_id)
     order = await crud_order.get_order(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    if not _visible_for_manufacturer(order, current_user):
+        raise HTTPException(status_code=403, detail="Access denied")
     payload = f"spruzhyk://order/{order.id}|{order.status or 'new'}"
     png = qr_png_bytes(payload)
     return Response(
         content=png,
         media_type="image/png",
         headers={"Cache-Control": "private, max-age=60"},
+    )
+
+
+@router.post("/orders/{order_id}/techcard")
+async def create_manufacturer_techcard(
+    order_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_manufacturer_user),
+):
+    safe_path_segment(order_id)
+    order = await crud_order.get_order(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if not _visible_for_manufacturer(order, current_user):
+        raise HTTPException(status_code=403, detail="Access denied")
+    try:
+        result = await generate_techcard(order, db)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"techcard service unavailable: {exc}") from exc
+
+    event_logger.log(
+        "ORDER_TECHCARD_GENERATED",
+        "Manufacturer generated tech card for order",
+        direction="user->backend",
+        actor_type=current_user.role,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        entity_type="order",
+        entity_id=order_id,
+        request_id=getattr(request.state, "request_id", ""),
+        details={"s3_key": result.get("s3_key"), "bytes": result.get("bytes")},
+    )
+    return result
+
+
+@router.get("/orders/{order_id}/techcard.pdf")
+async def download_manufacturer_techcard(
+    order_id: str,
+    filename: str = Query(..., min_length=1, max_length=255),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_manufacturer_user),
+):
+    safe_id = safe_path_segment(order_id)
+    safe_name = safe_filename(filename)
+    order = await crud_order.get_order(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if not _visible_for_manufacturer(order, current_user):
+        raise HTTPException(status_code=403, detail="Access denied")
+    try:
+        data = await fetch_techcard_pdf(safe_id, safe_name)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f"techcard not found: {exc}") from exc
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
     )

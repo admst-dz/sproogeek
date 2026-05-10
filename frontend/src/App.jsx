@@ -22,6 +22,7 @@ import { ConfirmModal } from './components/shared/ConfirmModal'
 import { UndoRedoControls } from './components/shared/UndoRedoControls'
 import { useUndoRedoHotkeys } from './hooks/useTemporalConfigurator'
 import { CommandPalette } from './components/shared/CommandPalette'
+import { CookiePolicy } from './components/shared/CookiePolicy'
 
 const SCREEN_TO_PATH = {
     home: '/',
@@ -29,6 +30,7 @@ const SCREEN_TO_PATH = {
     order: '/order',
     dealer: '/dealer',
     client_dashboard: '/dashboard',
+    cookie_policy: '/cookie-policy',
     admin_auth: '/borodazaebal',
     admin_dashboard: '/admin',
 };
@@ -125,43 +127,45 @@ function clearConfiguratorDraft() {
     }
 }
 
-function App() {
+function RenderModeView({ configBase64 }) {
+    const { applyRenderConfig } = useConfigurator();
 
+    useEffect(() => {
+        if (!configBase64) return;
+        try {
+            const config = JSON.parse(decodeURIComponent(escape(atob(configBase64))));
+            applyRenderConfig(config);
+        } catch (e) {
+            console.error("Failed to parse render config", e);
+        }
+    }, [configBase64, applyRenderConfig]);
+
+    return (
+        <div className="w-[1024px] h-[1024px] bg-[#E5E5E5] flex items-center justify-center">
+            <Canvas
+                shadows
+                dpr={[1, 2]}
+                camera={{ position: [0, 0, 4.5], fov: 45 }}
+                gl={{ preserveDrawingBuffer: true, antialias: true, alpha: false, powerPreference: 'high-performance' }}
+            >
+                <Experience />
+            </Canvas>
+        </div>
+    );
+}
+
+function App() {
     const urlParams = new URLSearchParams(window.location.search);
     const isRenderMode = urlParams.get('render_mode') === 'true';
 
-    const { applyRenderConfig /* ... остальное ... */ } = useConfigurator();
-
-    useEffect(() => {
-        if (isRenderMode) {
-            const configBase64 = urlParams.get('config');
-            if (configBase64) {
-                try {
-                    const config = JSON.parse(decodeURIComponent(escape(atob(configBase64))));
-                    applyRenderConfig(config);
-                } catch (e) {
-                    console.error("Failed to parse render config", e);
-                }
-            }
-        }
-    }, [isRenderMode, applyRenderConfig]);
-
     if (isRenderMode) {
-        return (
-            <div className="w-[1024px] h-[1024px] bg-[#E5E5E5] flex items-center justify-center">
-                <Canvas
-                    shadows
-                    dpr={[1, 2]}
-                    camera={{ position: [0, 0, 4.5], fov: 45 }}
-                    gl={{ preserveDrawingBuffer: true, antialias: true, alpha: false, powerPreference: 'high-performance' }}
-                >
-                    <Experience />
-                </Canvas>
-            </div>
-        );
+        return <RenderModeView configBase64={urlParams.get('config')} />;
     }
 
+    return <MainApp />;
+}
 
+function MainApp() {
     const [screen, setScreen] = useState(() => getInitialState().screen);
     const [showAuth, setShowAuth] = useState(false);
     const [pendingSuccessToast, setPendingSuccessToast] = useState(false);
@@ -179,7 +183,6 @@ function App() {
         setAuthLoading,
         currentUser,
         userRole,
-        authLoading,
         logout,
         theme,
         zoomLevel,
@@ -233,9 +236,9 @@ function App() {
     }, [theme]);
 
     useEffect(() => {
-        if (screen === 'home') {
-            syncConfiguratorDraftState();
-        }
+        if (screen !== 'home') return undefined;
+        const frame = window.requestAnimationFrame(syncConfiguratorDraftState);
+        return () => window.cancelAnimationFrame(frame);
     }, [screen]);
 
     useEffect(() => {
@@ -295,20 +298,25 @@ function App() {
 
     // --- ЛОГИКА: ПРОВЕРКА РОЛИ И РОУТИНГ ---
     useEffect(() => {
-        if (['admin', 'owner'].includes(userRole)) {
-            setScreen('admin_dashboard');
-        } else if (userRole === 'dealer') {
-            setScreen('dealer');
-        } else if (userRole === 'manufacturer') {
-            setScreen('manufacturer');
-        } else if (userRole === 'client') {
-            setScreen('client_dashboard');
-        } else if (!userRole && ['dealer', 'manufacturer', 'client_dashboard', 'admin_dashboard'].includes(screen)) {
-            setScreen('home');
-        }
-    }, [userRole, screen]);
+        if (screen === 'cookie_policy') return undefined;
 
-    // ... остальной код (без изменений с прошлого рабочего варианта)
+        let targetScreen = null;
+        if (['admin', 'owner'].includes(userRole)) {
+            targetScreen = 'admin_dashboard';
+        } else if (userRole === 'dealer') {
+            targetScreen = 'dealer';
+        } else if (userRole === 'manufacturer') {
+            targetScreen = 'manufacturer';
+        } else if (userRole === 'client') {
+            targetScreen = 'client_dashboard';
+        } else if (!userRole && ['dealer', 'manufacturer', 'client_dashboard', 'admin_dashboard'].includes(screen)) {
+            targetScreen = 'home';
+        }
+
+        if (!targetScreen || targetScreen === screen) return undefined;
+        const frame = window.requestAnimationFrame(() => setScreen(targetScreen));
+        return () => window.cancelAnimationFrame(frame);
+    }, [userRole, screen]);
 
     // --- ЛОГИКА: ВОССТАНОВЛЕНИЕ СЕССИИ ПО JWT ---
     useEffect(() => {
@@ -438,6 +446,12 @@ function App() {
                     user={currentUser}
                     logout={logout}
                 />
+            )}
+
+
+            {/* --- ЭКРАН: ПОЛИТИКА COOKIE --- */}
+            {screen === 'cookie_policy' && (
+                <CookiePolicy onBack={() => setScreen('home')} />
             )}
 
 
