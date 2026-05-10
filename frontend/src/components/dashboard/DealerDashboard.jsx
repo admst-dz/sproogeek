@@ -590,9 +590,9 @@ const ProductionPacket = ({
     );
 };
 
-export const DealerDashboard = ({ onBack }) => {
+export const DealerDashboard = ({ onBack, initialTab, onTabChange }) => {
     const { currentUser, logout, language } = useConfigurator();
-    const [activeTab, setActiveTab] = useState('products');
+    const [activeTab, setActiveTab] = useState(initialTab ?? 'products');
     const [orders, setOrders] = useState([]);
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -614,6 +614,18 @@ export const DealerDashboard = ({ onBack }) => {
     const [orderTypeSaving, setOrderTypeSaving] = useState(false);
 
     const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'owner';
+
+    useEffect(() => {
+        if (initialTab) setActiveTab(initialTab);
+    }, [initialTab]);
+
+    useEffect(() => {
+        onTabChange?.(activeTab);
+    }, [activeTab, onTabChange]);
+
+    const changeTab = useCallback((tab) => {
+        setActiveTab(tab);
+    }, []);
 
     const loadOrders = useCallback(() => {
         if (isAdmin) {
@@ -644,8 +656,8 @@ export const DealerDashboard = ({ onBack }) => {
     }, [activeTab, loadOrders]);
 
     useEffect(() => {
-        if (isAdmin && activeTab === 'products') setActiveTab('orders');
-    }, [isAdmin, activeTab]);
+        if (isAdmin && activeTab === 'products') changeTab('orders');
+    }, [isAdmin, activeTab, changeTab]);
 
     useEffect(() => {
         if (activeTab === 'orders') {
@@ -849,7 +861,7 @@ export const DealerDashboard = ({ onBack }) => {
                     ].map(tab => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
+                            onClick={() => changeTab(tab.id)}
                             className={`w-full flex items-center gap-3 px-4 py-3 rounded-[14px] transition-all text-left font-bold ${
                                 activeTab === tab.id
                                     ? 'bg-white/10 text-white border border-white/10'
@@ -888,13 +900,13 @@ export const DealerDashboard = ({ onBack }) => {
                 {isAdmin && (
                     <div className="mb-6 flex flex-wrap gap-2">
                         <button
-                            onClick={() => setActiveTab('orders')}
+                            onClick={() => changeTab('orders')}
                             className={`px-4 py-2 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'orders' ? 'bg-white text-black border-white' : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'}`}
                         >
                             {t(language, 'tabOrders')}
                         </button>
                         <button
-                            onClick={() => setActiveTab('orderTypes')}
+                            onClick={() => changeTab('orderTypes')}
                             className={`px-4 py-2 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'orderTypes' ? 'bg-white text-black border-white' : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'}`}
                         >
                             {t(language, 'orderTypesTabLabel')}
@@ -1308,7 +1320,7 @@ export const DealerDashboard = ({ onBack }) => {
                 ].map(tab => (
                     <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
+                        onClick={() => changeTab(tab.id)}
                         className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors ${
                             activeTab === tab.id ? 'text-white' : 'text-gray-600'
                         }`}

@@ -73,7 +73,8 @@ export function SceneLoadingOverlay({ label, compact = false }) {
         if (visible) {
             setDisplayProgress(100);
             const elapsed = Math.max(0, now() - startedAt);
-            const delay = Math.max(520, LOGO_ANIMATION_MS - elapsed);
+            const remainingCycle = LOGO_ANIMATION_MS - (elapsed % LOGO_ANIMATION_MS);
+            const delay = Math.max(520, remainingCycle);
             const timeout = window.setTimeout(() => setVisible(false), delay);
             return () => window.clearTimeout(timeout);
         }

@@ -32,7 +32,8 @@ const SCREEN_TO_PATH = {
     client_dashboard: '/dashboard',
     cookie_policy: '/cookie-policy',
     admin_auth: '/borodazaebal',
-    admin_dashboard: '/admin',
+    admin_stub: '/admin',
+    admin_dashboard: '/borodaadmin',
 };
 
 const CONFIGURATOR_PRODUCTS = new Set(['notebook', 'calendar', 'thermos', 'powerbank']);
@@ -53,6 +54,32 @@ const PATH_TO_TAB = {
     '/dashboard/orders': 'orders',
 };
 
+const DEALER_TAB_TO_PATH = {
+    products: '/dealer/products',
+    orders: '/dealer/orders',
+    clients: '/dealer/clients',
+    orderTypes: '/dealer/order-types',
+};
+
+const PATH_TO_DEALER_TAB = {
+    '/dealer/products': 'products',
+    '/dealer/orders': 'orders',
+    '/dealer/clients': 'clients',
+    '/dealer/order-types': 'orderTypes',
+};
+
+const MANUFACTURER_TAB_TO_PATH = {
+    queue: '/manufacturer/queue',
+    materials: '/manufacturer/materials',
+    history: '/manufacturer/history',
+};
+
+const PATH_TO_MANUFACTURER_TAB = {
+    '/manufacturer/queue': 'queue',
+    '/manufacturer/materials': 'materials',
+    '/manufacturer/history': 'history',
+};
+
 const METRIKA_COUNTER_ID = 109128387;
 const CONFIGURATOR_DRAFT_KEY = 'spruzhuk_configurator_draft';
 const CONFIGURATOR_DRAFT_FIELDS = ['activeProduct', 'zoomLevel', ...Object.keys(ALL_PRODUCT_DEFAULTS)];
@@ -67,25 +94,53 @@ function sendMetrikaHit(url = window.location.href) {
 
 function getInitialState() {
     const path = window.location.pathname;
+    if (path.startsWith('/order/')) {
+        const product = path.split('/').filter(Boolean)[1];
+        const activeProduct = CONFIGURATOR_PRODUCTS.has(product) ? product : 'notebook';
+        useConfigurator.getState().setProduct(activeProduct);
+        return { screen: 'order', clientTab: null, dealerTab: null, manufacturerTab: null };
+    }
+    if (path === '/order') {
+        return { screen: 'order', clientTab: null, dealerTab: null, manufacturerTab: null };
+    }
     if (path.startsWith('/configurator/')) {
         const product = path.split('/').filter(Boolean)[1];
         const activeProduct = CONFIGURATOR_PRODUCTS.has(product) ? product : 'notebook';
         useConfigurator.getState().setProduct(activeProduct);
-        return { screen: 'configurator', tab: null };
+        return { screen: 'configurator', clientTab: null, dealerTab: null, manufacturerTab: null };
     }
     if (path === '/configurator') {
-        return { screen: 'configurator', tab: null };
+        return { screen: 'configurator', clientTab: null, dealerTab: null, manufacturerTab: null };
     }
     if (path.startsWith('/dashboard/')) {
-        return { screen: 'client_dashboard', tab: PATH_TO_TAB[path] ?? null };
+        return { screen: 'client_dashboard', clientTab: PATH_TO_TAB[path] ?? null, dealerTab: null, manufacturerTab: null };
     }
-    return { screen: PATH_TO_SCREEN[path] ?? 'home', tab: null };
+    if (path.startsWith('/dealer/')) {
+        return { screen: 'dealer', clientTab: null, dealerTab: PATH_TO_DEALER_TAB[path] ?? null, manufacturerTab: null };
+    }
+    if (path.startsWith('/manufacturer/')) {
+        return { screen: 'manufacturer', clientTab: null, dealerTab: null, manufacturerTab: PATH_TO_MANUFACTURER_TAB[path] ?? null };
+    }
+    return { screen: PATH_TO_SCREEN[path] ?? 'home', clientTab: null, dealerTab: null, manufacturerTab: null };
 }
 
-function getPathForScreen(screen, activeProduct) {
+function getPathForScreen(screen, activeProduct, clientTab, dealerTab, manufacturerTab) {
     if (screen === 'configurator') {
         const product = CONFIGURATOR_PRODUCTS.has(activeProduct) ? activeProduct : 'notebook';
         return `/configurator/${product}`;
+    }
+    if (screen === 'order') {
+        const product = CONFIGURATOR_PRODUCTS.has(activeProduct) ? activeProduct : 'notebook';
+        return `/order/${product}`;
+    }
+    if (screen === 'client_dashboard') {
+        return TAB_TO_PATH[clientTab || 'orders'] || SCREEN_TO_PATH.client_dashboard;
+    }
+    if (screen === 'dealer') {
+        return DEALER_TAB_TO_PATH[dealerTab || 'products'] || SCREEN_TO_PATH.dealer;
+    }
+    if (screen === 'manufacturer') {
+        return MANUFACTURER_TAB_TO_PATH[manufacturerTab || 'queue'] || SCREEN_TO_PATH.manufacturer;
     }
     return SCREEN_TO_PATH[screen];
 }
@@ -166,7 +221,13 @@ function App() {
 }
 
 function MainApp() {
-    const [screen, setScreen] = useState(() => getInitialState().screen);
+    const initialStateRef = useRef(null);
+    if (!initialStateRef.current) initialStateRef.current = getInitialState();
+
+    const [screen, setScreen] = useState(() => initialStateRef.current.screen);
+    const [clientTab, setClientTab] = useState(() => initialStateRef.current.clientTab);
+    const [dealerTab, setDealerTab] = useState(() => initialStateRef.current.dealerTab);
+    const [manufacturerTab, setManufacturerTab] = useState(() => initialStateRef.current.manufacturerTab);
     const [showAuth, setShowAuth] = useState(false);
     const [pendingSuccessToast, setPendingSuccessToast] = useState(false);
     const [configuratorDraft, setConfiguratorDraft] = useState(() => readConfiguratorDraft());
@@ -211,6 +272,7 @@ function MainApp() {
         useConfigurator.setState(draft.state);
         try { useConfigurator.temporal.getState().clear(); } catch { /* noop */ }
         setConfiguratorDraft(draft);
+        setClientTab(null);
         setScreen('configurator');
     };
 
@@ -224,6 +286,7 @@ function MainApp() {
             skipNextDraftSaveRef.current = true;
             clearConfiguratorDraft();
             setConfiguratorDraft(null);
+            setClientTab('cart');
             setScreen('client_dashboard');
         } else {
             setShowAuth(true);
@@ -269,7 +332,7 @@ function MainApp() {
     }, [screen]);
 
     useEffect(() => {
-        const path = getPathForScreen(screen, activeProduct);
+        const path = getPathForScreen(screen, activeProduct, clientTab, dealerTab, manufacturerTab);
         if (path && window.location.pathname !== path) {
             window.history.pushState({}, '', path);
             const nextUrl = window.location.href;
@@ -278,12 +341,15 @@ function MainApp() {
                 lastMetrikaUrlRef.current = nextUrl;
             }
         }
-    }, [activeProduct, screen]);
+    }, [activeProduct, clientTab, dealerTab, manufacturerTab, screen]);
 
     useEffect(() => {
         const handlePopState = () => {
             const next = getInitialState();
             setScreen(next.screen);
+            setClientTab(next.clientTab);
+            setDealerTab(next.dealerTab);
+            setManufacturerTab(next.manufacturerTab);
             window.requestAnimationFrame(() => {
                 const nextUrl = window.location.href;
                 if (lastMetrikaUrlRef.current !== nextUrl) {
@@ -298,7 +364,7 @@ function MainApp() {
 
     // --- ЛОГИКА: ПРОВЕРКА РОЛИ И РОУТИНГ ---
     useEffect(() => {
-        if (screen === 'cookie_policy') return undefined;
+        if (screen === 'cookie_policy' || screen === 'admin_stub') return undefined;
 
         let targetScreen = null;
         if (['admin', 'owner'].includes(userRole)) {
@@ -332,6 +398,7 @@ function MainApp() {
 
     const handleContinueOrder = () => {
         if (currentUser) {
+            setClientTab('cart');
             setScreen('client_dashboard');
         } else {
             setShowAuth(true);
@@ -441,7 +508,10 @@ function MainApp() {
             {/* --- ЭКРАН: ГЛАВНАЯ СТРАНИЦА --- */}
             {screen === 'home' && (
                 <Home
-                    onStart={() => setScreen('configurator')}
+                    onStart={() => {
+                        setClientTab(null);
+                        setScreen('configurator');
+                    }}
                     onAuth={() => setShowAuth(true)}
                     user={currentUser}
                     logout={logout}
@@ -470,13 +540,21 @@ function MainApp() {
 
             {/* --- ЭКРАН: КАБИНЕТ ДИЛЕРА --- */}
             {screen === 'dealer' && (
-                <DealerDashboard onBack={() => setScreen('home')} />
+                <DealerDashboard
+                    onBack={() => setScreen('home')}
+                    initialTab={dealerTab}
+                    onTabChange={setDealerTab}
+                />
             )}
 
 
             {/* --- ЭКРАН: КАБИНЕТ ПРОИЗВОДСТВА --- */}
             {screen === 'manufacturer' && (
-                <ManufacturerDashboard onBack={() => setScreen('home')} />
+                <ManufacturerDashboard
+                    onBack={() => setScreen('home')}
+                    initialTab={manufacturerTab}
+                    onTabChange={setManufacturerTab}
+                />
             )}
 
 
@@ -487,6 +565,8 @@ function MainApp() {
                     onEdit={() => setScreen('configurator')}
                     showSuccessToast={pendingSuccessToast}
                     onSuccessToastShown={() => setPendingSuccessToast(false)}
+                    initialTab={clientTab}
+                    onTabChange={setClientTab}
                 />
             )}
 
@@ -572,6 +652,12 @@ function MainApp() {
                     setCurrentUser(user);
                     setUserRole(user.role);
                 }} />
+            )}
+
+            {screen === 'admin_stub' && (
+                <div className="app-bg fixed inset-0 flex items-center justify-center font-sans text-gray-900 dark:text-white">
+                    <h1 className="text-6xl md:text-8xl font-black tracking-widest">ХА, а админки то у нас и нет</h1>
+                </div>
             )}
 
             {screen === 'admin_dashboard' && (

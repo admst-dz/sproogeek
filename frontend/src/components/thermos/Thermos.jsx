@@ -12,6 +12,7 @@ const CAP_SIDE_DISTANCE = 2.75;
 const CAP_ARC_FORWARD_DISTANCE = 1.55;
 const CAP_FINAL_FORWARD_DISTANCE = 0.35;
 const CAP_SEATED_LIFT_RATIO = 0.1;
+const CAP_ANIMATION_SPEED = 2.2;
 const LOGO_SURFACE_OFFSET = 0.006;
 const LOGO_POLYGON_OFFSET = -18;
 
@@ -398,7 +399,7 @@ export function Thermos({ config: configProp, ...props }) {
 
         if (capGroupRef.current) {
             const target = thermosCapVisible ? 1 : 0;
-            capProgress.current += (target - capProgress.current) * (1 - Math.exp(-2.8 * delta));
+            capProgress.current += (target - capProgress.current) * (1 - Math.exp(-CAP_ANIMATION_SPEED * delta));
 
             const t = easeInOut(Math.max(0, Math.min(1, capProgress.current)));
 

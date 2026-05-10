@@ -3,11 +3,12 @@ import { t } from '../../i18n';
 import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { useConfigurator } from "../../store";
-import { fetchUserOrders, fetchAllProducts, createOrderInDB } from '../../api';
+import { fetchUserOrders, createOrderInDB } from '../../api';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 import { ApprovalPanel } from '../shared/ApprovalPanel';
 import { Notebook } from '../shared/Notebook';
 import { Thermos } from '../thermos/Thermos';
+import { ConfiguratorProductMenu } from '../home/Home';
 import { getUserDisplayName, getUserSecondaryLabel } from '../../utils/user';
 import { SceneLoadingOverlay } from '../shared/VibeLoader';
 
@@ -135,18 +136,22 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
     const cartThermosColor = cartProductConfig?.thermosBodyColor || cartProductConfig?.thermosCapColor || thermosBodyColor;
     const [activeTab, setActiveTab] = useState(initialTab ?? (cartItem ? 'cart' : 'orders'));
 
+    useEffect(() => {
+        if (initialTab) setActiveTab(initialTab);
+    }, [initialTab]);
+
+    useEffect(() => {
+        onTabChange?.(activeTab);
+    }, [activeTab, onTabChange]);
+
     const changeTab = useCallback((tab) => {
         setActiveTab(tab);
-        onTabChange?.(tab);
-    }, [onTabChange]);
+    }, []);
 
     const [orders, setOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(false);
     const [expandedOrders, setExpandedOrders] = useState(new Set());
     const [orderSuccess, setOrderSuccess] = useState(false);
-    const [products, setProducts] = useState([]);
-    const [productsLoading, setProductsLoading] = useState(false);
-
     const [clientType, setClientType] = useState('phys');
     const [quantity, setQuantity] = useState(cartItem?.quantity || 1);
     const [isSample, setIsSample] = useState(cartItem?.isSample || false);
@@ -192,17 +197,6 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
             });
         }
     }, [activeTab, currentUser]);
-
-    useEffect(() => {
-        if (activeTab === 'catalog') {
-            setProductsLoading(true);
-            fetchAllProducts().then(data => {
-                setProducts(data);
-                setProductsLoading(false);
-            });
-        }
-    }, [activeTab]);
-
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -314,37 +308,8 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
 
                 {/* CATALOG TAB */}
                 {activeTab === 'catalog' && (
-                    <div>
-                        {productsLoading ? (
-                            <div className="py-16 flex flex-col items-center gap-3">
-                                <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                                <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">{t(language, 'loading')}</p>
-                            </div>
-                        ) : products.length === 0 ? (
-                            <div className="py-16 flex flex-col items-center gap-4">
-                                <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">{t(language, 'catalogEmpty')}</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                                {products.map(prod => (
-                                    <div key={prod.id} className="group relative flex flex-col rounded-[24px] bg-white/[0.03] border border-white/10 backdrop-blur-xl overflow-hidden hover:bg-white/[0.06] hover:border-white/20 transition-all duration-500 p-6">
-                                        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 blur-[70px] rounded-full bg-blue-500/20 group-hover:bg-blue-500/30 transition-colors duration-500"></div>
-                                        <div className="relative z-10 flex flex-col flex-1 gap-3">
-                                            <h3 className="font-bold text-base text-white">{prod.name}</h3>
-                                            {prod.formats?.length > 0 && (
-                                                <p className="text-xs text-gray-500">{t(language, 'formatsLabel')} {prod.formats.join(', ')}</p>
-                                            )}
-                                            {prod.binding?.length > 0 && (
-                                                <p className="text-xs text-gray-500">{t(language, 'bindingFormatLabel')} {prod.binding.map(b => b === 'hard' ? t(language, 'bindingHard') : t(language, 'bindingSpiral')).join(', ')}</p>
-                                            )}
-                                            <div className="pt-4 border-t border-white/5 mt-auto">
-                                                <span className="font-bold text-white">{prod.retailPrice ? `${prod.retailPrice} BYN` : t(language, 'onRequest')}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                    <div className="flex flex-col items-center">
+                        <ConfiguratorProductMenu onStart={onEdit} />
                     </div>
                 )}
 

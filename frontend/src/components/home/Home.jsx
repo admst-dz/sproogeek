@@ -237,16 +237,11 @@ function ProductDock({ children }) {
 }
 
 
-export const Home = ({ onStart, onAuth, user, logout }) => {
+export function ConfiguratorProductMenu({ onStart }) {
     const {
         setProduct, setFormat, setBindingType, setHasElastic,
-        language, setLanguage, theme, toggleTheme
+        language,
     } = useConfigurator();
-
-    useEffect(() => {
-        if (theme === 'dark') document.documentElement.classList.add('dark');
-        else document.documentElement.classList.remove('dark');
-    }, [theme]);
 
     const handleSelect = (productType, config = {}) => {
         setProduct(productType);
@@ -255,6 +250,89 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
         setHasElastic(config.bindingType === 'hard' ? false : (config.hasElastic !== undefined ? config.hasElastic : true));
         onStart();
     };
+
+    return (
+        <ProductDock>
+            {({ mouseX, dockEnabled }) => (
+                <>
+                    {/* Карточка 1: Ежедневник */}
+                    <DockCard
+                        mouseX={mouseX}
+                        dockEnabled={dockEnabled}
+                        onClick={() => handleSelect('notebook', { format: 'A5', bindingType: 'hard', hasElastic: false })}
+                    >
+                        <div className="group relative flex flex-col items-center p-5 md:p-6 rounded-[20px] md:rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-colors duration-500 overflow-hidden">
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-blue-500/10 dark:bg-blue-500/20 blur-[60px] group-hover:bg-blue-500/20 dark:group-hover:bg-blue-400/30 transition-colors duration-500"></div>
+                            <div className="h-40 sm:h-48 lg:h-56 w-full flex items-center justify-center relative z-10">
+                                <svg width="120" height="160" viewBox="0 0 100 130" fill="none" className="drop-shadow-xl dark:drop-shadow-2xl">
+                                    <rect x="20" y="10" width="60" height="110" rx="3" fill="#151515" stroke="#333" strokeWidth="1" />
+                                    <path d="M76 12 V118 L82 116 V14 Z" fill="#D4AF37" />
+                                    <rect x="20" y="10" width="8" height="110" fill="black" fillOpacity="0.4" />
+                                </svg>
+                            </div>
+                            <div className="text-center relative z-10 mt-2">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'notebook')}</h3>
+                                <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
+                                    {t(language, 'openBtn')}
+                                </button>
+                            </div>
+                        </div>
+                    </DockCard>
+
+                    {/* Карточка 2: Термос */}
+                    <DockCard
+                        mouseX={mouseX}
+                        dockEnabled={dockEnabled}
+                        onClick={() => handleSelect('thermos', {})}
+                    >
+                        <div className="group relative flex flex-col items-center p-5 md:p-6 rounded-[20px] md:rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-colors duration-500 overflow-hidden">
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-slate-500/10 dark:bg-slate-400/20 blur-[60px] group-hover:bg-slate-500/20 dark:group-hover:bg-slate-400/30 transition-colors duration-500"></div>
+                            <div className="h-40 sm:h-48 lg:h-56 w-full relative z-10">
+                                <ThermosPreview />
+                            </div>
+                            <div className="text-center relative z-10 mt-2">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'thermos')}</h3>
+                                <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-slate-50 group-hover:text-slate-700 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
+                                    {t(language, 'openBtn')}
+                                </button>
+                            </div>
+                        </div>
+                    </DockCard>
+
+                    {/* Карточка 3: Повербанк */}
+                    <DockCard
+                        mouseX={mouseX}
+                        dockEnabled={dockEnabled}
+                        onClick={() => handleSelect('powerbank', {})}
+                    >
+                        <div className="group relative flex flex-col items-center p-5 md:p-6 rounded-[20px] md:rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-colors duration-500 overflow-hidden sm:col-span-2 lg:col-span-1">
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-emerald-500/10 dark:bg-emerald-400/20 blur-[60px] group-hover:bg-emerald-500/20 dark:group-hover:bg-emerald-400/30 transition-colors duration-500"></div>
+                            <div className="h-40 sm:h-48 lg:h-56 w-full relative z-10">
+                                <PowerbankPreview />
+                            </div>
+                            <div className="text-center relative z-10 mt-2">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'powerbank')}</h3>
+                                <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-emerald-50 group-hover:text-emerald-700 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
+                                    {t(language, 'openBtn')}
+                                </button>
+                            </div>
+                        </div>
+                    </DockCard>
+                </>
+            )}
+        </ProductDock>
+    );
+}
+
+export const Home = ({ onStart, onAuth, user, logout }) => {
+    const {
+        language, setLanguage, theme, toggleTheme
+    } = useConfigurator();
+
+    useEffect(() => {
+        if (theme === 'dark') document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+    }, [theme]);
 
     const cycleLanguage = () => {
         if (language === 'ru') setLanguage('en');
@@ -327,75 +405,7 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
                     {t(language, 'subtitle')}
                 </p>
 
-                <ProductDock>
-                    {({ mouseX, dockEnabled }) => (
-                        <>
-                            {/* Карточка 1: Ежедневник */}
-                            <DockCard
-                                mouseX={mouseX}
-                                dockEnabled={dockEnabled}
-                                onClick={() => handleSelect('notebook', { format: 'A5', bindingType: 'hard', hasElastic: false })}
-                            >
-                                <div className="group relative flex flex-col items-center p-5 md:p-6 rounded-[20px] md:rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-colors duration-500 overflow-hidden">
-                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-blue-500/10 dark:bg-blue-500/20 blur-[60px] group-hover:bg-blue-500/20 dark:group-hover:bg-blue-400/30 transition-colors duration-500"></div>
-                                    <div className="h-40 sm:h-48 lg:h-56 w-full flex items-center justify-center relative z-10">
-                                        <svg width="120" height="160" viewBox="0 0 100 130" fill="none" className="drop-shadow-xl dark:drop-shadow-2xl">
-                                            <rect x="20" y="10" width="60" height="110" rx="3" fill="#151515" stroke="#333" strokeWidth="1" />
-                                            <path d="M76 12 V118 L82 116 V14 Z" fill="#D4AF37" />
-                                            <rect x="20" y="10" width="8" height="110" fill="black" fillOpacity="0.4" />
-                                        </svg>
-                                    </div>
-                                    <div className="text-center relative z-10 mt-2">
-                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'notebook')}</h3>
-                                        <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-blue-50 group-hover:text-blue-600 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
-                                            {t(language, 'openBtn')}
-                                        </button>
-                                    </div>
-                                </div>
-                            </DockCard>
-
-                            {/* Карточка 2: Термос */}
-                            <DockCard
-                                mouseX={mouseX}
-                                dockEnabled={dockEnabled}
-                                onClick={() => handleSelect('thermos', {})}
-                            >
-                                <div className="group relative flex flex-col items-center p-5 md:p-6 rounded-[20px] md:rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-colors duration-500 overflow-hidden">
-                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-slate-500/10 dark:bg-slate-400/20 blur-[60px] group-hover:bg-slate-500/20 dark:group-hover:bg-slate-400/30 transition-colors duration-500"></div>
-                                    <div className="h-40 sm:h-48 lg:h-56 w-full relative z-10">
-                                        <ThermosPreview />
-                                    </div>
-                                    <div className="text-center relative z-10 mt-2">
-                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'thermos')}</h3>
-                                        <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-slate-50 group-hover:text-slate-700 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
-                                            {t(language, 'openBtn')}
-                                        </button>
-                                    </div>
-                                </div>
-                            </DockCard>
-
-                            {/* Карточка 3: Повербанк */}
-                            <DockCard
-                                mouseX={mouseX}
-                                dockEnabled={dockEnabled}
-                                onClick={() => handleSelect('powerbank', {})}
-                            >
-                                <div className="group relative flex flex-col items-center p-5 md:p-6 rounded-[20px] md:rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-colors duration-500 overflow-hidden sm:col-span-2 lg:col-span-1">
-                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-emerald-500/10 dark:bg-emerald-400/20 blur-[60px] group-hover:bg-emerald-500/20 dark:group-hover:bg-emerald-400/30 transition-colors duration-500"></div>
-                                    <div className="h-40 sm:h-48 lg:h-56 w-full relative z-10">
-                                        <PowerbankPreview />
-                                    </div>
-                                    <div className="text-center relative z-10 mt-2">
-                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'powerbank')}</h3>
-                                        <button className="mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 group-hover:bg-emerald-50 group-hover:text-emerald-700 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white transition-colors dark:border-white/5 text-xs font-bold">
-                                            {t(language, 'openBtn')}
-                                        </button>
-                                    </div>
-                                </div>
-                            </DockCard>
-                        </>
-                    )}
-                </ProductDock>
+                <ConfiguratorProductMenu onStart={onStart} />
 
                 <FeedbackPanel language={language} />
             </main>
