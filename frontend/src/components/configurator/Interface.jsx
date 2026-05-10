@@ -7,7 +7,9 @@ import {
     ColorSwatches,
     ConstructorDock,
     DockGrid,
+    DockTitleColumn,
     FileUploadChip,
+    FloatingLogoSettings,
     LogoList,
     MiniSegment,
     MiniToggle,
@@ -103,9 +105,13 @@ export const Interface = ({ onFinish }) => {
             onTabChange={(next) => { setTab(next); setNotebookOpen(next === 'block'); }}
             onSave={handleAddToCart}
             saveLabel={t(language, 'placeOrder')}
+            desktopTitleColumn
         >
             {tab === 'cover' && (
-                <DockGrid>
+                <DockGrid
+                    cols="md:grid-cols-[0.78fr_1fr_1fr_1.12fr_0.85fr]"
+                    leading={<DockTitleColumn title={t(language, 'notebook')} />}
+                >
                     <SettingGroup title={t(language, 'formatLabel')}>
                         <SettingRow label={t(language, 'formatLabel')}>
                             <MiniSegment
@@ -186,29 +192,34 @@ export const Interface = ({ onFinish }) => {
             )}
 
             {tab === 'block' && (
-                <div className="space-y-3">
-                    <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-5 gap-2">
-                        {PATTERN_IDS.map((id) => (
-                            <button
-                                key={id}
-                                onClick={() => setPaperPattern(id)}
-                                className={`rounded-[8px] border px-2 py-2 transition ${paperPattern === id ? 'border-[#fff9ec] bg-[#fff9ec] text-[#191919]' : 'border-white/18 bg-white/8 text-white/75 hover:text-white'}`}
-                            >
-                                <div className="mx-auto mb-1 h-8 w-8 rounded-[6px] border border-current/20 p-1">
-                                    <img src={PATTERN_ICONS[id]} alt={t(language, PATTERN_KEYS[id])} className="h-full w-full object-contain" />
-                                </div>
-                                <span className="text-[10px] font-black uppercase tracking-wider">{t(language, PATTERN_KEYS[id])}</span>
-                            </button>
-                        ))}
-                    </div>
-                    <BlockPDFPreview pattern={paperPattern} />
-                    {paperPattern === 'blank' && (
-                        <div className="rounded-[8px] border border-white/12 bg-white/8 p-3 text-center text-xs text-white/55">
-                            {t(language, 'blankPages')}
+                <DockGrid
+                    cols="md:grid-cols-[0.78fr_4.05fr]"
+                    leading={<DockTitleColumn title={t(language, 'notebook')} />}
+                >
+                    <div className="min-w-0 space-y-3 md:pl-5 lg:pl-6">
+                        <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-5 gap-2">
+                            {PATTERN_IDS.map((id) => (
+                                <button
+                                    key={id}
+                                    onClick={() => setPaperPattern(id)}
+                                    className={`rounded-[8px] border px-2 py-2 transition ${paperPattern === id ? 'border-[#fff9ec] bg-[#fff9ec] text-[#191919]' : 'border-white/18 bg-white/8 text-white/75 hover:text-white'}`}
+                                >
+                                    <div className="mx-auto mb-1 h-8 w-8 rounded-[6px] border border-current/20 p-1">
+                                        <img src={PATTERN_ICONS[id]} alt={t(language, PATTERN_KEYS[id])} className="h-full w-full object-contain" />
+                                    </div>
+                                    <span className="text-[10px] font-black uppercase tracking-wider">{t(language, PATTERN_KEYS[id])}</span>
+                                </button>
+                            ))}
                         </div>
-                    )}
-                    <BlockBuilder />
-                </div>
+                        <BlockPDFPreview pattern={paperPattern} />
+                        {paperPattern === 'blank' && (
+                            <div className="rounded-[8px] border border-white/12 bg-white/8 p-3 text-center text-xs text-white/55">
+                                {t(language, 'blankPages')}
+                            </div>
+                        )}
+                        <BlockBuilder />
+                    </div>
+                </DockGrid>
             )}
         </ConstructorDock>
     )
@@ -248,11 +259,18 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
                 metaForLogo={(logo) => (logo.side ?? 'front') === 'back' ? t(language, 'sideBack') : t(language, 'sideFront')}
             />
             {selected && (
-                <div className="mt-3 space-y-3">
+                <>
+                    <div className="mt-3 space-y-3 md:hidden">
+                        <TransformPad label={t(language, 'position')} value={selected.position} onChange={setLogoPosition} onReset={resetLogoTransform} />
+                        <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setLogoRotation} />
+                        <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.2} max={1.5} step={0.05} onChange={setLogoScale} />
+                    </div>
+                    <FloatingLogoSettings title={t(language, 'logoLabel')} subtitle={selected.filename}>
                     <TransformPad label={t(language, 'position')} value={selected.position} onChange={setLogoPosition} onReset={resetLogoTransform} />
                     <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setLogoRotation} />
                     <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.2} max={1.5} step={0.05} onChange={setLogoScale} />
-                </div>
+                    </FloatingLogoSettings>
+                </>
             )}
         </SettingGroup>
     );

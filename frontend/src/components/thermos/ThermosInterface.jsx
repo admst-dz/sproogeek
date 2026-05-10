@@ -5,7 +5,9 @@ import {
     ColorSwatches,
     ConstructorDock,
     DockGrid,
+    DockTitleColumn,
     FileUploadChip,
+    FloatingLogoSettings,
     LogoList,
     MiniSegment,
     MiniToggle,
@@ -61,8 +63,11 @@ export const ThermosInterface = ({ onFinish }) => {
     };
 
     return (
-        <ConstructorDock title={t(language, 'thermosTitle')} onSave={handleAddToCart} saveLabel={t(language, 'placeOrder')}>
-            <DockGrid>
+        <ConstructorDock title={t(language, 'thermosTitle')} onSave={handleAddToCart} saveLabel={t(language, 'placeOrder')} desktopTitleColumn>
+            <DockGrid
+                cols="md:grid-cols-[0.78fr_0.9fr_1.08fr_1.24fr_0.85fr]"
+                leading={<DockTitleColumn title={t(language, 'thermosTitle')} />}
+            >
                 <SettingGroup title={t(language, 'thermosBodyPart')}>
                     <SettingRow label={t(language, 'bodyColor')}>
                         <ColorSwatches colors={palette} currentColor={thermosBodyColor} onSelect={(c) => setColor('thermosBody', c)} />
@@ -142,7 +147,24 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, activeLogoTarget, addLogo, se
             </SettingRow>
             <LogoList logos={visibleLogos} selectedLogoId={selectedLogoId} selectLogo={selectLogo} removeLogo={removeLogo} />
             {selected && (
-                <div className="mt-3 space-y-3">
+                <>
+                    <div className="mt-3 space-y-3 md:hidden">
+                        {selected.mode === 'wrap' && (
+                            <div className="rounded-[8px] border border-white/10 bg-white/8 px-3 py-2 text-xs font-bold text-white/60">
+                                {t(language, 'aiWrapApplied')}
+                            </div>
+                        )}
+                        {selected.mode !== 'wrap' && (
+                            <TransformPad label={t(language, 'position')} value={selected.position} onChange={setLogoPosition} onReset={resetLogoTransform} xRange={xRange} yRange={yRange} />
+                        )}
+                        {selected.mode !== 'wrap' && (
+                            <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setLogoRotation} />
+                        )}
+                        {selected.mode !== 'wrap' && (
+                            <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.12} max={activeLogoTarget === 'body' ? 1.5 : 0.9} step={0.03} onChange={setLogoScale} />
+                        )}
+                    </div>
+                    <FloatingLogoSettings title={t(language, 'logoLabel')} subtitle={selected.filename}>
                     {selected.mode === 'wrap' && (
                         <div className="rounded-[8px] border border-white/10 bg-white/8 px-3 py-2 text-xs font-bold text-white/60">
                             {t(language, 'aiWrapApplied')}
@@ -157,7 +179,8 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, activeLogoTarget, addLogo, se
                     {selected.mode !== 'wrap' && (
                         <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.12} max={activeLogoTarget === 'body' ? 1.5 : 0.9} step={0.03} onChange={setLogoScale} />
                     )}
-                </div>
+                    </FloatingLogoSettings>
+                </>
             )}
         </SettingGroup>
     );

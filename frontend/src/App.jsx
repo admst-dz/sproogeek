@@ -577,7 +577,7 @@ function MainApp() {
 
                     <button
                         onClick={() => guardedNavigate(currentUser ? (userRole === 'dealer' ? 'dealer' : 'client_dashboard') : 'home')}
-                        className="absolute top-3 left-3 md:top-8 md:left-9 z-50 px-4 md:px-5 py-2 bg-[#fff9ec] backdrop-blur-md rounded-full shadow-lg text-xs md:text-sm font-bold text-[#1a1a1a] hover:bg-white font-zen active:scale-95 transition-all border border-black/10 max-w-[42vw] md:max-w-none truncate"
+                        className="absolute top-3 left-3 md:top-8 md:left-9 z-50 max-w-[42vw] md:max-w-none truncate rounded-full border border-white/18 bg-[#1b2c3c]/72 px-4 py-2 text-xs font-bold text-white shadow-[0_14px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl transition-all hover:bg-[#24384b]/86 hover:border-white/28 active:scale-95 md:px-5 md:text-sm font-zen"
                     >
                         {currentUser ? t(language, 'backToCabinet') : t(language, 'backToMenu')}
                     </button>

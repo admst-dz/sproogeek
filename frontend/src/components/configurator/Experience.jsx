@@ -16,22 +16,22 @@ const clampZoom = (value) => Math.min(Math.max(value, MIN_ZOOM), MAX_ZOOM)
 const ORBIT_VIEW_CONFIG = {
     thermos: {
         desktop: {
-            baseDistance: 7.35,
+            baseDistance: 10.95,
             minDistance: 2.85,
             maxDistance: 22,
-            target: [0, 0.12, 0],
-            defaultDirection: [0, 0.08, 1],
+            target: [0, -0.48, 0],
+            defaultDirection: [0, 0.03, 1],
             minPolarAngle: Math.PI * 0.16,
             maxPolarAngle: Math.PI * 0.86,
             rotateSpeed: 0.72,
             zoomSpeed: 0.78,
         },
         mobile: {
-            baseDistance: 8.4,
+            baseDistance: 11.25,
             minDistance: 3.05,
             maxDistance: 25,
-            target: [0, 0.08, 0],
-            defaultDirection: [0, 0.06, 1],
+            target: [0, -0.34, 0],
+            defaultDirection: [0, 0.03, 1],
             minPolarAngle: Math.PI * 0.18,
             maxPolarAngle: Math.PI * 0.84,
             rotateSpeed: 0.92,

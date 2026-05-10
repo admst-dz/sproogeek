@@ -1,18 +1,19 @@
 import { useRef } from 'react';
+import { createPortal } from 'react-dom';
 
-export const ConstructorDock = ({ title, tabs = [], activeTab, onTabChange, onSave, saveLabel, children }) => (
-    <div className="pointer-events-auto w-full h-full md:h-auto md:w-[min(980px,calc(100vw-6rem))] md:max-h-[64vh] flex flex-col items-center gap-4 font-zen text-white">
+export const ConstructorDock = ({ title, tabs = [], activeTab, onTabChange, onSave, saveLabel, desktopTitleColumn = false, children }) => (
+    <div className="pointer-events-auto w-full h-full md:h-auto md:w-[min(1120px,calc(100vw-3rem))] lg:w-[min(1180px,calc(100vw-4rem))] md:max-h-[64vh] flex flex-col items-center gap-4 font-zen text-white">
         <button
             type="button"
             onClick={onSave}
-            className="hidden md:inline-flex min-w-[118px] justify-center rounded-full bg-[#fff9ec] px-7 py-2 text-[14px] font-black text-[#1b1b1b] shadow-lg transition hover:bg-white active:scale-95"
+            className="hidden md:inline-flex self-end mr-4 lg:mr-5 min-w-[118px] justify-center rounded-full bg-[#fff9ec] px-7 py-2 text-[14px] font-black text-[#1b1b1b] shadow-lg transition hover:bg-white active:scale-95"
         >
             {saveLabel}
         </button>
 
-        <section className="w-full h-full md:h-auto md:max-h-[calc(64vh-54px)] min-h-0 flex flex-col rounded-t-[24px] md:rounded-[8px] border border-white/35 bg-[#4b393c]/72 shadow-2xl backdrop-blur-xl overflow-hidden">
-            <div className="flex items-center justify-between gap-3 border-b border-white/20 px-4 py-3 md:px-7 md:py-4">
-                <div className="min-w-0">
+        <section className="w-full h-full md:h-auto md:max-h-[calc(64vh-54px)] min-h-0 flex flex-col rounded-t-[24px] md:rounded-[8px] border border-white/35 bg-[#4b393c]/84 shadow-2xl backdrop-blur-xl overflow-hidden">
+            <div className={`${desktopTitleColumn && tabs.length === 0 ? 'md:hidden ' : ''}flex items-center justify-between gap-3 border-b border-white/20 px-4 py-3 md:pl-4 md:pr-7 md:py-4 lg:pl-5 lg:pr-8`}>
+                <div className={`${desktopTitleColumn ? 'md:hidden ' : ''}min-w-0`}>
                     <p className="text-[10px] md:text-[11px] font-black uppercase tracking-[0.24em] text-white/45">Конструктор</p>
                     <h2 className="truncate text-lg md:text-[22px] font-black leading-tight">{title}</h2>
                 </div>
@@ -51,23 +52,46 @@ export const ConstructorDock = ({ title, tabs = [], activeTab, onTabChange, onSa
     </div>
 );
 
-export const DockGrid = ({ children, cols = 'md:grid-cols-4' }) => (
-    <div className={`grid grid-cols-1 sm:grid-cols-2 ${cols} gap-0 md:divide-x md:divide-white/25`}>
+export const DockGrid = ({ children, cols = 'md:grid-cols-4', leading = null }) => (
+    <div className={`grid grid-cols-1 sm:grid-cols-2 ${cols} gap-y-4 md:gap-y-0 md:divide-x md:divide-white/25 [&>*]:min-w-0`}>
+        {leading}
         {children}
     </div>
 );
 
+export const DockTitleColumn = ({ title }) => (
+    <div className="hidden md:flex min-w-0 flex-col justify-start px-0 py-0 pr-5 lg:pr-6">
+        <p className="text-[11px] font-black uppercase tracking-[0.24em] text-white/45">Конструктор</p>
+        <h2 className="mt-1 truncate text-[22px] font-black leading-tight text-white">{title}</h2>
+    </div>
+);
+
+export const FloatingLogoSettings = ({ title, subtitle, children }) => {
+    if (typeof document === 'undefined') return null;
+
+    return createPortal(
+        <aside className="pointer-events-auto hidden md:block fixed right-5 lg:right-8 top-1/2 z-[90] w-[320px] max-w-[calc(100vw-2.5rem)] max-h-[min(560px,calc(100vh-8rem))] -translate-y-1/2 overflow-y-auto rounded-[12px] border border-white/30 bg-[#3f3438]/94 px-5 py-4 font-zen text-white shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-2xl custom-scrollbar">
+            <div className="mb-4 border-b border-white/12 pb-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/42">{title}</p>
+                {subtitle && <h3 className="mt-1 truncate text-[18px] font-black leading-tight">{subtitle}</h3>}
+            </div>
+            <div className="space-y-4">{children}</div>
+        </aside>,
+        document.body
+    );
+};
+
 export const SettingGroup = ({ title, children }) => (
-    <div className="space-y-2 px-0 py-2 md:px-6 md:py-0 first:md:pl-0 last:md:pr-0">
+    <div className="space-y-3 px-0 py-2 md:px-5 md:py-0 lg:px-6 first:md:pl-0 last:md:pr-0">
         {title && <p className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.2em] text-white/42">{title}</p>}
-        <div className="space-y-1.5 md:space-y-2.5">{children}</div>
+        <div className="space-y-3">{children}</div>
     </div>
 );
 
 export const SettingRow = ({ label, children }) => (
-    <div className="grid grid-cols-[minmax(92px,1fr)_auto] md:grid-cols-[minmax(130px,1fr)_auto] items-center gap-3 md:gap-5 text-[13px] md:text-[16px] leading-tight">
-        <span className="min-w-0 truncate font-bold text-white/92">{label}</span>
-        <div className="justify-self-end">{children}</div>
+    <div className="flex min-w-0 flex-col items-start gap-2 text-[13px] md:text-[15px] lg:text-[16px] leading-tight">
+        <span className="min-w-0 font-bold text-white/92">{label}</span>
+        <div className="w-full min-w-0">{children}</div>
     </div>
 );
 
@@ -83,13 +107,13 @@ export const MiniToggle = ({ checked, onChange }) => (
 );
 
 export const MiniSegment = ({ options, value, onChange }) => (
-    <div className="flex max-w-[170px] md:max-w-[240px] flex-wrap justify-end gap-1 md:gap-1.5">
+    <div className="flex w-full max-w-full flex-wrap justify-start gap-1.5">
         {options.map(opt => (
             <button
                 key={opt.value}
                 type="button"
                 onClick={() => onChange(opt.value)}
-                className={`rounded-full border px-2 py-1 md:px-3 md:py-1.5 text-[10px] md:text-[12px] font-black uppercase tracking-wider transition ${
+                className={`rounded-full border px-2.5 py-1.5 md:px-3 md:py-1.5 text-[10px] md:text-[12px] font-black uppercase tracking-wider transition ${
                     value === opt.value ? 'border-[#fff9ec] bg-[#fff9ec] text-[#191919]' : 'border-white/20 bg-white/8 text-white/70 hover:text-white'
                 }`}
             >
@@ -100,7 +124,7 @@ export const MiniSegment = ({ options, value, onChange }) => (
 );
 
 export const ColorSwatches = ({ colors, currentColor, onSelect }) => (
-    <div className="flex max-w-[150px] md:max-w-[210px] flex-wrap justify-end gap-1.5 md:gap-2">
+    <div className="flex w-full max-w-full flex-wrap justify-start gap-2">
         {colors.map(color => {
             const value = color.bg ?? color;
             return (
@@ -120,8 +144,8 @@ export const ColorSwatches = ({ colors, currentColor, onSelect }) => (
 );
 
 export const FileUploadChip = ({ label, onFile }) => (
-    <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-[12px] font-black uppercase tracking-wider transition hover:bg-white/18">
-        <span>{label}</span>
+    <label className="inline-flex max-w-full cursor-pointer items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-[12px] font-black uppercase tracking-wider transition hover:bg-white/18">
+        <span className="min-w-0 leading-tight">{label}</span>
         <span className="text-base leading-none">+</span>
         <input
             type="file"

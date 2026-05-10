@@ -15,6 +15,9 @@ const CAP_SEATED_LIFT_RATIO = 0.05;
 const CAP_ANIMATION_SPEED = 1.0;
 const LOGO_SURFACE_OFFSET = 0.006;
 const LOGO_POLYGON_OFFSET = -18;
+const THERMOS_NECK_METAL_RGB = 'vec3(0.96, 0.95, 0.9)';
+const THERMOS_INNER_METAL_COLOR = '#8d9698';
+const THERMOS_INNER_BOTTOM_COLOR = '#667073';
 
 // ─── Bezier arc for cap animation ─────────────────────────────────────────────
 function quadBezier(t, p0, p1, p2) {
@@ -188,12 +191,44 @@ function CapInnerSeal({ capInner, capRadius }) {
     );
 }
 
+function BodyInnerCavity({ bodyRadius, bodyTopY }) {
+    const innerRadius = Math.max(bodyRadius * 0.43, 0.16);
+    const innerDepth = Math.max(bodyRadius * 0.72, 0.32);
+    const topInset = Math.max(bodyRadius * 0.018, 0.012);
+    const centerY = bodyTopY - topInset - innerDepth / 2;
+    const bottomY = bodyTopY - topInset - innerDepth;
+
+    return (
+        <group>
+            <mesh position={[0, centerY, 0]} renderOrder={8}>
+                <cylinderGeometry args={[innerRadius, innerRadius, innerDepth, 96, 1, true]} />
+                <meshStandardMaterial
+                    color={THERMOS_INNER_METAL_COLOR}
+                    roughness={0.28}
+                    metalness={0.78}
+                    side={THREE.DoubleSide}
+                />
+            </mesh>
+            <mesh position={[0, bottomY, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={9}>
+                <circleGeometry args={[innerRadius * 0.98, 96]} />
+                <meshStandardMaterial
+                    color={THERMOS_INNER_BOTTOM_COLOR}
+                    roughness={0.34}
+                    metalness={0.72}
+                    side={THREE.DoubleSide}
+                />
+            </mesh>
+        </group>
+    );
+}
+
 // ─── Generic mesh component ────────────────────────────────────────────────────
 function ThermosMesh({ geo, matRef, color, neckStartY = null, capInner = null, capLogos = [], capRadius = 0.4, capMinY = 0, capMaxY = 1, metalness = 0.05, roughness = 0.82, logos = [], bodyRadius = 0.4, bodyCenterY = 0, bodyMinY = -1, bodyTopY = 999, bodyNeckStartY = 999 }) {
     const materialShader = useMemo(() => {
         if (neckStartY === null && !capInner) return {};
 
         const neckThreshold = neckStartY?.toFixed(4);
+        const neckOuterLimit = neckStartY !== null ? Math.max(bodyRadius * 0.68, 0.18).toFixed(4) : null;
         const capBottomLimit = capInner?.bottomLimitY.toFixed(4);
         const capRimStart = capInner?.rimStartRadius.toFixed(4);
         const capRimEnd = capInner?.rimEndRadius.toFixed(4);
@@ -208,30 +243,32 @@ function ThermosMesh({ geo, matRef, color, neckStartY = null, capInner = null, c
                     .replace(
                         '#include <color_fragment>',
                         `#include <color_fragment>
-                        float thermosNeckMask = ${neckThreshold ? `step(${neckThreshold}, vThermosLocalY)` : '0.0'};
+                        float thermosNeckHeightMask = ${neckThreshold ? `step(${neckThreshold}, vThermosLocalY)` : '0.0'};
+                        float thermosNeckRadiusMask = ${neckOuterLimit ? `(1.0 - smoothstep(${neckOuterLimit}, ${neckOuterLimit} + 0.04, vThermosLocalRadius))` : '0.0'};
+                        float thermosNeckMask = thermosNeckHeightMask * thermosNeckRadiusMask;
                         float thermosCapBottomMask = ${capBottomLimit ? `(1.0 - smoothstep(${capBottomLimit}, ${capBottomLimit} + 0.04, vThermosLocalY))` : '0.0'};
                         float thermosCapRimMask = ${capRimStart && capRimEnd ? `smoothstep(${capRimStart}, ${capRimStart} + 0.03, vThermosLocalRadius) * (1.0 - smoothstep(${capRimEnd} - 0.03, ${capRimEnd}, vThermosLocalRadius))` : '0.0'};
                         float thermosCapInsideMask = ${capRimEnd ? `(1.0 - smoothstep(${capRimEnd}, ${capRimEnd} + 0.03, vThermosLocalRadius))` : '0.0'};
                         float thermosCapInnerMask = thermosCapBottomMask * max(thermosCapInsideMask, thermosCapRimMask);
-                        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.85, 0.85, 0.82), thermosNeckMask);
+                        diffuseColor.rgb = mix(diffuseColor.rgb, ${THERMOS_NECK_METAL_RGB}, thermosNeckMask);
                         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.055, 0.055, 0.052), thermosCapInnerMask);`
                     )
                     .replace(
                         '#include <roughnessmap_fragment>',
                         `#include <roughnessmap_fragment>
-                        roughnessFactor = mix(roughnessFactor, 0.16, thermosNeckMask);
+                        roughnessFactor = mix(roughnessFactor, 0.08, thermosNeckMask);
                         roughnessFactor = mix(roughnessFactor, 0.72, thermosCapInnerMask);`
                     )
                     .replace(
                         '#include <metalnessmap_fragment>',
                         `#include <metalnessmap_fragment>
-                        metalnessFactor = mix(metalnessFactor, 0.88, thermosNeckMask);
+                        metalnessFactor = mix(metalnessFactor, 1.0, thermosNeckMask);
                         metalnessFactor = mix(metalnessFactor, 0.08, thermosCapInnerMask);`
                     );
             },
-            customProgramCacheKey: () => `thermos-material-${neckThreshold ?? 'none'}-${capBottomLimit ?? 'none'}-${capRimStart ?? 'none'}-${capRimEnd ?? 'none'}`,
+            customProgramCacheKey: () => `thermos-material-${neckThreshold ?? 'none'}-${neckOuterLimit ?? 'none'}-${capBottomLimit ?? 'none'}-${capRimStart ?? 'none'}-${capRimEnd ?? 'none'}`,
         };
-    }, [neckStartY, capInner]);
+    }, [neckStartY, bodyRadius, capInner]);
 
     return (
         <mesh geometry={geo}>
@@ -448,6 +485,7 @@ export function Thermos({ config: configProp, ...props }) {
                             bodyTopY={bodyTopY}
                             bodyNeckStartY={bodyNeckStartY}
                         />
+                        <BodyInnerCavity bodyRadius={bodyRadius} bodyTopY={bodyTopY} />
                     </>
                 )}
                 {capGeo && (

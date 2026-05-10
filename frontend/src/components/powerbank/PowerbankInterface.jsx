@@ -4,7 +4,9 @@ import {
     ColorSwatches,
     ConstructorDock,
     DockGrid,
+    DockTitleColumn,
     FileUploadChip,
+    FloatingLogoSettings,
     LogoList,
     MiniSegment,
     RotationScrub,
@@ -47,8 +49,11 @@ export const PowerbankInterface = ({ onFinish }) => {
     };
 
     return (
-        <ConstructorDock title={t(language, 'powerbankTitle')} onSave={handleAddToCart} saveLabel={t(language, 'placeOrder')}>
-            <DockGrid cols="md:grid-cols-3">
+        <ConstructorDock title={t(language, 'powerbankTitle')} onSave={handleAddToCart} saveLabel={t(language, 'placeOrder')} desktopTitleColumn>
+            <DockGrid
+                cols="md:grid-cols-[0.78fr_0.9fr_1.16fr_0.85fr]"
+                leading={<DockTitleColumn title={t(language, 'powerbankTitle')} />}
+            >
                 <SettingGroup title={t(language, 'bodyColor')}>
                     <SettingRow label={t(language, 'bodyColor')}>
                         <ColorSwatches colors={palette} currentColor={powerbankBodyColor} onSelect={(c) => setColor('powerbankBody', c)} />
@@ -99,7 +104,26 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
             />
 
             {selected && (
-                <div className="mt-3 space-y-3">
+                <>
+                    <div className="mt-3 space-y-3 md:hidden">
+                        <SettingRow label={t(language, 'applicationSide')}>
+                            <MiniSegment
+                                value={selected.side ?? 'outer'}
+                                onChange={setLogoSide}
+                                options={[
+                                    { value: 'outer', label: t(language, 'outerSide') },
+                                    { value: 'charging', label: t(language, 'chargingSide') },
+                                ]}
+                            />
+                        </SettingRow>
+                        <p className="text-[10px] leading-tight text-white/35">
+                            {(selected.side ?? 'outer') === 'charging' ? t(language, 'chargingSideDesc') : t(language, 'outerSideDesc')}
+                        </p>
+                        <TransformPad label={t(language, 'position')} value={selected.position} onChange={setLogoPosition} onReset={resetLogoTransform} aspect="aspect-[3/4]" />
+                        <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setLogoRotation} />
+                        <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.1} max={1.2} step={0.02} onChange={setLogoScale} />
+                    </div>
+                    <FloatingLogoSettings title={t(language, 'logoLabel')} subtitle={selected.filename}>
                     <SettingRow label={t(language, 'applicationSide')}>
                         <MiniSegment
                             value={selected.side ?? 'outer'}
@@ -116,7 +140,8 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
                     <TransformPad label={t(language, 'position')} value={selected.position} onChange={setLogoPosition} onReset={resetLogoTransform} aspect="aspect-[3/4]" />
                     <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setLogoRotation} />
                     <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.1} max={1.2} step={0.02} onChange={setLogoScale} />
-                </div>
+                    </FloatingLogoSettings>
+                </>
             )}
         </SettingGroup>
     );
