@@ -113,18 +113,42 @@ async def fetch_unwrap_zip(order: Order) -> bytes:
         return resp.content
 
 
+_PATTERN_TO_RULING = {
+    "blank": "blank",
+    "lined": "lined",
+    "tlined": "lined",
+    "grid": "grid",
+    "dotted": "dotted",
+    "planner": "planner",
+}
+
+
 def _build_block_payload(order: Order) -> dict[str, Any]:
     cfg = order.configuration or {}
     pc = cfg.get("productConfig") or {}
+    pattern = str(pc.get("paperPattern") or pc.get("ruling") or pc.get("blockType") or "lined")
+    template_ids_raw = pc.get("blockPages") or pc.get("template_ids") or []
+    template_ids: list[int] = []
+    if isinstance(template_ids_raw, list):
+        for tid in template_ids_raw:
+            try:
+                template_ids.append(int(tid))
+            except (TypeError, ValueError):
+                continue
+    contact = (cfg.get("contact") or {}) if isinstance(cfg.get("contact"), dict) else {}
     return {
         "order_id": str(order.id),
         "width_mm": float(pc.get("widthMm") or 145.0),
         "height_mm": float(pc.get("heightMm") or 210.0),
         "pages": int(pc.get("pages") or pc.get("pageCount") or 120),
-        "ruling": str(pc.get("ruling") or pc.get("blockType") or "lined"),
+        "ruling": _PATTERN_TO_RULING.get(pattern, "lined"),
         "line_spacing_mm": float(pc.get("lineSpacingMm") or 7.0),
         "page_numbers": bool(pc.get("pageNumbers", True)),
         "title": pc.get("blockTitle"),
+        "template_ids": template_ids,
+        "paper_type": pc.get("paperType"),
+        "client_name": contact.get("name") or order.user_email,
+        "product_name": order.product_name,
     }
 
 

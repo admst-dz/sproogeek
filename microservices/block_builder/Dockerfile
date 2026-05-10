@@ -14,6 +14,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY app ./app
+COPY templates ./templates
 
 EXPOSE 8000
 ENTRYPOINT ["/usr/bin/tini", "--"]

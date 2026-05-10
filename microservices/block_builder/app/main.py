@@ -1,19 +1,26 @@
 """Notebook block PDF builder.
 
-Generates the inner-block PDF for a planner/notebook order: configurable count
-of pages with the requested ruling style (blank, lined, grid, dotted, planner).
-The output is a print-ready PDF in the requested page size.
+Two modes:
+1. **Procedural** (default): generate ruled pages from scratch (blank/lined/grid/dotted/planner).
+2. **Template assembly**: stitch user-selected pages from the catalog of pre-designed
+   PDFs (1..50). The print shop sees a cover page with order metadata and the
+   chosen paper type, followed by the requested templates in order.
 """
 from __future__ import annotations
 
 import io
 import logging
+import os
 import re
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import List, Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel, Field
+from pypdf import PdfReader, PdfWriter
 from reportlab.lib.colors import HexColor, black
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
@@ -21,9 +28,10 @@ from reportlab.pdfgen import canvas
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("block_builder")
 
-app = FastAPI(title="Spruzhyk Block Builder", version="1.0.0")
+app = FastAPI(title="Spruzhyk Block Builder", version="2.0.0")
 
 _SAFE = re.compile(r"^[A-Za-z0-9._-]+$")
+TEMPLATES_DIR = Path(os.environ.get("BLOCK_TEMPLATES_DIR", "/app/templates/pages"))
 
 
 def _safe(value: str) -> str:
@@ -33,6 +41,16 @@ def _safe(value: str) -> str:
 
 
 RulingStyle = Literal["blank", "lined", "grid", "dotted", "planner"]
+PaperType = Literal["offset_80", "offset_100", "offset_110", "coated_115", "coated_130"]
+
+
+PAPER_LABELS: dict[str, str] = {
+    "offset_80": "Офсетная 80 г/м²",
+    "offset_100": "Офсетная 100 г/м²",
+    "offset_110": "Офсетная 110 г/м²",
+    "coated_115": "Мелованная 115 г/м²",
+    "coated_130": "Мелованная 130 г/м²",
+}
 
 
 class BlockRequest(BaseModel):
@@ -45,6 +63,12 @@ class BlockRequest(BaseModel):
     page_numbers: bool = True
     margin_mm: float = Field(12.0, ge=0.0, le=30.0)
     title: Optional[str] = None
+
+    # Template-assembly mode
+    template_ids: List[int] = Field(default_factory=list)
+    paper_type: Optional[PaperType] = None
+    client_name: Optional[str] = None
+    product_name: Optional[str] = None
 
 
 GRID_COLOR = HexColor("#94A3B8")
@@ -87,14 +111,12 @@ def _draw_dotted(c: canvas.Canvas, w: float, h: float, m: float, spacing: float)
 
 
 def _draw_planner(c: canvas.Canvas, w: float, h: float, m: float, spacing: float) -> None:
-    # Header strip
     c.setFillColor(HexColor("#F1F5F9"))
     c.rect(m, h - m - 18 * mm, w - 2 * m, 18 * mm, fill=1, stroke=0)
     c.setFillColor(TEXT_GRAY)
     c.setFont("Helvetica-Bold", 10)
     c.drawString(m + 4 * mm, h - m - 7 * mm, "DATE")
     c.drawString(m + 60 * mm, h - m - 7 * mm, "PRIORITIES")
-    # Body lines below the strip
     c.setStrokeColor(RULE_COLOR)
     c.setLineWidth(0.3)
     y = m + spacing
@@ -112,7 +134,7 @@ _DRAW = {
 }
 
 
-def _render_block_pdf(req: BlockRequest) -> bytes:
+def _render_procedural_pdf(req: BlockRequest) -> bytes:
     buf = io.BytesIO()
     page = (req.width_mm * mm, req.height_mm * mm)
     c = canvas.Canvas(buf, pagesize=page)
@@ -140,16 +162,114 @@ def _render_block_pdf(req: BlockRequest) -> bytes:
     return buf.getvalue()
 
 
+def _render_cover_page(req: BlockRequest) -> bytes:
+    """One-page production cover with order metadata and paper type."""
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    w, h = A4
+    c.setFillColor(black)
+    c.setFont("Helvetica-Bold", 22)
+    c.drawString(20 * mm, h - 30 * mm, "Производственный блок")
+
+    c.setFont("Helvetica", 11)
+    c.setFillColor(TEXT_GRAY)
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    lines = [
+        f"Заказ: {req.order_id}",
+        f"Дата: {ts}",
+    ]
+    if req.product_name:
+        lines.append(f"Товар: {req.product_name}")
+    if req.client_name:
+        lines.append(f"Клиент: {req.client_name}")
+    if req.paper_type:
+        lines.append(f"Бумага: {PAPER_LABELS.get(req.paper_type, req.paper_type)}")
+    if req.template_ids:
+        lines.append(f"Страниц в блоке: {len(req.template_ids)}")
+        lines.append(f"Формат страницы: {req.width_mm:.0f} × {req.height_mm:.0f} мм")
+
+    y = h - 45 * mm
+    for line in lines:
+        c.drawString(20 * mm, y, line)
+        y -= 7 * mm
+
+    if req.template_ids:
+        c.setFillColor(black)
+        c.setFont("Helvetica-Bold", 10)
+        y -= 5 * mm
+        c.drawString(20 * mm, y, "Состав блока (по порядку):")
+        c.setFillColor(TEXT_GRAY)
+        c.setFont("Helvetica", 9)
+        y -= 6 * mm
+        per_line = 14
+        for i in range(0, len(req.template_ids), per_line):
+            chunk = req.template_ids[i:i + per_line]
+            c.drawString(20 * mm, y, "  ".join(f"#{tid:02d}" for tid in chunk))
+            y -= 5 * mm
+            if y < 25 * mm:
+                break
+
+    c.setFillColor(TEXT_GRAY)
+    c.setFont("Helvetica", 7)
+    c.drawRightString(w - 20 * mm, 12 * mm, f"spruzhyk · order {req.order_id}")
+    c.save()
+    return buf.getvalue()
+
+
+def _assemble_template_pdf(req: BlockRequest) -> bytes:
+    """Stitch the chosen catalog templates after a cover page."""
+    writer = PdfWriter()
+
+    cover = PdfReader(io.BytesIO(_render_cover_page(req)))
+    for page in cover.pages:
+        writer.add_page(page)
+
+    missing: list[int] = []
+    for tid in req.template_ids:
+        path = TEMPLATES_DIR / f"{tid}.pdf"
+        if not path.is_file():
+            missing.append(tid)
+            continue
+        reader = PdfReader(str(path))
+        for page in reader.pages:
+            writer.add_page(page)
+
+    if missing:
+        log.warning("missing template ids: %s", missing)
+
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
+
+
+@app.get("/api/templates")
+def list_templates():
+    items = []
+    for path in sorted(TEMPLATES_DIR.glob("*.pdf"), key=lambda p: int(p.stem) if p.stem.isdigit() else 0):
+        if not path.stem.isdigit():
+            continue
+        items.append({"id": int(path.stem), "filename": path.name})
+    return {"templates": items}
 
 
 @app.post("/api/block.pdf")
 def block_pdf(req: BlockRequest):
     _safe(req.order_id)
     try:
-        pdf = _render_block_pdf(req)
+        if req.template_ids:
+            for tid in req.template_ids:
+                if tid < 1 or tid > 9999:
+                    raise HTTPException(400, f"invalid template id: {tid}")
+            pdf = _assemble_template_pdf(req)
+        else:
+            pdf = _render_procedural_pdf(req)
+    except HTTPException:
+        raise
     except Exception as exc:  # noqa: BLE001
         log.exception("block render failed")
         raise HTTPException(500, f"block render failed: {exc}") from exc

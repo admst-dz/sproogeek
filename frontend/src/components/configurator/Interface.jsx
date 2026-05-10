@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useConfigurator, captureRender } from "../../store";
 import { t } from '../../i18n';
 import { BlockPDFPreview } from './BlockPDFPreview';
+import { BlockBuilder } from './BlockBuilder';
 import patternBlank  from '../../assets/icons/pattern-blank.svg';
 import patternLined  from '../../assets/icons/pattern-lined.svg';
 import patternTlined from '../../assets/icons/pattern-tlined.svg';
@@ -36,6 +37,7 @@ export const Interface = ({ onFinish }) => {
         hasCorners, toggleCorners,
         setNotebookOpen,
         paperPattern, setPaperPattern,
+        blockPages, paperType,
         logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide,
         activeProduct,
         zoomLevel, setZoom,
@@ -65,8 +67,8 @@ export const Interface = ({ onFinish }) => {
             design: `${t(language, 'bindingFormatLabel')} ${bindingLabel}, ${t(language, 'patternLabel')}: ${paperPattern}`,
             priceBYN: 1500,
             type: 'notebook',
-            config: { format, coverColor, hasElastic: orderHasElastic, elasticColor, paperPattern, bindingType, spiralColor, hasCorners },
-            format, coverColor, hasElastic: orderHasElastic, elasticColor, paperPattern, bindingType, spiralColor, hasCorners,
+            config: { format, coverColor, hasElastic: orderHasElastic, elasticColor, paperPattern, bindingType, spiralColor, hasCorners, blockPages, paperType },
+            format, coverColor, hasElastic: orderHasElastic, elasticColor, paperPattern, bindingType, spiralColor, hasCorners, blockPages, paperType,
             status: 'draft',
             rendersGenerated: 0,
             quantity,
@@ -144,6 +146,7 @@ export const Interface = ({ onFinish }) => {
                                 {t(language, 'blankPages')}
                             </div>
                         )}
+                        <BlockBuilder />
                     </div>
                 )}
             </div>

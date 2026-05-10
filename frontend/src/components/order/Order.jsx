@@ -12,6 +12,7 @@ export const Order = ({ onBack, onSuccess }) => {
     const {
         format, coverColor, elasticColor, hasElastic,
         paperPattern, logos, bindingType, spiralColor,
+        blockPages, paperType,
         activeProduct, language
     } = useConfigurator();
 
@@ -58,6 +59,7 @@ export const Order = ({ onBack, onSuccess }) => {
                         elasticColor: hasElastic ? elasticColor : null,
                         spiralColor: bindingType === 'spiral' ? spiralColor : null,
                         paperPattern, hasLogo: logos.length > 0,
+                        blockPages, paperType,
                     },
                 },
                 quantity,

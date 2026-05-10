@@ -36,6 +36,8 @@ export const NOTEBOOK_DEFAULTS = {
     hasCorners: true,
     logos: [],
     selectedLogoId: null,
+    blockPages: [],
+    paperType: 'offset_100',
 };
 export const THERMOS_DEFAULTS = {
     thermosBodyColor: '#E65405',
@@ -84,6 +86,8 @@ export const useConfigurator = create(temporal((set, get) => ({
     logos: [],
     selectedLogoId: null,
     zoomLevel: 1,
+    blockPages: [],
+    paperType: 'offset_100',
 
     // --- Параметры термоса ---
     thermosBodyColor: '#E65405',
@@ -159,6 +163,23 @@ export const useConfigurator = create(temporal((set, get) => ({
     setHasElastic: (has) => set({ hasElastic: has }),
     setNotebookOpen: (isOpen) => set({ isNotebookOpen: isOpen }),
     setPaperPattern: (pattern) => set({ paperPattern: pattern, isNotebookOpen: true }),
+    setPaperType: (type) => set({ paperType: type }),
+    addBlockPage: (templateId) => set((state) => ({
+        blockPages: [...state.blockPages, Number(templateId)],
+        isNotebookOpen: true,
+    })),
+    removeBlockPageAt: (index) => set((state) => ({
+        blockPages: state.blockPages.filter((_, i) => i !== index),
+    })),
+    moveBlockPage: (fromIndex, toIndex) => set((state) => {
+        const next = state.blockPages.slice();
+        if (fromIndex < 0 || fromIndex >= next.length) return state;
+        const [item] = next.splice(fromIndex, 1);
+        const target = Math.max(0, Math.min(next.length, toIndex));
+        next.splice(target, 0, item);
+        return { blockPages: next };
+    }),
+    clearBlockPages: () => set({ blockPages: [] }),
     addLogo: async (file, side = 'front') => {
         if (file instanceof File) {
             const id = Date.now();
