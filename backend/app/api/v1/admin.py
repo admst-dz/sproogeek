@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_admin_user
 from app.core.event_logger import event_logger
-from app.core.security import hash_password
+from app.core.security import hash_password_async
 from app.crud import order as crud_order
 from app.crud import user as crud_user
 from app.database import get_db
@@ -102,7 +102,7 @@ async def create_admin_user(
         db,
         id=str(uuid.uuid4()),
         email=email,
-        password_hash=hash_password(payload.password),
+        password_hash=await hash_password_async(payload.password),
         display_name=payload.display_name or "",
         role=payload.role,
         sub_role=payload.sub_role,
@@ -175,7 +175,7 @@ async def reset_admin_user_password(
     if user.role == "owner" and current_user.role != "owner":
         raise HTTPException(status_code=403, detail="Cannot reset password for owner")
 
-    user = await crud_user.update_user(db, user, {"password_hash": hash_password(payload.password)})
+    user = await crud_user.update_user(db, user, {"password_hash": await hash_password_async(payload.password)})
     stats_map = await crud_user.order_stats_for_users(db, [user.id])
     event_logger.log(
         "USER_PASSWORD_RESET_BY_ADMIN",

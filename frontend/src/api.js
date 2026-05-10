@@ -58,6 +58,11 @@ export const orderApi = {
         return apiClient.post(`/orders/${encodeURIComponent(orderId)}/signed-approval`, formData);
     },
     selectQuote: (orderId, quoteId) => apiClient.post(`/orders/${encodeURIComponent(orderId)}/select-quote`, { quote_id: quoteId }),
+    qr: (orderId) => apiClient.get(`/orders/${encodeURIComponent(orderId)}/qr.png`, { responseType: 'blob' }),
+    productionPackage: (orderId) => apiClient.get(
+        `/orders/${encodeURIComponent(orderId)}/production-package.zip`,
+        { responseType: 'blob' }
+    ),
 };
 
 export const adminApi = {
@@ -117,7 +122,6 @@ export const manufacturerApi = {
         { params: { filename }, responseType: 'blob' }
     ),
     imposition: (orderId) => apiClient.get(`/manufacturer/orders/${encodeURIComponent(orderId)}/imposition`),
-    qrUrl: (orderId) => `${(import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '')}/manufacturer/orders/${encodeURIComponent(orderId)}/qr.png`,
     materials: () => apiClient.get('/manufacturer/materials'),
     materialsLow: () => apiClient.get('/manufacturer/materials/low'),
 };

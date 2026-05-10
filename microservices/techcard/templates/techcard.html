@@ -161,7 +161,9 @@ ul.files li { margin-bottom: 1mm; font-size: 9pt; }
 <table class="kv">
     <tr><td class="k">Формат, мм</td><td class="v">{{ c.blockFormat or c.format | safe_dash }}</td></tr>
     <tr><td class="k">Сшивка, вид</td><td class="v">{{ c.blockBinding | safe_dash }}</td></tr>
-    <tr><td class="k">Бумага, вид</td><td class="v">{{ c.paperType | safe_dash }}</td></tr>
+    <tr><td class="k">Бумага, вид</td><td class="v">{{ c.paperType | paper_label }}</td></tr>
+    <tr><td class="k">Состав блока (порядок страниц)</td><td class="v">{{ c.blockPages | block_pages }}</td></tr>
+    <tr><td class="k">Кол-во кастомных страниц</td><td class="v">{{ c.blockPages | length if c.blockPages else "—" }}</td></tr>
     <tr><td class="k">Плотность бумаги</td><td class="v">{{ c.paperDensity | safe_dash }}</td></tr>
     <tr><td class="k">Цвет бумаги</td><td class="v">{{ c.paperColor | safe_dash }}</td></tr>
     <tr><td class="k">Разлиновка</td><td class="v">{{ c.paperPattern | safe_dash }}</td></tr>

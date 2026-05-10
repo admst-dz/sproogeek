@@ -1,11 +1,13 @@
+import io
 import os
 import uuid
+import zipfile
 from typing import Optional
 
 import aiofiles
 import httpx
 import sentry_sdk
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi_pagination import Page, paginate
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
@@ -21,12 +23,14 @@ from pydantic import BaseModel, Field as PField
 
 from app.core.security_utils import safe_filename, safe_path_segment
 from app.crud import order as crud_order
-from app.database import get_db
+from app.database import AsyncSessionLocal, get_db
 from app.models.order import Order
 from app.schemas.order import OrderCreate, OrderResponse, OrderStatusUpdate
 from app.services.event_hub import event_hub
+from app.services.imposition import qr_png_bytes
 from app.services.order_service import OrderService
-from app.services.techcard_client import fetch_techcard_pdf, generate_approval
+from app.services.techcard_client import fetch_techcard_pdf, generate_approval, generate_techcard
+from app.services.unwrap_client import fetch_block_pdf, fetch_unwrap_zip
 
 
 router = APIRouter()
@@ -129,21 +133,74 @@ async def _send_order_event(topic: str, message: dict, req_id: str = "") -> None
         )
 
 
+async def _post_order_create_jobs(
+    order_id: str,
+    user_id: str,
+    user_email: str,
+    config_for_3d: dict,
+    req_id: str,
+) -> None:
+    """Render preview, persist URL, then publish order.created with the URL."""
+    render_url = await generate_backend_render(config_for_3d, req_id)
+
+    if render_url:
+        async with AsyncSessionLocal() as session:
+            order = await crud_order.get_order(session, order_id)
+            if order is not None:
+                config = dict(order.configuration or {})
+                config["server_render_url"] = render_url
+                order.configuration = config
+                flag_modified(order, "configuration")
+                await session.commit()
+                await session.refresh(order)
+
+    async with AsyncSessionLocal() as session:
+        order = await crud_order.get_order(session, order_id)
+        if order is None:
+            return
+        dealer_id = _extract_dealer_id(order)
+        product_name = order.product_name
+        status = order.status
+        created_at = order.created_at.isoformat() if order.created_at else None
+
+    await _send_order_event(
+        topic="order_events",
+        message={
+            "event_type": "ORDER_CREATED",
+            "order_id": order_id,
+            "user_id": user_id,
+            "user_email": user_email,
+            "render_url": render_url,
+            "status": status,
+        },
+        req_id=req_id,
+    )
+
+    await event_hub.publish("order.created", {
+        "order_id": order_id,
+        "user_id": user_id,
+        "user_email": user_email,
+        "product_name": product_name,
+        "status": status,
+        "dealer_id": dealer_id,
+        "created_at": created_at,
+        "render_url": render_url,
+    })
+
+
 @router.post("/", response_model=OrderResponse)
 async def create_order(
     request: Request,
     order: OrderCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     req_id = request_id(request)
     config_for_3d = order.configuration.get("productConfig", {})
-    render_url = await generate_backend_render(config_for_3d, req_id)
-
-    if render_url:
-        order.configuration["server_render_url"] = render_url
 
     new_order = await OrderService.create_new_order(db, order, current_user.id)
+
     event_logger.log(
         "ORDER_CREATED",
         "User created order",
@@ -162,32 +219,17 @@ async def create_order(
             "quantity": new_order.quantity,
             "total_price": new_order.total_price,
             "currency": new_order.currency,
-            "render_url": render_url,
         },
     )
 
-    await _send_order_event(
-        topic="order_events",
-        message={
-            "event_type": "ORDER_CREATED",
-            "order_id": str(new_order.id),
-            "user_id": current_user.id,
-            "user_email": current_user.email,
-            "render_url": render_url,
-            "status": new_order.status,
-        },
-        req_id=req_id,
+    background_tasks.add_task(
+        _post_order_create_jobs,
+        str(new_order.id),
+        current_user.id,
+        current_user.email,
+        config_for_3d,
+        req_id,
     )
-
-    await event_hub.publish("order.created", {
-        "order_id": str(new_order.id),
-        "user_id": current_user.id,
-        "user_email": current_user.email,
-        "product_name": new_order.product_name,
-        "status": new_order.status,
-        "dealer_id": _extract_dealer_id(new_order),
-        "created_at": new_order.created_at.isoformat() if new_order.created_at else None,
-    })
 
     return new_order
 
@@ -301,6 +343,88 @@ def _can_view_order(order: Order, current_user) -> bool:
 
 async def _append_order_status(db: AsyncSession, order: Order, status: str, comment: str) -> Order:
     return await crud_order.update_status(db, str(order.id), status, comment)
+
+
+@router.get("/{order_id}/production-package.zip")
+async def download_production_package(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Bundle everything the print shop needs: techcard + unwrap + decals + (notebook block) + QR."""
+    safe_path_segment(order_id)
+    order = await crud_order.get_order(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if not _can_view_order(order, current_user):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+        # 1) Tech card PDF (re-generates so the bundle is always fresh)
+        try:
+            tc = await generate_techcard(order, db)
+            tc_filename = (tc.get("s3_key") or "").rsplit("/", 1)[-1] or f"techcard-{order.id}.pdf"
+            tc_pdf = await fetch_techcard_pdf(str(order.id), tc_filename)
+            zf.writestr(f"techcard/{tc_filename}", tc_pdf)
+        except Exception as exc:  # noqa: BLE001
+            sentry_sdk.capture_exception(exc)
+            zf.writestr("techcard/ERROR.txt", f"techcard generation failed: {exc}\n")
+
+        # 2) Unwrap (PDF + decals) — flatten the nested zip into the bundle
+        try:
+            unwrap_bytes = await fetch_unwrap_zip(order)
+            with zipfile.ZipFile(io.BytesIO(unwrap_bytes)) as inner:
+                for info in inner.infolist():
+                    if info.is_dir():
+                        continue
+                    zf.writestr(f"unwrap/{info.filename}", inner.read(info.filename))
+        except Exception as exc:  # noqa: BLE001
+            sentry_sdk.capture_exception(exc)
+            zf.writestr("unwrap/ERROR.txt", f"unwrap render failed: {exc}\n")
+
+        # 3) Notebook inner block PDF (only for notebook orders)
+        try:
+            block_pdf = await fetch_block_pdf(order)
+            if block_pdf is not None:
+                zf.writestr(f"block/block-{order.id}.pdf", block_pdf)
+        except Exception as exc:  # noqa: BLE001
+            sentry_sdk.capture_exception(exc)
+            zf.writestr("block/ERROR.txt", f"block render failed: {exc}\n")
+
+        # 4) Order QR (production tracking)
+        try:
+            qr = qr_png_bytes(f"spruzhyk://order/{order.id}|{order.status or 'new'}")
+            zf.writestr(f"qr/order-{order.id}.png", qr)
+        except Exception as exc:  # noqa: BLE001
+            sentry_sdk.capture_exception(exc)
+
+    filename = f"production-package-{order.id}.zip"
+    return Response(
+        content=out.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{order_id}/qr.png")
+async def download_order_qr(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    safe_path_segment(order_id)
+    order = await crud_order.get_order(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if not _can_view_order(order, current_user):
+        raise HTTPException(status_code=403, detail="Access denied")
+    payload = f"spruzhyk://order/{order.id}|{order.status or 'new'}"
+    return Response(
+        content=qr_png_bytes(payload),
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=60"},
+    )
 
 
 @router.post("/{order_id}/approval-pdf")
