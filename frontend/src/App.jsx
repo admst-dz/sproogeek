@@ -577,7 +577,7 @@ function MainApp() {
 
                     <button
                         onClick={() => guardedNavigate(currentUser ? (userRole === 'dealer' ? 'dealer' : 'client_dashboard') : 'home')}
-                        className="absolute top-3 left-3 md:top-6 md:left-6 z-50 px-4 md:px-6 py-2 bg-white/85 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-xs md:text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10 max-w-[42vw] md:max-w-none truncate"
+                        className="absolute top-3 left-3 md:top-8 md:left-9 z-50 px-4 md:px-5 py-2 bg-[#fff9ec] backdrop-blur-md rounded-full shadow-lg text-xs md:text-sm font-bold text-[#1a1a1a] hover:bg-white font-zen active:scale-95 transition-all border border-black/10 max-w-[42vw] md:max-w-none truncate"
                     >
                         {currentUser ? t(language, 'backToCabinet') : t(language, 'backToMenu')}
                     </button>
@@ -601,7 +601,7 @@ function MainApp() {
                         </div>
                     ) : (
                         <>
-                            <div ref={configuratorCanvasRef} className="app-bg relative w-full h-[40svh] min-h-[270px] max-h-[46svh] shrink-0 md:absolute md:top-0 md:left-0 md:bottom-0 md:w-[64%] lg:w-[70%] md:h-full md:max-h-none md:bg-transparent dark:md:bg-transparent">
+                            <div ref={configuratorCanvasRef} className="app-bg relative w-full h-[40svh] min-h-[270px] max-h-[46svh] shrink-0 md:absolute md:inset-0 md:w-full md:h-full md:max-h-none md:bg-transparent dark:md:bg-transparent">
                                 <div className="absolute bottom-3 right-3 z-10 md:hidden">
                                     <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
                                 </div>
@@ -623,7 +623,7 @@ function MainApp() {
                                 <SceneHints containerRef={configuratorCanvasRef} />
                             </div>
 
-                            <div className="relative flex-1 min-h-0 w-full z-10 md:absolute md:top-0 md:right-0 md:h-full md:w-[36%] lg:w-[30%] pointer-events-none md:p-4 md:flex md:flex-col md:justify-center">
+                            <div className="relative flex-1 min-h-0 w-full z-20 pointer-events-none md:absolute md:inset-x-0 md:bottom-5 md:top-auto md:h-auto md:px-6 md:flex md:justify-center">
                                 {activeProduct === 'thermos' ? (
                                     <ThermosInterface
                                         onFinish={completeConfiguratorFlow}
@@ -676,18 +676,20 @@ function ConfiguratorToolbar({ onReset, productLabel, language = 'ru' }) {
     const [confirmReset, setConfirmReset] = useState(false);
     return (
         <>
-            <div className="absolute top-3 right-3 md:top-6 md:left-1/2 md:right-auto md:-translate-x-1/2 z-50 flex items-center gap-2">
+            <div className="absolute top-3 right-3 md:top-8 md:right-9 z-50 flex items-center gap-2">
                 <UndoRedoControls />
                 <button
                     onClick={() => setConfirmReset(true)}
                     title={t(language, 'resetConfigTitle')}
-                    className="h-[42px] px-4 flex items-center gap-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-[9px] border border-black/10 dark:border-white/10 shadow-xl text-[#1a1a1a] dark:text-white text-xs font-bold uppercase tracking-widest hover:bg-white dark:hover:bg-white/10 active:scale-95 transition-all"
+                    className="h-[34px] w-[34px] flex items-center justify-center bg-[#fff9ec] backdrop-blur-md rounded-full border border-black/10 shadow-xl text-[#1a1a1a] hover:bg-white active:scale-95 transition-all"
                 >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 12a9 9 0 1 0 3-6.7" />
-                        <polyline points="3 4 3 9 8 9" />
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M8 6V4h8v2" />
+                        <path d="M19 6l-1 14H6L5 6" />
+                        <path d="M10 11v5" />
+                        <path d="M14 11v5" />
                     </svg>
-                    <span className="hidden sm:inline">{t(language, 'resetBtn')}</span>
                 </button>
             </div>
             <ConfirmModal

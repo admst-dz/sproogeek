@@ -1,8 +1,22 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useConfigurator, captureRender } from "../../store";
 import { t } from '../../i18n';
 import { BlockPDFPreview } from './BlockPDFPreview';
 import { BlockBuilder } from './BlockBuilder';
+import {
+    ColorSwatches,
+    ConstructorDock,
+    DockGrid,
+    FileUploadChip,
+    LogoList,
+    MiniSegment,
+    MiniToggle,
+    RotationScrub,
+    SettingGroup,
+    SettingRow,
+    SizeSlider,
+    TransformPad,
+} from './ConstructorDock';
 import patternBlank  from '../../assets/icons/pattern-blank.svg';
 import patternLined  from '../../assets/icons/pattern-lined.svg';
 import patternTlined from '../../assets/icons/pattern-tlined.svg';
@@ -21,7 +35,7 @@ const palette = [
     { name: 'Blue', bg: '#1565C0' },
     { name: 'White', bg: '#ffffff' },
     { name: 'Pink', bg: '#EC407A' },
-    { name: 'Silver', bg: '#Silver' },
+    { name: 'Silver', bg: '#C0C0C0' },
 ];
 
 export const Interface = ({ onFinish }) => {
@@ -79,107 +93,124 @@ export const Interface = ({ onFinish }) => {
     };
 
     return (
-        <div className="pointer-events-auto w-full h-full md:h-[95%] custom-gradient backdrop-blur-xl rounded-t-[30px] md:rounded-[9px] shadow-2xl flex flex-col overflow-hidden font-zen border-t md:border border-white/20 relative">
-
-            <div className="flex items-end gap-5 md:gap-8 px-5 md:px-8 py-4 md:py-6 shrink-0 z-10 bg-white/5 backdrop-blur-sm touch-scroll-x">
-                <button onClick={() => { setTab('cover'); setNotebookOpen(false); }} className={`text-xl sm:text-2xl md:text-3xl transition-all leading-none whitespace-nowrap ${tab === 'cover' ? 'opacity-100 scale-105 border-b-2 border-white pb-1' : 'opacity-50 hover:opacity-80'}`}>{t(language, 'tabCover')}</button>
-                <button onClick={() => { setTab('block'); setNotebookOpen(true); }} className={`text-xl sm:text-2xl md:text-3xl transition-all leading-none whitespace-nowrap ${tab === 'block' ? 'opacity-100 scale-105 border-b-2 border-white pb-1' : 'opacity-50 hover:opacity-80'}`}>{t(language, 'tabBlock')}</button>
-            </div>
-
-            <div className="flex-1 px-4 md:px-6 pt-4 overflow-y-auto custom-scrollbar flex flex-col gap-3 relative z-0">
-                {tab === 'cover' && (
-                    <div className="animate-fade-in flex flex-col gap-3 pb-40">
-                        <GlassDropdown label={t(language, 'bindingTypeLabel')} currentValue={bindingType === 'hard' ? t(language, 'bindingHard') : bindingType === 'spiral' ? t(language, 'bindingSpiral') : t(language, 'bindingSoft')}>
-                            <div className="flex flex-col gap-1">
-                                <button onClick={() => setBindingType('hard')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'hard' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>{t(language, 'bindingHardFull')}</span> {bindingType === 'hard' && <span>✓</span>}</button>
-                                <button onClick={() => setBindingType('spiral')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'spiral' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>{t(language, 'bindingSpiralFull')}</span> {bindingType === 'spiral' && <span>✓</span>}</button>
-                                <button onClick={() => setBindingType('soft')} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${bindingType === 'soft' ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>{t(language, 'bindingSoftFull')}</span> {bindingType === 'soft' && <span>✓</span>}</button>
-                            </div>
-                        </GlassDropdown>
-                        {bindingType === 'spiral' && (<div className="glass-panel rounded-[11px] overflow-hidden animate-fade-in"><ColorGlassList currentColor={spiralColor} onSelect={(c) => setColor('spiral', c)} label={t(language, 'spiralColorLabel')}/></div>)}
+        <ConstructorDock
+            title={t(language, 'notebook')}
+            tabs={[
+                { id: 'cover', label: t(language, 'tabCover') },
+                { id: 'block', label: t(language, 'tabBlock') },
+            ]}
+            activeTab={tab}
+            onTabChange={(next) => { setTab(next); setNotebookOpen(next === 'block'); }}
+            onSave={handleAddToCart}
+            saveLabel={t(language, 'placeOrder')}
+        >
+            {tab === 'cover' && (
+                <DockGrid>
+                    <SettingGroup title={t(language, 'formatLabel')}>
+                        <SettingRow label={t(language, 'formatLabel')}>
+                            <MiniSegment
+                                value={format}
+                                onChange={setFormat}
+                                options={['A5', 'A6'].map(value => ({ value, label: value }))}
+                            />
+                        </SettingRow>
+                        <SettingRow label={t(language, 'bindingTypeLabel')}>
+                            <MiniSegment
+                                value={bindingType}
+                                onChange={setBindingType}
+                                options={[
+                                    { value: 'hard', label: t(language, 'bindingHard') },
+                                    { value: 'soft', label: t(language, 'bindingSoft') },
+                                    { value: 'spiral', label: t(language, 'bindingSpiral') },
+                                ]}
+                            />
+                        </SettingRow>
                         {(bindingType === 'hard' || bindingType === 'soft') && (
-                            <div className="glass-panel rounded-[11px] overflow-hidden transition-all animate-fade-in">
-                                <div className="p-5 flex items-center justify-between cursor-pointer" onClick={toggleCorners}>
-                                    <span className="text-xl font-bold tracking-wide">{t(language, 'cornersLabel')}</span>
-                                    <div className={`w-12 h-7 rounded-full p-1 transition-colors border border-white/30 ${hasCorners ? 'bg-green-500/80' : 'bg-gray-500/50'}`}><div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${hasCorners ? 'translate-x-5' : ''}`} /></div>
-                                </div>
-                            </div>
+                            <SettingRow label={t(language, 'cornersLabel')}>
+                                <MiniToggle checked={hasCorners} onChange={toggleCorners} />
+                            </SettingRow>
                         )}
-                        <GlassDropdown label={t(language, 'formatLabel')} currentValue={format}>
-                            <div className="flex flex-col gap-1">
-                                {['A5', 'A6'].map(f => (<button key={f} onClick={() => setFormat(f)} className={`py-3 px-4 text-left rounded-[6px] transition-colors flex justify-between items-center ${format === f ? 'bg-white/20 font-bold' : 'hover:bg-white/10'}`}><span>{f}</span> {format === f && <span>✓</span>}</button>))}
-                            </div>
-                        </GlassDropdown>
+                    </SettingGroup>
+
+                    <SettingGroup title={t(language, 'coverColorLabel')}>
+                        <SettingRow label={t(language, 'coverColorLabel')}>
+                            <ColorSwatches colors={palette} currentColor={coverColor} onSelect={(c) => setColor('cover', c)} />
+                        </SettingRow>
                         {bindingType !== 'hard' && (
-                            <div className="glass-panel rounded-[11px] overflow-hidden transition-all">
-                                <div className="p-5 flex items-center justify-between cursor-pointer" onClick={() => setHasElastic(!hasElastic)}>
-                                    <span className="text-xl font-bold tracking-wide">{t(language, 'elasticLabel')}</span>
-                                    <div className={`w-12 h-7 rounded-full p-1 transition-colors border border-white/30 ${hasElastic ? 'bg-green-500/80' : 'bg-gray-500/50'}`}><div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${hasElastic ? 'translate-x-5' : ''}`} /></div>
+                            <>
+                                <SettingRow label={t(language, 'elasticLabel')}>
+                                    <MiniToggle checked={hasElastic} onChange={setHasElastic} />
+                                </SettingRow>
+                                {hasElastic && (
+                                    <SettingRow label={t(language, 'elasticColorLabel')}>
+                                        <ColorSwatches colors={palette} currentColor={elasticColor} onSelect={(c) => setColor('elastic', c)} />
+                                    </SettingRow>
+                                )}
+                            </>
+                        )}
+                        {bindingType === 'spiral' && (
+                            <SettingRow label={t(language, 'spiralColorLabel')}>
+                                <ColorSwatches colors={palette} currentColor={spiralColor} onSelect={(c) => setColor('spiral', c)} />
+                            </SettingRow>
+                        )}
+                    </SettingGroup>
+
+                    <LogoPanel
+                        logos={logos}
+                        selectedLogoId={selectedLogoId}
+                        addLogo={addLogo}
+                        selectLogo={selectLogo}
+                        removeLogo={removeLogo}
+                        resetLogoTransform={resetLogoTransform}
+                        setLogoPosition={setLogoPosition}
+                        setLogoRotation={setLogoRotation}
+                        setLogoScale={setLogoScale}
+                        setLogoSide={setLogoSide}
+                        language={language}
+                    />
+
+                    <SettingGroup title={t(language, 'placeOrder')}>
+                        <SettingRow label={t(language, 'quantityLabel')}>
+                            <div className="flex items-center gap-1">
+                                <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="h-6 w-6 rounded-full bg-white/10 font-black">−</button>
+                                <span className="w-7 text-center text-sm font-black">{quantity}</span>
+                                <button onClick={() => setQuantity(q => q + 1)} className="h-6 w-6 rounded-full bg-white/10 font-black">+</button>
+                            </div>
+                        </SettingRow>
+                        <SettingRow label={t(language, 'sampleLabel')}>
+                            <MiniToggle checked={isSample} onChange={setIsSample} />
+                        </SettingRow>
+                        <p className="text-[10px] leading-tight text-white/35">{t(language, 'sampleDesc')}</p>
+                    </SettingGroup>
+                </DockGrid>
+            )}
+
+            {tab === 'block' && (
+                <div className="space-y-3">
+                    <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-5 gap-2">
+                        {PATTERN_IDS.map((id) => (
+                            <button
+                                key={id}
+                                onClick={() => setPaperPattern(id)}
+                                className={`rounded-[8px] border px-2 py-2 transition ${paperPattern === id ? 'border-[#fff9ec] bg-[#fff9ec] text-[#191919]' : 'border-white/18 bg-white/8 text-white/75 hover:text-white'}`}
+                            >
+                                <div className="mx-auto mb-1 h-8 w-8 rounded-[6px] border border-current/20 p-1">
+                                    <img src={PATTERN_ICONS[id]} alt={t(language, PATTERN_KEYS[id])} className="h-full w-full object-contain" />
                                 </div>
-                                {hasElastic && (<div className="border-t border-white/10"><ColorGlassList currentColor={elasticColor} onSelect={(c) => setColor('elastic', c)} label={t(language, 'elasticColorLabel')} /></div>)}
-                            </div>
-                        )}
-                        <div className="glass-panel rounded-[11px] overflow-hidden"><ColorGlassList currentColor={coverColor} onSelect={(c) => setColor('cover', c)} label={t(language, 'coverColorLabel')}/></div>
-                        <LogoPanel logos={logos} selectedLogoId={selectedLogoId} addLogo={addLogo} selectLogo={selectLogo} removeLogo={removeLogo} resetLogoTransform={resetLogoTransform} setLogoPosition={setLogoPosition} setLogoRotation={setLogoRotation} setLogoScale={setLogoScale} setLogoSide={setLogoSide} language={language} />
+                                <span className="text-[10px] font-black uppercase tracking-wider">{t(language, PATTERN_KEYS[id])}</span>
+                            </button>
+                        ))}
                     </div>
-                )}
-
-                {tab === 'block' && (
-                    <div className="animate-fade-in flex flex-col gap-4 pb-40">
-                        <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-5 md:grid-cols-3 xl:grid-cols-5 gap-2">
-                            {PATTERN_IDS.map((id) => (
-                                <button
-                                    key={id}
-                                    onClick={() => setPaperPattern(id)}
-                                    className={`glass-panel rounded-[11px] flex flex-col items-center justify-center gap-1.5 py-3 px-1 transition-all hover:bg-white/20 ${paperPattern === id ? 'bg-white/30 border-white/50 shadow-lg scale-[1.02]' : ''}`}
-                                >
-                                    <div className={`w-10 h-10 rounded-[8px] border p-1.5 flex items-center justify-center ${paperPattern === id ? 'border-white bg-white/20' : 'border-white/20'}`}>
-                                        <img src={PATTERN_ICONS[id]} alt={t(language, PATTERN_KEYS[id])} className="w-full h-full object-contain" />
-                                    </div>
-                                    <span className="text-[10px] font-bold tracking-wide text-center leading-tight opacity-90">{t(language, PATTERN_KEYS[id])}</span>
-                                </button>
-                            ))}
+                    <BlockPDFPreview pattern={paperPattern} />
+                    {paperPattern === 'blank' && (
+                        <div className="rounded-[8px] border border-white/12 bg-white/8 p-3 text-center text-xs text-white/55">
+                            {t(language, 'blankPages')}
                         </div>
-                        <BlockPDFPreview pattern={paperPattern} />
-                        {paperPattern === 'blank' && (
-                            <div className="glass-panel rounded-[11px] p-6 flex items-center justify-center opacity-60 text-sm text-center">
-                                {t(language, 'blankPages')}
-                            </div>
-                        )}
-                        <BlockBuilder />
-                    </div>
-                )}
-            </div>
-
-            {/* КНОПКА ОФОРМЛЕНИЯ */}
-            <div className="absolute bottom-0 left-0 w-full px-4 md:px-6 pt-3 pb-4 md:pb-6 z-20 border-t border-white/10 bg-[#0E2235]/85 dark:bg-[#0E2235]/85 backdrop-blur-xl flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-4">
-                    <div className="flex flex-col gap-1">
-                        <span className="text-[10px] opacity-50 font-bold uppercase tracking-widest">{t(language, 'quantityLabel')}</span>
-                        <div className="flex items-center gap-1">
-                            <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-8 h-8 flex items-center justify-center bg-white/10 rounded-[8px] text-white font-bold text-lg hover:bg-white/20 active:scale-95 transition">−</button>
-                            <span className="w-10 text-center font-black text-white text-lg select-none">{quantity}</span>
-                            <button onClick={() => setQuantity(q => q + 1)} className="w-8 h-8 flex items-center justify-center bg-white/10 rounded-[8px] text-white font-bold text-lg hover:bg-white/20 active:scale-95 transition">+</button>
-                        </div>
-                    </div>
-                    <label className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setIsSample(s => !s)}>
-                        <div className={`w-5 h-5 rounded-[5px] border flex items-center justify-center transition-all shrink-0 ${isSample ? 'bg-white border-white' : 'bg-white/5 border-white/20'}`}>
-                            {isSample && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#0B0F19" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-xs font-bold text-white leading-tight">{t(language, 'sampleLabel')}</span>
-                            <span className="text-[9px] text-white/40 leading-tight">{t(language, 'sampleDesc')}</span>
-                        </div>
-                    </label>
+                    )}
+                    <BlockBuilder />
                 </div>
-                <button
-                    onClick={handleAddToCart}
-                    className="w-full py-3.5 md:py-4 bg-white text-[#1a1a1a] rounded-[11px] text-base sm:text-lg md:text-xl font-black tracking-[0.08em] sm:tracking-[0.14em] md:tracking-[0.2em] uppercase hover:bg-gray-100 transition-all shadow-lg active:scale-[0.98]"
-                >
-                    {t(language, 'placeOrder')}
-                </button>
-            </div>
-        </div>
+            )}
+        </ConstructorDock>
     )
 }
 
@@ -187,16 +218,7 @@ export const Interface = ({ onFinish }) => {
 const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide, language }) => {
     const selected = logos.find(l => l.id === selectedLogoId) || null;
     const [uploadSide, setUploadSide] = useState('front');
-    const rotStart = useRef(0);
-    const rotStartX = useRef(null);
     const activeSide = selected?.side ?? uploadSide;
-
-    const updatePos = (e) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-        const ny = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-        setLogoPosition(nx * 2 - 1, 1 - ny * 2);
-    };
 
     const selectSide = (side) => {
         if (selected) setLogoSide(side);
@@ -204,105 +226,35 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
     };
 
     return (
-        <div className="glass-panel rounded-[11px] p-5">
-            <h3 className="text-lg md:text-xl font-bold tracking-wide mb-4">{t(language, 'embossing')}</h3>
-            <div className="grid grid-cols-2 gap-2 mb-4">
-                {[
-                    ['front', t(language, 'sideFront')],
-                    ['back', t(language, 'sideBack')],
-                ].map(([side, label]) => (
-                    <button
-                        key={side}
-                        onClick={() => selectSide(side)}
-                        className={`py-2 rounded-[7px] text-xs font-bold uppercase tracking-widest border transition-colors ${activeSide === side ? 'bg-white/25 border-white/40' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
-                    >
-                        {label}
-                    </button>
-                ))}
-            </div>
-            <label className="block w-full py-3 bg-white/10 rounded-[6px] text-center cursor-pointer border border-white/20 text-sm font-bold mb-4 hover:bg-white/20 transition-colors">
-                {t(language, 'addLogo')}
-                <input type="file" accept="image/*" onChange={(e) => { if (e.target.files[0]) { addLogo(e.target.files[0], activeSide); e.target.value = ''; } }} className="hidden"/>
-            </label>
-            {logos.length > 0 && (
-                <div className="flex flex-col gap-2 mb-4">
-                    {logos.map(logo => (
-                        <div key={logo.id} className={`flex items-center rounded-[6px] border ${logo.id === selectedLogoId ? 'bg-white/30 border-white/40' : 'bg-white/10 border-white/10'}`}>
-                            <button onClick={() => { selectLogo(logo.id); setUploadSide(logo.side ?? 'front'); }} className="flex-1 py-2 px-3 text-left text-sm font-bold truncate hover:opacity-80 transition-opacity">
-                                <span className="block truncate">{logo.filename}</span>
-                                <span className="block text-[9px] opacity-50 uppercase tracking-widest">{(logo.side ?? 'front') === 'back' ? t(language, 'sideBack') : t(language, 'sideFront')}</span>
-                            </button>
-                            <button onClick={() => removeLogo(logo.id)} className="px-3 py-2 text-white/40 hover:text-white/90 text-lg leading-none transition-colors shrink-0" title={t(language, 'deleteTooltip')}>×</button>
-                        </div>
-                    ))}
-                </div>
-            )}
+        <SettingGroup title={t(language, 'embossing')}>
+            <SettingRow label={t(language, 'embossing')}>
+                <FileUploadChip label={t(language, 'addLogo')} onFile={(file) => addLogo(file, activeSide)} />
+            </SettingRow>
+            <SettingRow label={t(language, 'applicationSide') || t(language, 'sideFront')}>
+                <MiniSegment
+                    value={activeSide}
+                    onChange={selectSide}
+                    options={[
+                        { value: 'front', label: t(language, 'sideFront') },
+                        { value: 'back', label: t(language, 'sideBack') },
+                    ]}
+                />
+            </SettingRow>
+            <LogoList
+                logos={logos}
+                selectedLogoId={selectedLogoId}
+                selectLogo={(id) => { selectLogo(id); const picked = logos.find(l => l.id === id); setUploadSide(picked?.side ?? 'front'); }}
+                removeLogo={removeLogo}
+                metaForLogo={(logo) => (logo.side ?? 'front') === 'back' ? t(language, 'sideBack') : t(language, 'sideFront')}
+            />
             {selected && (
-                <div className="flex flex-col gap-4 mt-1">
-                    <div className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between mb-1">
-                            <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">{t(language, 'position')}</span>
-                            <button onClick={resetLogoTransform} className="text-[10px] font-bold opacity-40 hover:opacity-80 transition-opacity uppercase tracking-wider border border-white/20 px-2 py-0.5 rounded-[5px] hover:border-white/40">{t(language, 'centerBtn')}</button>
-                        </div>
-                        <div
-                            className="relative w-full aspect-square bg-white/8 rounded-[10px] border border-white/15 cursor-crosshair touch-none select-none overflow-hidden"
-                            onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); updatePos(e); }}
-                            onPointerMove={(e) => { if (e.buttons) updatePos(e); }}
-                        >
-                            <div className="absolute inset-0 flex items-center pointer-events-none">
-                                <div className="w-full h-px bg-white/15" />
-                            </div>
-                            <div className="absolute inset-0 flex justify-center pointer-events-none">
-                                <div className="h-full w-px bg-white/15" />
-                            </div>
-                            <div
-                                className="absolute w-4 h-4 bg-white rounded-full shadow-lg border-2 border-white/80 pointer-events-none"
-                                style={{
-                                    left: `${(((selected.position?.[0] ?? 0) + 1) / 2) * 100}%`,
-                                    top: `${((1 - (selected.position?.[1] ?? 0)) / 2) * 100}%`,
-                                    transform: 'translate(-50%, -50%)'
-                                }}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                        <div className="flex justify-between items-center">
-                            <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">{t(language, 'rotation')}</span>
-                            <span className="text-xs font-bold opacity-80">{Math.round((selected.rotation ?? 0) * 180 / Math.PI)}°</span>
-                        </div>
-                        <div
-                            className="relative h-10 rounded-[10px] border border-white/15 cursor-ew-resize touch-none select-none overflow-hidden"
-                            style={{
-                                backgroundColor: 'rgba(255,255,255,0.07)',
-                                backgroundImage: `repeating-linear-gradient(to right, transparent 14px, rgba(255,255,255,0.22) 14px, rgba(255,255,255,0.22) 15px, transparent 15px), repeating-linear-gradient(to right, transparent 89px, rgba(255,255,255,0.55) 89px, rgba(255,255,255,0.55) 90px, transparent 90px)`,
-                                backgroundSize: '15px 35%, 90px 65%',
-                                backgroundPosition: `${(selected.rotation ?? 0) * 180 / Math.PI * 1.5}px center, ${(selected.rotation ?? 0) * 180 / Math.PI * 1.5}px center`,
-                                backgroundRepeat: 'repeat-x, repeat-x',
-                            }}
-                            onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); rotStart.current = selected.rotation ?? 0; rotStartX.current = e.clientX; }}
-                            onPointerMove={(e) => { if (!e.buttons || rotStartX.current === null) return; setLogoRotation(rotStart.current + (e.clientX - rotStartX.current) * 0.015); }}
-                            onPointerUp={() => { rotStartX.current = null; }}
-                        >
-                            <div className="absolute inset-y-0 left-1/2 w-0.5 bg-white/50 -translate-x-1/2 rounded-full pointer-events-none" />
-                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[9px] text-white/20 font-bold pointer-events-none select-none">←</span>
-                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] text-white/20 font-bold pointer-events-none select-none">→</span>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                        <div className="flex justify-between items-center">
-                            <span className="text-[11px] opacity-50 font-bold uppercase tracking-widest">{t(language, 'size')}</span>
-                            <span className="text-xs font-bold opacity-80">{Math.round((selected.scale ?? 0.6) * 100)}%</span>
-                        </div>
-                        <input type="range" min="0.2" max="1.5" step="0.05"
-                            value={selected.scale ?? 0.6}
-                            onChange={(e) => setLogoScale(parseFloat(e.target.value))}
-                            className="w-full h-1 bg-white/30 rounded-full appearance-none accent-white"/>
-                    </div>
+                <div className="mt-3 space-y-3">
+                    <TransformPad label={t(language, 'position')} value={selected.position} onChange={setLogoPosition} onReset={resetLogoTransform} />
+                    <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setLogoRotation} />
+                    <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.2} max={1.5} step={0.05} onChange={setLogoScale} />
                 </div>
             )}
-        </div>
+        </SettingGroup>
     );
 };
 export const ZoomControls = ({ zoomLevel, setZoom }) => (
