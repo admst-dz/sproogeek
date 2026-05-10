@@ -25,7 +25,7 @@ export const CookiePolicy = ({ onBack }) => {
     const { language } = useConfigurator();
 
     return (
-        <div className="app-bg min-h-screen font-sans text-gray-900 dark:text-white transition-colors">
+        <div className="app-bg h-full min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar font-sans text-gray-900 dark:text-white transition-colors">
             <header className="sticky top-0 z-20 border-b border-gray-200/70 dark:border-white/10 bg-[#E5E5E5]/90 dark:bg-[#080B13]/90 backdrop-blur-xl">
                 <div className="max-w-5xl mx-auto px-4 md:px-8 py-4 flex items-center justify-between gap-3">
                     <button

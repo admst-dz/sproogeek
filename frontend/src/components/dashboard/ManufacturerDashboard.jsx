@@ -69,9 +69,9 @@ const ProgressTrack = ({ status, stageHistory = [], language = 'ru' }) => {
     );
 };
 
-export const ManufacturerDashboard = ({ onBack }) => {
+export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
     const { currentUser, logout, language } = useConfigurator();
-    const [activeTab, setActiveTab] = useState('queue');
+    const [activeTab, setActiveTab] = useState(initialTab ?? 'queue');
     const [statusFilter, setStatusFilter] = useState('');
     const [orders, setOrders] = useState([]);
     const [stats, setStats] = useState({ total: 0, by_status: {} });
@@ -81,6 +81,18 @@ export const ManufacturerDashboard = ({ onBack }) => {
     const [techcardBusy, setTechcardBusy] = useState(null);
     const [commentDraft, setCommentDraft] = useState({});
     const [quoteDraft, setQuoteDraft] = useState({});
+
+    useEffect(() => {
+        if (initialTab) setActiveTab(initialTab);
+    }, [initialTab]);
+
+    useEffect(() => {
+        onTabChange?.(activeTab);
+    }, [activeTab, onTabChange]);
+
+    const changeTab = useCallback((tab) => {
+        setActiveTab(tab);
+    }, []);
 
     const reload = useCallback(async () => {
         setLoading(true);
@@ -216,7 +228,7 @@ export const ManufacturerDashboard = ({ onBack }) => {
                     ].map(tab => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
+                            onClick={() => changeTab(tab.id)}
                             className={`w-full flex items-center gap-3 px-4 py-3 rounded-[14px] transition-all text-left font-bold ${
                                 activeTab === tab.id
                                     ? 'bg-white/10 text-white border border-white/10'
@@ -543,7 +555,7 @@ export const ManufacturerDashboard = ({ onBack }) => {
                 ].map(tab => (
                     <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
+                        onClick={() => changeTab(tab.id)}
                         className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors ${activeTab === tab.id ? 'text-white' : 'text-gray-600'}`}
                     >
                         {tab.icon}

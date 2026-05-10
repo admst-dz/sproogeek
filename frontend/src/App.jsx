@@ -32,7 +32,8 @@ const SCREEN_TO_PATH = {
     client_dashboard: '/dashboard',
     cookie_policy: '/cookie-policy',
     admin_auth: '/borodazaebal',
-    admin_dashboard: '/admin',
+    admin_stub: '/admin',
+    admin_dashboard: '/borodaadmin',
 };
 
 const CONFIGURATOR_PRODUCTS = new Set(['notebook', 'calendar', 'thermos', 'powerbank']);
@@ -53,6 +54,32 @@ const PATH_TO_TAB = {
     '/dashboard/orders': 'orders',
 };
 
+const DEALER_TAB_TO_PATH = {
+    products: '/dealer/products',
+    orders: '/dealer/orders',
+    clients: '/dealer/clients',
+    orderTypes: '/dealer/order-types',
+};
+
+const PATH_TO_DEALER_TAB = {
+    '/dealer/products': 'products',
+    '/dealer/orders': 'orders',
+    '/dealer/clients': 'clients',
+    '/dealer/order-types': 'orderTypes',
+};
+
+const MANUFACTURER_TAB_TO_PATH = {
+    queue: '/manufacturer/queue',
+    materials: '/manufacturer/materials',
+    history: '/manufacturer/history',
+};
+
+const PATH_TO_MANUFACTURER_TAB = {
+    '/manufacturer/queue': 'queue',
+    '/manufacturer/materials': 'materials',
+    '/manufacturer/history': 'history',
+};
+
 const METRIKA_COUNTER_ID = 109128387;
 const CONFIGURATOR_DRAFT_KEY = 'spruzhuk_configurator_draft';
 const CONFIGURATOR_DRAFT_FIELDS = ['activeProduct', 'zoomLevel', ...Object.keys(ALL_PRODUCT_DEFAULTS)];
@@ -67,25 +94,53 @@ function sendMetrikaHit(url = window.location.href) {
 
 function getInitialState() {
     const path = window.location.pathname;
+    if (path.startsWith('/order/')) {
+        const product = path.split('/').filter(Boolean)[1];
+        const activeProduct = CONFIGURATOR_PRODUCTS.has(product) ? product : 'notebook';
+        useConfigurator.getState().setProduct(activeProduct);
+        return { screen: 'order', clientTab: null, dealerTab: null, manufacturerTab: null };
+    }
+    if (path === '/order') {
+        return { screen: 'order', clientTab: null, dealerTab: null, manufacturerTab: null };
+    }
     if (path.startsWith('/configurator/')) {
         const product = path.split('/').filter(Boolean)[1];
         const activeProduct = CONFIGURATOR_PRODUCTS.has(product) ? product : 'notebook';
         useConfigurator.getState().setProduct(activeProduct);
-        return { screen: 'configurator', tab: null };
+        return { screen: 'configurator', clientTab: null, dealerTab: null, manufacturerTab: null };
     }
     if (path === '/configurator') {
-        return { screen: 'configurator', tab: null };
+        return { screen: 'configurator', clientTab: null, dealerTab: null, manufacturerTab: null };
     }
     if (path.startsWith('/dashboard/')) {
-        return { screen: 'client_dashboard', tab: PATH_TO_TAB[path] ?? null };
+        return { screen: 'client_dashboard', clientTab: PATH_TO_TAB[path] ?? null, dealerTab: null, manufacturerTab: null };
     }
-    return { screen: PATH_TO_SCREEN[path] ?? 'home', tab: null };
+    if (path.startsWith('/dealer/')) {
+        return { screen: 'dealer', clientTab: null, dealerTab: PATH_TO_DEALER_TAB[path] ?? null, manufacturerTab: null };
+    }
+    if (path.startsWith('/manufacturer/')) {
+        return { screen: 'manufacturer', clientTab: null, dealerTab: null, manufacturerTab: PATH_TO_MANUFACTURER_TAB[path] ?? null };
+    }
+    return { screen: PATH_TO_SCREEN[path] ?? 'home', clientTab: null, dealerTab: null, manufacturerTab: null };
 }
 
-function getPathForScreen(screen, activeProduct) {
+function getPathForScreen(screen, activeProduct, clientTab, dealerTab, manufacturerTab) {
     if (screen === 'configurator') {
         const product = CONFIGURATOR_PRODUCTS.has(activeProduct) ? activeProduct : 'notebook';
         return `/configurator/${product}`;
+    }
+    if (screen === 'order') {
+        const product = CONFIGURATOR_PRODUCTS.has(activeProduct) ? activeProduct : 'notebook';
+        return `/order/${product}`;
+    }
+    if (screen === 'client_dashboard') {
+        return TAB_TO_PATH[clientTab || 'orders'] || SCREEN_TO_PATH.client_dashboard;
+    }
+    if (screen === 'dealer') {
+        return DEALER_TAB_TO_PATH[dealerTab || 'products'] || SCREEN_TO_PATH.dealer;
+    }
+    if (screen === 'manufacturer') {
+        return MANUFACTURER_TAB_TO_PATH[manufacturerTab || 'queue'] || SCREEN_TO_PATH.manufacturer;
     }
     return SCREEN_TO_PATH[screen];
 }
@@ -166,7 +221,13 @@ function App() {
 }
 
 function MainApp() {
-    const [screen, setScreen] = useState(() => getInitialState().screen);
+    const initialStateRef = useRef(null);
+    if (!initialStateRef.current) initialStateRef.current = getInitialState();
+
+    const [screen, setScreen] = useState(() => initialStateRef.current.screen);
+    const [clientTab, setClientTab] = useState(() => initialStateRef.current.clientTab);
+    const [dealerTab, setDealerTab] = useState(() => initialStateRef.current.dealerTab);
+    const [manufacturerTab, setManufacturerTab] = useState(() => initialStateRef.current.manufacturerTab);
     const [showAuth, setShowAuth] = useState(false);
     const [pendingSuccessToast, setPendingSuccessToast] = useState(false);
     const [configuratorDraft, setConfiguratorDraft] = useState(() => readConfiguratorDraft());
@@ -211,6 +272,7 @@ function MainApp() {
         useConfigurator.setState(draft.state);
         try { useConfigurator.temporal.getState().clear(); } catch { /* noop */ }
         setConfiguratorDraft(draft);
+        setClientTab(null);
         setScreen('configurator');
     };
 
@@ -224,6 +286,7 @@ function MainApp() {
             skipNextDraftSaveRef.current = true;
             clearConfiguratorDraft();
             setConfiguratorDraft(null);
+            setClientTab('cart');
             setScreen('client_dashboard');
         } else {
             setShowAuth(true);
@@ -269,7 +332,7 @@ function MainApp() {
     }, [screen]);
 
     useEffect(() => {
-        const path = getPathForScreen(screen, activeProduct);
+        const path = getPathForScreen(screen, activeProduct, clientTab, dealerTab, manufacturerTab);
         if (path && window.location.pathname !== path) {
             window.history.pushState({}, '', path);
             const nextUrl = window.location.href;
@@ -278,12 +341,15 @@ function MainApp() {
                 lastMetrikaUrlRef.current = nextUrl;
             }
         }
-    }, [activeProduct, screen]);
+    }, [activeProduct, clientTab, dealerTab, manufacturerTab, screen]);
 
     useEffect(() => {
         const handlePopState = () => {
             const next = getInitialState();
             setScreen(next.screen);
+            setClientTab(next.clientTab);
+            setDealerTab(next.dealerTab);
+            setManufacturerTab(next.manufacturerTab);
             window.requestAnimationFrame(() => {
                 const nextUrl = window.location.href;
                 if (lastMetrikaUrlRef.current !== nextUrl) {
@@ -298,7 +364,7 @@ function MainApp() {
 
     // --- ЛОГИКА: ПРОВЕРКА РОЛИ И РОУТИНГ ---
     useEffect(() => {
-        if (screen === 'cookie_policy') return undefined;
+        if (screen === 'cookie_policy' || screen === 'admin_stub') return undefined;
 
         let targetScreen = null;
         if (['admin', 'owner'].includes(userRole)) {
@@ -332,6 +398,7 @@ function MainApp() {
 
     const handleContinueOrder = () => {
         if (currentUser) {
+            setClientTab('cart');
             setScreen('client_dashboard');
         } else {
             setShowAuth(true);
@@ -441,7 +508,10 @@ function MainApp() {
             {/* --- ЭКРАН: ГЛАВНАЯ СТРАНИЦА --- */}
             {screen === 'home' && (
                 <Home
-                    onStart={() => setScreen('configurator')}
+                    onStart={() => {
+                        setClientTab(null);
+                        setScreen('configurator');
+                    }}
                     onAuth={() => setShowAuth(true)}
                     user={currentUser}
                     logout={logout}
@@ -470,13 +540,21 @@ function MainApp() {
 
             {/* --- ЭКРАН: КАБИНЕТ ДИЛЕРА --- */}
             {screen === 'dealer' && (
-                <DealerDashboard onBack={() => setScreen('home')} />
+                <DealerDashboard
+                    onBack={() => setScreen('home')}
+                    initialTab={dealerTab}
+                    onTabChange={setDealerTab}
+                />
             )}
 
 
             {/* --- ЭКРАН: КАБИНЕТ ПРОИЗВОДСТВА --- */}
             {screen === 'manufacturer' && (
-                <ManufacturerDashboard onBack={() => setScreen('home')} />
+                <ManufacturerDashboard
+                    onBack={() => setScreen('home')}
+                    initialTab={manufacturerTab}
+                    onTabChange={setManufacturerTab}
+                />
             )}
 
 
@@ -487,6 +565,8 @@ function MainApp() {
                     onEdit={() => setScreen('configurator')}
                     showSuccessToast={pendingSuccessToast}
                     onSuccessToastShown={() => setPendingSuccessToast(false)}
+                    initialTab={clientTab}
+                    onTabChange={setClientTab}
                 />
             )}
 
@@ -497,7 +577,7 @@ function MainApp() {
 
                     <button
                         onClick={() => guardedNavigate(currentUser ? (userRole === 'dealer' ? 'dealer' : 'client_dashboard') : 'home')}
-                        className="absolute top-3 left-3 md:top-6 md:left-6 z-50 px-4 md:px-6 py-2 bg-white/85 dark:bg-white/5 backdrop-blur-md rounded-full shadow-lg dark:shadow-none text-xs md:text-sm font-bold text-black dark:text-white hover:bg-white dark:hover:bg-white/10 font-zen active:scale-95 transition-all border border-black/10 dark:border-white/10 max-w-[42vw] md:max-w-none truncate"
+                        className="absolute top-3 left-3 md:top-8 md:left-9 z-50 max-w-[42vw] md:max-w-none truncate rounded-full border border-white/18 bg-[#1b2c3c]/72 px-4 py-2 text-xs font-bold text-white shadow-[0_14px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl transition-all hover:bg-[#24384b]/86 hover:border-white/28 active:scale-95 md:px-5 md:text-sm font-zen"
                     >
                         {currentUser ? t(language, 'backToCabinet') : t(language, 'backToMenu')}
                     </button>
@@ -521,7 +601,7 @@ function MainApp() {
                         </div>
                     ) : (
                         <>
-                            <div ref={configuratorCanvasRef} className="app-bg relative w-full h-[40svh] min-h-[270px] max-h-[46svh] shrink-0 md:absolute md:top-0 md:left-0 md:bottom-0 md:w-[64%] lg:w-[70%] md:h-full md:max-h-none md:bg-transparent dark:md:bg-transparent">
+                            <div ref={configuratorCanvasRef} className="app-bg relative w-full h-[40svh] min-h-[270px] max-h-[46svh] shrink-0 md:absolute md:inset-0 md:w-full md:h-full md:max-h-none md:bg-transparent dark:md:bg-transparent">
                                 <div className="absolute bottom-3 right-3 z-10 md:hidden">
                                     <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
                                 </div>
@@ -543,7 +623,7 @@ function MainApp() {
                                 <SceneHints containerRef={configuratorCanvasRef} />
                             </div>
 
-                            <div className="relative flex-1 min-h-0 w-full z-10 md:absolute md:top-0 md:right-0 md:h-full md:w-[36%] lg:w-[30%] pointer-events-none md:p-4 md:flex md:flex-col md:justify-center">
+                            <div className="relative flex-1 min-h-0 w-full z-20 pointer-events-none md:absolute md:inset-x-0 md:bottom-5 md:top-auto md:h-auto md:px-6 md:flex md:justify-center">
                                 {activeProduct === 'thermos' ? (
                                     <ThermosInterface
                                         onFinish={completeConfiguratorFlow}
@@ -574,6 +654,12 @@ function MainApp() {
                 }} />
             )}
 
+            {screen === 'admin_stub' && (
+                <div className="app-bg fixed inset-0 flex items-center justify-center font-sans text-gray-900 dark:text-white">
+                    <h1 className="text-6xl md:text-8xl font-black tracking-widest">ХА, а админки то у нас и нет</h1>
+                </div>
+            )}
+
             {screen === 'admin_dashboard' && (
                 <AdminDashboard onLogout={() => {
                     logout();
@@ -590,18 +676,20 @@ function ConfiguratorToolbar({ onReset, productLabel, language = 'ru' }) {
     const [confirmReset, setConfirmReset] = useState(false);
     return (
         <>
-            <div className="absolute top-3 right-3 md:top-6 md:left-1/2 md:right-auto md:-translate-x-1/2 z-50 flex items-center gap-2">
+            <div className="absolute top-3 right-3 md:top-8 md:right-9 z-50 flex items-center gap-2">
                 <UndoRedoControls />
                 <button
                     onClick={() => setConfirmReset(true)}
                     title={t(language, 'resetConfigTitle')}
-                    className="h-[42px] px-4 flex items-center gap-2 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-[9px] border border-black/10 dark:border-white/10 shadow-xl text-[#1a1a1a] dark:text-white text-xs font-bold uppercase tracking-widest hover:bg-white dark:hover:bg-white/10 active:scale-95 transition-all"
+                    className="h-[34px] w-[34px] flex items-center justify-center bg-[#fff9ec] backdrop-blur-md rounded-full border border-black/10 shadow-xl text-[#1a1a1a] hover:bg-white active:scale-95 transition-all"
                 >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 12a9 9 0 1 0 3-6.7" />
-                        <polyline points="3 4 3 9 8 9" />
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M8 6V4h8v2" />
+                        <path d="M19 6l-1 14H6L5 6" />
+                        <path d="M10 11v5" />
+                        <path d="M14 11v5" />
                     </svg>
-                    <span className="hidden sm:inline">{t(language, 'resetBtn')}</span>
                 </button>
             </div>
             <ConfirmModal

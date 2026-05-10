@@ -70,6 +70,24 @@ const normalizeProduct = (type) => (
     ['notebook', 'calendar', 'thermos', 'powerbank'].includes(type) ? type : 'notebook'
 );
 
+const makeLogoId = () => (
+    typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+);
+
+const THERMOS_LOGO_START_POSITIONS = {
+    body: [[0, 0], [0.08, 0.46], [-0.08, -0.46], [0.16, -0.92], [-0.16, 0.92]],
+    capTop: [[0, 0], [0.16, 0.16], [-0.16, -0.16], [0.16, -0.16], [-0.16, 0.16]],
+    capSide: [[0, 0], [0.08, 0.28], [-0.08, -0.28], [0.16, -0.42], [-0.16, 0.42]],
+};
+
+const getThermosLogoStartPosition = (logos, target) => {
+    const sameTargetCount = logos.filter((logo) => (logo.target ?? 'body') === target).length;
+    const positions = THERMOS_LOGO_START_POSITIONS[target] ?? THERMOS_LOGO_START_POSITIONS.body;
+    return positions[sameTargetCount % positions.length];
+};
+
 export const useConfigurator = create(temporal((set, get) => ({
     activeProduct: 'notebook', // 'notebook' | 'calendar' | 'thermos' | 'powerbank'
     applyRenderConfig: (config) => set((state) => ({ ...state, ...config })),
@@ -182,7 +200,7 @@ export const useConfigurator = create(temporal((set, get) => ({
     clearBlockPages: () => set({ blockPages: [] }),
     addLogo: async (file, side = 'front') => {
         if (file instanceof File) {
-            const id = Date.now();
+            const id = makeLogoId();
             try {
                 const texture = await normalizeImageFile(file);
                 set((state) => ({
@@ -224,12 +242,12 @@ export const useConfigurator = create(temporal((set, get) => ({
     // --- ACTIONS: ТЕРМОС ---
     addThermosLogo: async (file, target = 'body') => {
         if (file instanceof File) {
-            const id = Date.now();
+            const id = makeLogoId();
             const scale = target === 'body' ? 0.6 : 0.32;
             try {
                 const texture = await normalizeImageFile(file);
                 set((state) => ({
-                    thermosLogos: [...state.thermosLogos, { id, target, texture, filename: file.name, position: [0, 0], rotation: 0, scale }],
+                    thermosLogos: [...state.thermosLogos, { id, target, texture, filename: file.name, position: getThermosLogoStartPosition(state.thermosLogos, target), rotation: 0, scale }],
                     selectedThermosLogoId: id
                 }));
             } catch (error) {
@@ -239,11 +257,11 @@ export const useConfigurator = create(temporal((set, get) => ({
     },
     addGeneratedThermosLogo: (texture, filename = 'AI дизайн.png', target = 'body') => {
         if (!texture) return;
-        const id = Date.now();
+        const id = makeLogoId();
         const isBodyWrap = target === 'body';
         const scale = isBodyWrap ? 1 : 0.38;
         set((state) => ({
-            thermosLogos: [...state.thermosLogos, { id, target, texture, filename, position: [0, 0], rotation: 0, scale, mode: isBodyWrap ? 'wrap' : 'decal' }],
+            thermosLogos: [...state.thermosLogos, { id, target, texture, filename, position: getThermosLogoStartPosition(state.thermosLogos, target), rotation: 0, scale, mode: isBodyWrap ? 'wrap' : 'decal' }],
             selectedThermosLogoId: id
         }));
     },
@@ -277,7 +295,7 @@ export const useConfigurator = create(temporal((set, get) => ({
     // --- ACTIONS: ПОВЕРБАНК ---
     addPowerbankLogo: async (file) => {
         if (file instanceof File) {
-            const id = Date.now();
+            const id = makeLogoId();
             try {
                 const texture = await normalizeImageFile(file);
                 set((state) => ({
