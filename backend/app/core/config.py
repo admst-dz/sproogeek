@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     techcard_url: str = Field("http://techcard:8000", alias="TECHCARD_URL")
     techcard_timeout_seconds: float = Field(60.0, alias="TECHCARD_TIMEOUT_SECONDS")
 
+    unwrap_url: str = Field("http://unwrap:8000", alias="UNWRAP_URL")
+    unwrap_timeout_seconds: float = Field(60.0, alias="UNWRAP_TIMEOUT_SECONDS")
+
+    block_builder_url: str = Field("http://block_builder:8000", alias="BLOCK_BUILDER_URL")
+    block_builder_timeout_seconds: float = Field(60.0, alias="BLOCK_BUILDER_TIMEOUT_SECONDS")
+
     s3_endpoint_url: str = Field("", alias="S3_ENDPOINT_URL")
     s3_public_endpoint: str = Field("", alias="S3_PUBLIC_ENDPOINT")
     s3_region: str = Field("us-east-1", alias="S3_REGION")

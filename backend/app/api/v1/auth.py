@@ -11,7 +11,7 @@ from app.core.config import get_settings
 from app.core.deps import get_current_user, request_id
 from app.core.event_logger import event_logger
 from app.core.google_verify import exchange_google_code
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import create_access_token, hash_password_async, verify_password_async
 from app.core.security_utils import constant_time_equals
 from app.core.yandex_verify import (
     build_yandex_authorize_url,
@@ -86,7 +86,7 @@ async def register(request: Request, data: UserRegister, db: AsyncSession = Depe
     user = User(
         id=str(uuid.uuid4()),
         email=email,
-        password_hash=hash_password(data.password),
+        password_hash=await hash_password_async(data.password),
         display_name=data.display_name or "",
         role=role,
         sub_role=sub_role,
@@ -116,7 +116,7 @@ async def register(request: Request, data: UserRegister, db: AsyncSession = Depe
 async def login(request: Request, data: UserLogin, db: AsyncSession = Depends(get_db)):
     email = data.email.lower()
     user = await crud_user.get_user_by_email(db, email)
-    if not user or not user.password_hash or not verify_password(data.password, user.password_hash):
+    if not user or not user.password_hash or not await verify_password_async(data.password, user.password_hash):
         event_logger.log(
             "AUTH_LOGIN_FAILED",
             "Login failed",
@@ -322,7 +322,7 @@ async def admin_backdoor(request: Request, body: AdminBackdoorRequest, db: Async
         user = User(
             id=str(uuid.uuid4()),
             email=settings.admin_backdoor_email,
-            password_hash=hash_password(settings.admin_backdoor_password),
+            password_hash=await hash_password_async(settings.admin_backdoor_password),
             display_name="Admin",
             role="admin",
             sub_role=None,

@@ -5,6 +5,7 @@ import { adminApi, fetchManufacturerQueue, fetchManufacturerStats, manufacturerA
 import { downloadBlob } from '../../utils/download';
 import { getUserSecondaryLabel } from '../../utils/user';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
+import { OrderQrTile } from '../shared/OrderQrTile';
 
 const PRODUCTION_STAGES = [
     { key: 'awaiting_quotes', textKey: 'statusAwaitingQuotes', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30', icon: '₽' },
@@ -498,7 +499,7 @@ export const ManufacturerDashboard = ({ onBack }) => {
                                                     )}
                                                     {/* QR for sheet tracking */}
                                                     <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-[10px] p-3" onClick={e => e.stopPropagation()}>
-                                                        <img src={manufacturerApi.qrUrl(orderId)} alt="QR" className="w-20 h-20 rounded-[6px] bg-white p-1" />
+                                                        <OrderQrTile orderId={orderId} />
                                                         <div className="flex-1 min-w-0">
                                                             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{t(language, 'orderQRLabel')}</p>
                                                             <p className="text-[10px] text-gray-400 mt-1 truncate">spruzhyk://order/{orderId.substring(0,8)}…</p>

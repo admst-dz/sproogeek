@@ -7,7 +7,7 @@ import {
     fetchAdminOrders, updateOrderStatus,
     fetchDealerProducts, saveProduct, updateProduct, deleteProduct,
     fetchOrderTypes, fetchOrderType, saveOrderType,
-    fetchDealerSelectedOrders, fetchManufacturerQueue, manufacturerApi,
+    fetchDealerSelectedOrders, fetchManufacturerQueue, manufacturerApi, orderApi,
 } from '../../api';
 import { getUserSecondaryLabel } from '../../utils/user';
 import { Canvas } from '@react-three/fiber';
@@ -15,6 +15,7 @@ import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { Notebook } from '../shared/Notebook';
 import { Thermos } from '../thermos/Thermos';
 import { downloadBlob } from '../../utils/download';
+import { OrderQrTile } from '../shared/OrderQrTile';
 
 const ORDER_STAGES = [
     { key: 'new',         textKey: 'statusNew',        color: 'bg-white/10 text-gray-400 border-white/10',            icon: '🕐' },
@@ -563,7 +564,7 @@ const ProductionPacket = ({
                     </a>
                 )}
                 <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-[10px] p-3">
-                    <img src={manufacturerApi.qrUrl(orderId)} alt="QR" className="w-20 h-20 rounded-[6px] bg-white p-1" />
+                    <OrderQrTile orderId={orderId} />
                     <div className="flex-1 min-w-0">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{t(language, 'orderQRLabel')}</p>
                         <p className="text-[10px] text-gray-400 mt-1 truncate">spruzhyk://order/{orderId.substring(0, 8)}...</p>
@@ -763,35 +764,14 @@ export const DealerDashboard = ({ onBack }) => {
         }
     };
 
-    const printProductionPacket = (orderId) => {
-        const node = document.getElementById(`dealer-production-order-${orderId}`);
-        if (!node) {
-            window.print();
-            return;
+    const printProductionPacket = async (orderId) => {
+        setTechcardBusy(orderId);
+        try {
+            const { data: blob } = await orderApi.productionPackage(orderId);
+            downloadBlob(blob, `production-package-${orderId}.zip`);
+        } finally {
+            setTechcardBusy(null);
         }
-        const printWindow = window.open('', '_blank', 'width=1100,height=800');
-        if (!printWindow) {
-            window.print();
-            return;
-        }
-        printWindow.document.write(`
-            <html>
-                <head>
-                    <title>Order ${orderId}</title>
-                    <style>
-                        body { margin: 24px; font-family: Arial, sans-serif; background: #fff; color: #111; }
-                        * { box-sizing: border-box; }
-                        button { display: none !important; }
-                        a { color: #111; text-decoration: none; }
-                        canvas, img { max-width: 100%; }
-                    </style>
-                </head>
-                <body>${node.innerHTML}</body>
-            </html>
-        `);
-        printWindow.document.close();
-        printWindow.focus();
-        printWindow.print();
     };
 
     const toggleOrderExpand = (orderId) => {
