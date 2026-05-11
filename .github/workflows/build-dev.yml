@@ -10,7 +10,7 @@ on:
         required: true
         default: "all"
         type: choice
-        options: [all, frontend, backend, renderer, techcard]
+        options: [all, frontend, backend, renderer, techcard, unwrap, block_builder]
 
 permissions:
   contents: read
@@ -24,6 +24,8 @@ jobs:
       backend:  ${{ steps.result.outputs.backend }}
       renderer: ${{ steps.result.outputs.renderer }}
       techcard: ${{ steps.result.outputs.techcard }}
+      unwrap:   ${{ steps.result.outputs.unwrap }}
+      block_builder: ${{ steps.result.outputs.block_builder }}
     steps:
       - uses: actions/checkout@v4
 
@@ -40,10 +42,15 @@ jobs:
               - 'microservices/renderer/**'
             techcard:
               - 'microservices/techcard/**'
+            unwrap:
+              - 'microservices/unwrap/**'
+              - 'microservices/glb-unwrapper/**'
+            block_builder:
+              - 'microservices/block_builder/**'
 
       - id: result
         run: |
-          targets=(frontend backend renderer techcard)
+          targets=(frontend backend renderer techcard unwrap block_builder)
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             T="${{ inputs.target }}"
             for t in "${targets[@]}"; do
@@ -54,6 +61,8 @@ jobs:
             echo "backend=${{ steps.filter.outputs.backend }}"   >> "$GITHUB_OUTPUT"
             echo "renderer=${{ steps.filter.outputs.renderer }}" >> "$GITHUB_OUTPUT"
             echo "techcard=${{ steps.filter.outputs.techcard }}" >> "$GITHUB_OUTPUT"
+            echo "unwrap=${{ steps.filter.outputs.unwrap }}"     >> "$GITHUB_OUTPUT"
+            echo "block_builder=${{ steps.filter.outputs.block_builder }}" >> "$GITHUB_OUTPUT"
           fi
 
   frontend:
@@ -92,4 +101,23 @@ jobs:
     with:
       image: techcard
       context: ./microservices/techcard
+      tag: dev
+
+  unwrap:
+    needs: changes
+    if: needs.changes.outputs.unwrap == 'true'
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      image: unwrap
+      context: ./microservices
+      dockerfile: microservices/unwrap/Dockerfile
+      tag: dev
+
+  block_builder:
+    needs: changes
+    if: needs.changes.outputs.block_builder == 'true'
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      image: block-builder
+      context: ./microservices/block_builder
       tag: dev
