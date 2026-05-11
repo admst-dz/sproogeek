@@ -78,6 +78,7 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState(new Set());
     const [updating, setUpdating] = useState(null);
+    const [stageError, setStageError] = useState(null);
     const [techcardBusy, setTechcardBusy] = useState(null);
     const [commentDraft, setCommentDraft] = useState({});
     const [quoteDraft, setQuoteDraft] = useState({});
@@ -133,10 +134,14 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
     const setStage = async (orderId, newStatus) => {
         const comment = commentDraft[orderId] || '';
         setUpdating(orderId);
+        setStageError(null);
         try {
             await manufacturerApi.updateStatus(orderId, newStatus, comment || null);
             setCommentDraft(prev => { const next = { ...prev }; delete next[orderId]; return next; });
             await reload();
+        } catch (err) {
+            const msg = err?.response?.data?.detail || 'Ошибка обновления статуса';
+            setStageError({ orderId, msg });
         } finally {
             setUpdating(null);
         }
@@ -497,6 +502,9 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
                                                                 rows={2}
                                                                 className="w-full bg-black/20 border border-white/10 rounded-[10px] px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/40 resize-none"
                                                             />
+                                                            {stageError?.orderId === orderId && (
+                                                                <p className="text-[10px] text-red-400 font-bold">{stageError.msg}</p>
+                                                            )}
                                                         </div>
                                                     ) : (
                                                         <div className="rounded-[12px] border border-white/8 bg-white/[0.03] p-4 flex items-center gap-3">

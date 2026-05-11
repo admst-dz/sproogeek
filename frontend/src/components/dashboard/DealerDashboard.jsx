@@ -781,7 +781,7 @@ const ClientsTab = ({
                     </p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
                     {filtered.map(order => (
                         <ClientCard
                             key={order.id}
