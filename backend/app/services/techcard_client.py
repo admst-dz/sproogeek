@@ -74,6 +74,43 @@ async def _build_request(order: Order, db: AsyncSession) -> dict[str, Any]:
             client_email = client_email or user.email
 
     cfg = order.configuration or {}
+    contact = cfg.get("contact") if isinstance(cfg.get("contact"), dict) else {}
+    contact = contact or {}
+
+    client_name = contact.get("name") or contact.get("contactPerson") or client_name
+    client_phone = contact.get("phone") or ""
+    client_address = contact.get("address") or ""
+    notes = cfg.get("notes") or cfg.get("comment") or contact.get("comment") or ""
+
+    manager_name = cfg.get("managerName") or ""
+    manager_id = cfg.get("managerId") or ""
+    selected_quote_id = getattr(order, "selected_quote_id", None)
+    selected_manufacturer_id = getattr(order, "selected_manufacturer_id", None)
+    selected_quote: dict[str, Any] = {}
+    quotes = getattr(order, "manufacturer_quotes", None) or []
+    if isinstance(quotes, list) and selected_quote_id:
+        for q in quotes:
+            if isinstance(q, dict) and str(q.get("id")) == str(selected_quote_id):
+                selected_quote = q
+                break
+    if selected_manufacturer_id and not manager_id:
+        manager_id = str(selected_manufacturer_id)
+        mfg_user = await crud_user.get_user(db, selected_manufacturer_id)
+        if mfg_user:
+            manager_name = manager_name or mfg_user.display_name or mfg_user.company_name or mfg_user.email or ""
+
+    delivery = {
+        "address": client_address,
+        "phone": client_phone,
+    }
+    quote_info = {
+        "price": (selected_quote.get("price") if selected_quote else None) or (
+            float(order.total_price) if order.total_price else None
+        ),
+        "currency": (selected_quote.get("currency") if selected_quote else None) or (order.currency or "BYN"),
+        "production_days": selected_quote.get("production_days") if selected_quote else None,
+    }
+
     return {
         "order_id": str(order.id),
         "order_number": str(order.id)[:8].upper(),
@@ -82,15 +119,19 @@ async def _build_request(order: Order, db: AsyncSession) -> dict[str, Any]:
             "id": str(client_id) if client_id else "",
             "name": client_name,
             "email": client_email,
+            "phone": client_phone,
+            "address": client_address,
             "requisites": cfg.get("clientRequisites") or "",
         },
         "manager": {
-            "id": cfg.get("managerId") or "",
-            "name": cfg.get("managerName") or "",
+            "id": manager_id,
+            "name": manager_name,
         },
         "items": _items_payload(order),
         "storage_location": cfg.get("storageLocation") or "",
-        "notes": cfg.get("notes") or cfg.get("comment") or "",
+        "notes": notes,
+        "delivery": delivery,
+        "quote": quote_info,
     }
 
 

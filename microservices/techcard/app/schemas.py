@@ -8,12 +8,25 @@ class ClientInfo(BaseModel):
     id: str = ""
     name: str = ""
     email: str = ""
+    phone: str = ""
+    address: str = ""
     requisites: str = ""
 
 
 class ManagerInfo(BaseModel):
     id: str = ""
     name: str = ""
+
+
+class DeliveryInfo(BaseModel):
+    address: str = ""
+    phone: str = ""
+
+
+class QuoteInfo(BaseModel):
+    price: Optional[float] = None
+    currency: Optional[str] = "BYN"
+    production_days: Optional[int] = None
 
 
 class FileLink(BaseModel):
@@ -43,6 +56,8 @@ class TechCardRequest(BaseModel):
     download_all_url: Optional[str] = None
     storage_location: str = ""
     notes: str = ""
+    delivery: DeliveryInfo = Field(default_factory=DeliveryInfo)
+    quote: QuoteInfo = Field(default_factory=QuoteInfo)
     doc_type: str = Field("techcard", pattern="^(techcard|approval)$")
     render_url: Optional[str] = None
     total_price: Optional[float] = None

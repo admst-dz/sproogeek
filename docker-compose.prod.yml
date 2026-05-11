@@ -116,6 +116,10 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       FEEDBACK_TO: ${FEEDBACK_TO:-info@sproogeek.com}
       TECHCARD_URL: ${TECHCARD_URL:-http://techcard:8000}
+      UNWRAP_URL: ${UNWRAP_URL:-http://unwrap:8000}
+      UNWRAP_TIMEOUT_SECONDS: ${UNWRAP_TIMEOUT_SECONDS:-60}
+      BLOCK_BUILDER_URL: ${BLOCK_BUILDER_URL:-http://block_builder:8000}
+      BLOCK_BUILDER_TIMEOUT_SECONDS: ${BLOCK_BUILDER_TIMEOUT_SECONDS:-60}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
       S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-}
       S3_REGION: ${S3_REGION:-us-east-1}
@@ -242,6 +246,34 @@ services:
       S3_BUCKET: ${S3_BUCKET:-techcards}
       MANUFACTURER_NAME: ${MANUFACTURER_NAME:-ООО «Спружык»}
       MANUFACTURER_ID: ${MANUFACTURER_ID:-SPRUZHYK-001}
+    networks:
+      - spruzhuk_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  unwrap:
+    image: ghcr.io/admst-dz/spruzhyk-unwrap:latest
+    pull_policy: always
+    container_name: spruzhuk_unwrap
+    restart: unless-stopped
+    networks:
+      - spruzhuk_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  block_builder:
+    image: ghcr.io/admst-dz/spruzhyk-block-builder:latest
+    pull_policy: always
+    container_name: spruzhuk_block_builder
+    restart: unless-stopped
     networks:
       - spruzhuk_net
     healthcheck:
