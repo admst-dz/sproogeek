@@ -52,11 +52,19 @@ ul.files li { margin-bottom: 1mm; font-size: 9pt; }
     <tr><td class="k">Идентификатор поставщика / производителя</td><td class="v">{{ manufacturer_id }} — {{ manufacturer_name }}</td></tr>
     <tr><td class="k">Клиент (реквизиты)</td><td class="v">
         {{ req.client.name | safe_dash }}{% if req.client.email %}<br>{{ req.client.email }}{% endif %}
+        {% if req.client.phone %}<br>тел. {{ req.client.phone }}{% endif %}
         {% if req.client.requisites %}<br>{{ req.client.requisites }}{% endif %}
     </td></tr>
+    <tr><td class="k">Адрес доставки</td><td class="v">{{ (req.client.address or req.delivery.address) | safe_dash }}</td></tr>
     <tr><td class="k">Менеджер сервиса (ФИО, ID)</td><td class="v">
         {{ req.manager.name | safe_dash }}{% if req.manager.id %} — {{ req.manager.id }}{% endif %}
     </td></tr>
+    {% if req.quote and (req.quote.price or req.quote.production_days) %}
+    <tr><td class="k">Стоимость / срок производства</td><td class="v">
+        {% if req.quote.price %}{{ '%.2f' % req.quote.price }} {{ req.quote.currency or 'BYN' }}{% else %}—{% endif %}
+        {% if req.quote.production_days %} · {{ req.quote.production_days }} дн.{% endif %}
+    </td></tr>
+    {% endif %}
 </table>
 
 <h3>Файлы товаров</h3>
@@ -223,7 +231,22 @@ ul.files li { margin-bottom: 1mm; font-size: 9pt; }
 <table class="kv">
     <tr><td class="k">Наименование вида сувенирной продукции</td><td class="v">{{ it.name }}</td></tr>
     <tr><td class="k">Тираж, шт.</td><td class="v">{{ it.quantity }}</td></tr>
-    <tr><td class="k">Цвет (ID, название)</td><td class="v">{% set col = c.thermosBodyColor or c.powerbankBodyColor or c.bodyColor %}{% if col %}<span class="swatch" style="background:{{ col }}"></span>{{ col }}{% else %}—{% endif %}</td></tr>
+    {% set body_col = c.thermosBodyColor or c.powerbankBodyColor or c.bodyColor %}
+    {% set cap_col = c.thermosCapColor or c.capColor %}
+    <tr><td class="k">Цвет корпуса</td><td class="v">{% if body_col %}<span class="swatch" style="background:{{ body_col }}"></span>{{ body_col }}{% else %}—{% endif %}</td></tr>
+    {% if it.product_kind == 'thermos' or cap_col %}
+    <tr><td class="k">Цвет крышки</td><td class="v">{% if cap_col %}<span class="swatch" style="background:{{ cap_col }}"></span>{{ cap_col }}{% else %}—{% endif %}</td></tr>
+    {% endif %}
+    {% if it.product_kind == 'thermos' %}
+    <tr><td class="k">Диаметр корпуса, мм</td><td class="v">{{ c.bodyDiameterMm | safe_dash }}</td></tr>
+    <tr><td class="k">Высота корпуса, мм</td><td class="v">{{ c.bodyHeightMm | safe_dash }}</td></tr>
+    <tr><td class="k">Диаметр крышки, мм</td><td class="v">{{ c.capDiameterMm | safe_dash }}</td></tr>
+    <tr><td class="k">Высота борта крышки, мм</td><td class="v">{{ c.capSideHeightMm | safe_dash }}</td></tr>
+    {% elif it.product_kind == 'powerbank' %}
+    <tr><td class="k">Ширина, мм</td><td class="v">{{ c.widthMm | safe_dash }}</td></tr>
+    <tr><td class="k">Высота, мм</td><td class="v">{{ c.heightMm | safe_dash }}</td></tr>
+    <tr><td class="k">Глубина, мм</td><td class="v">{{ c.depthMm | safe_dash }}</td></tr>
+    {% endif %}
 </table>
 
 <h3>Нанесение</h3>
@@ -260,6 +283,11 @@ ul.files li { margin-bottom: 1mm; font-size: 9pt; }
     <tr><td class="k">Название</td><td class="v">{{ req.items[0].name if req.items else '—' }}</td></tr>
     <tr><td class="k">ID заказчика</td><td class="v">{{ req.client.id | safe_dash }}</td></tr>
     <tr><td class="k">Наименование заказчика</td><td class="v">{{ req.client.name | safe_dash }}</td></tr>
+    <tr><td class="k">Контактный телефон</td><td class="v">{{ (req.client.phone or req.delivery.phone) | safe_dash }}</td></tr>
+    <tr><td class="k">Адрес доставки</td><td class="v">{{ (req.client.address or req.delivery.address) | safe_dash }}</td></tr>
+    {% if req.quote and req.quote.production_days %}
+    <tr><td class="k">Срок производства</td><td class="v">{{ req.quote.production_days }} дн.</td></tr>
+    {% endif %}
 </table>
 
 <div class="shipment-block">
