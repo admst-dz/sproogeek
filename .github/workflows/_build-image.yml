@@ -4,13 +4,18 @@ on:
   workflow_call:
     inputs:
       image:
-        description: "Short name (frontend|backend|renderer|techcard)"
+        description: "Short name (frontend|backend|renderer|techcard|unwrap|block-builder)"
         required: true
         type: string
       context:
         description: "Build context path"
         required: true
         type: string
+      dockerfile:
+        description: "Path to Dockerfile relative to repo root (overrides default <context>/Dockerfile)"
+        required: false
+        type: string
+        default: ""
       tag:
         description: "Image tag (dev|latest|sha-…)"
         required: true
@@ -43,7 +48,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ${{ inputs.context }}
-          file: ${{ inputs.context }}/Dockerfile
+          file: ${{ inputs.dockerfile != '' && inputs.dockerfile || format('{0}/Dockerfile', inputs.context) }}
           push: true
           tags: ghcr.io/admst-dz/spruzhyk-${{ inputs.image }}:${{ inputs.tag }}
           build-args: ${{ inputs.build_args }}
