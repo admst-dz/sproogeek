@@ -46,8 +46,10 @@ jobs:
             unwrap:
               - 'microservices/unwrap/**'
               - 'microservices/glb-unwrapper/**'
+              - 'docker-compose.prod.yml'
             block_builder:
               - 'microservices/block_builder/**'
+              - 'docker-compose.prod.yml'
             compose:
               - 'docker-compose.prod.yml'
 
