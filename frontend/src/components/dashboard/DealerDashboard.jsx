@@ -590,6 +590,220 @@ const ProductionPacket = ({
     );
 };
 
+const ClientInitials = ({ name }) => {
+    const initials = (name || '?')
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(w => w[0].toUpperCase())
+        .join('');
+    const hue = (name || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
+    return (
+        <div
+            className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-sm font-black text-white border border-white/10"
+            style={{ background: `hsl(${hue}, 45%, 28%)` }}
+        >
+            {initials}
+        </div>
+    );
+};
+
+const ClientCard = ({ order, language, imposition, techcardBusy, onDownloadTechcard, onPrint, onChanged }) => {
+    const [expanded, setExpanded] = useState(false);
+    const contact = getOrderContact(order);
+    const selectedQuote = (order.manufacturerQuotes || []).find(q => q.id === order.selectedQuoteId);
+    const clientName = contact.name || contact.contactPerson || order.userEmail || '—';
+    const stageInfo = ORDER_STAGES.find(s => s.key === order.status);
+
+    return (
+        <div className={`bg-white/[0.03] border rounded-[20px] overflow-hidden transition-all ${expanded ? 'border-white/20' : 'border-white/10 hover:border-white/18'}`}>
+            {/* Card header — always visible */}
+            <button
+                className="w-full text-left p-5 flex items-start gap-4"
+                onClick={() => setExpanded(e => !e)}
+            >
+                <ClientInitials name={clientName} />
+
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                            <p className="font-bold text-white text-sm truncate leading-tight">{clientName}</p>
+                            <p className="text-[11px] text-gray-500 truncate mt-0.5">{order.userEmail || contact.email || '—'}</p>
+                        </div>
+                        <div className="shrink-0 mt-0.5">
+                            <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border ${stageInfo?.color || 'bg-white/10 text-gray-400 border-white/10'}`}>
+                                {stageInfo ? t(language, stageInfo.textKey) : order.status}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                        <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">
+                            #{order.id.substring(0, 6).toUpperCase()}
+                        </span>
+                        <span className="text-[10px] text-gray-500 truncate max-w-[140px]">{order.product}</span>
+                        <span className="text-[10px] text-gray-600">{order.quantity} {t(language, 'pcsUnit')}</span>
+                        <span className="text-[10px] text-gray-600">{order.date}</span>
+                    </div>
+
+                    {selectedQuote && (
+                        <div className="mt-2 inline-flex items-center gap-1.5 bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-1 rounded-full">
+                            <span className="text-[10px] font-bold text-cyan-300">{selectedQuote.price} {selectedQuote.currency || 'BYN'}</span>
+                            <span className="text-[10px] text-cyan-500/70">·</span>
+                            <span className="text-[10px] text-cyan-400">{selectedQuote.production_days} {t(language, 'quoteDaysShort')}</span>
+                        </div>
+                    )}
+                </div>
+
+                <svg
+                    width="14" height="14" viewBox="0 0 14 14" fill="none"
+                    className={`text-gray-500 transition-transform shrink-0 mt-1 ${expanded ? 'rotate-180' : ''}`}
+                >
+                    <path d="M2 5l5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+            </button>
+
+            {/* Expanded details */}
+            {expanded && (
+                <div className="border-t border-white/8 px-5 pb-5 pt-4 space-y-5">
+                    {/* Progress */}
+                    <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">{t(language, 'orderStatusLabel')}</p>
+                        <div className="touch-scroll-x pb-1">
+                            <div className="min-w-[520px]">
+                                <OrderProgressBar status={order.status} stageHistory={order.stageHistory} language={language} />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 3D + params */}
+                    <DealerOrderDetails order={order} language={language} full />
+
+                    {/* Docs & approval */}
+                    <ProductionPacket
+                        order={order}
+                        language={language}
+                        imposition={imposition}
+                        techcardBusy={techcardBusy}
+                        onDownloadTechcard={onDownloadTechcard}
+                        onPrint={onPrint}
+                        onChanged={onChanged}
+                    />
+                </div>
+            )}
+        </div>
+    );
+};
+
+const ClientsTab = ({
+    loading, clientOrders, setClientOrders,
+    impositionMap, techcardBusy,
+    downloadTechcard, printProductionPacket,
+    language,
+}) => {
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState('');
+
+    const filtered = clientOrders.filter(order => {
+        const contact = getOrderContact(order);
+        const name = (contact.name || contact.contactPerson || order.userEmail || '').toLowerCase();
+        const matchSearch = !search || name.includes(search.toLowerCase()) || order.id.toLowerCase().includes(search.toLowerCase());
+        const matchStatus = !statusFilter || order.status === statusFilter;
+        return matchSearch && matchStatus;
+    });
+
+    const activeStatuses = [...new Set(clientOrders.map(o => o.status))];
+
+    if (loading) {
+        return (
+            <div className="py-24 flex flex-col items-center gap-3">
+                <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">{t(language, 'loading')}</p>
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            {/* Header + search */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
+                <div>
+                    <h2 className="text-xl font-bold uppercase tracking-widest text-white">{t(language, 'myClientsTitle')}</h2>
+                    <p className="text-xs text-gray-500 mt-1">{t(language, 'myClientsDesc')}</p>
+                </div>
+                <div className="sm:ml-auto flex items-center gap-2 bg-white/5 border border-white/10 rounded-[14px] px-3 py-2 w-full sm:w-64">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500 shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        placeholder={t(language, 'searchPlaceholder') || 'Поиск...'}
+                        className="bg-transparent text-xs text-white placeholder-gray-600 focus:outline-none w-full"
+                    />
+                    {search && (
+                        <button onClick={() => setSearch('')} className="text-gray-600 hover:text-white transition-colors">
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Status filter pills */}
+            {activeStatuses.length > 1 && (
+                <div className="flex flex-wrap gap-2 mb-5">
+                    <button
+                        onClick={() => setStatusFilter('')}
+                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${statusFilter === '' ? 'bg-white text-black border-white' : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'}`}
+                    >
+                        {t(language, 'filterAllActive')} <span className="opacity-60 ml-1">{clientOrders.length}</span>
+                    </button>
+                    {activeStatuses.map(key => {
+                        const s = ORDER_STAGES.find(x => x.key === key);
+                        if (!s) return null;
+                        const cnt = clientOrders.filter(o => o.status === key).length;
+                        return (
+                            <button
+                                key={key}
+                                onClick={() => setStatusFilter(statusFilter === key ? '' : key)}
+                                className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${statusFilter === key ? 'bg-white text-black border-white' : `${s.color} hover:opacity-90`}`}
+                            >
+                                {s.icon} {t(language, s.textKey)} <span className="opacity-60 ml-1">{cnt}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
+            {filtered.length === 0 ? (
+                <div className="py-24 flex flex-col items-center gap-4">
+                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10 text-2xl">👥</div>
+                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">
+                        {search || statusFilter ? 'Ничего не найдено' : t(language, 'noClients')}
+                    </p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    {filtered.map(order => (
+                        <ClientCard
+                            key={order.id}
+                            order={order}
+                            language={language}
+                            imposition={impositionMap[order.id]}
+                            techcardBusy={techcardBusy === order.id}
+                            onDownloadTechcard={downloadTechcard}
+                            onPrint={printProductionPacket}
+                            onChanged={(updated) => setClientOrders(prev => prev.map(o =>
+                                String(o.id) === String(order.id)
+                                    ? { ...o, status: updated.status || o.status, approvalStatus: updated.approval_status || o.approvalStatus, dealerConfirmedAt: updated.dealer_confirmed_at || o.dealerConfirmedAt, stageHistory: updated.stage_history || o.stageHistory }
+                                    : o
+                            ))}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
 export const DealerDashboard = ({ onBack, initialTab, onTabChange }) => {
     const { currentUser, logout, language } = useConfigurator();
     const [activeTab, setActiveTab] = useState(initialTab ?? 'products');
@@ -843,12 +1057,16 @@ export const DealerDashboard = ({ onBack, initialTab, onTabChange }) => {
             {/* SIDEBAR — только на desktop */}
             <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-white/5 bg-white/[0.02] backdrop-blur-xl z-20">
                 <div className="p-6 border-b border-white/5">
-                    <div className="flex items-center gap-2 mb-3">
+                    <button
+                        type="button"
+                        onClick={() => window.location.reload()}
+                        className="flex items-center gap-2 mb-3 hover:opacity-75 active:scale-95 transition-all"
+                    >
                         <div className="w-8 h-8 bg-white/10 border border-white/10 rounded-[10px] flex items-center justify-center">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                         </div>
                         <span className="font-bold text-sm tracking-wide">Spruzhuk</span>
-                    </div>
+                    </button>
                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{t(language, 'dealerDashTitle')}</p>
                     <p className="text-xs text-gray-400 mt-0.5 truncate">{getUserSecondaryLabel(currentUser)}</p>
                 </div>
@@ -886,10 +1104,14 @@ export const DealerDashboard = ({ onBack, initialTab, onTabChange }) => {
 
             {/* MOBILE HEADER */}
             <div className="md:hidden fixed top-0 left-0 right-0 z-30 px-4 py-3 bg-[#0B0F19]/95 backdrop-blur-xl border-b border-white/5 flex items-center gap-3">
-                <div className="flex items-center gap-2">
+                <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="flex items-center gap-2 hover:opacity-75 active:scale-95 transition-all"
+                >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                     <span className="font-bold text-sm tracking-wide">Spruzhuk</span>
-                </div>
+                </button>
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{t(language, 'dealerDashTitle')}</span>
                 <span className="text-xs text-gray-500 truncate ml-auto">{getUserSecondaryLabel(currentUser)}</span>
             </div>
@@ -1240,68 +1462,16 @@ export const DealerDashboard = ({ onBack, initialTab, onTabChange }) => {
                 )}
 
                 {activeTab === 'clients' && (
-                    <div>
-                        <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
-                            <div>
-                                <h2 className="text-xl font-bold uppercase tracking-widest text-white">{t(language, 'myClientsTitle')}</h2>
-                                <p className="text-xs text-gray-500 mt-1">{t(language, 'myClientsDesc')}</p>
-                            </div>
-                        </div>
-                        <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[24px] overflow-hidden">
-                            {loading ? (
-                                <div className="py-20 flex flex-col items-center gap-3">
-                                    <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">{t(language, 'loading')}</p>
-                                </div>
-                            ) : clientOrders.length === 0 ? (
-                                <div className="py-20 flex flex-col items-center gap-4">
-                                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10 text-2xl">👥</div>
-                                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">{t(language, 'noClients')}</p>
-                                </div>
-                            ) : (
-                                <div className="divide-y divide-white/5">
-                                    {clientOrders.map(order => {
-                                        const contact = getOrderContact(order);
-                                        const selectedQuote = (order.manufacturerQuotes || []).find(q => q.id === order.selectedQuoteId);
-                                        return (
-                                            <div key={order.id} id={`dealer-production-order-${order.id}`} className="p-4 md:p-6">
-                                                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
-                                                    <div className="min-w-0">
-                                                        <p className="font-bold text-white text-sm truncate">
-                                                            {contact.name || contact.contactPerson || order.userEmail || '—'}
-                                                        </p>
-                                                        <p className="text-xs text-gray-500 mt-1 truncate">
-                                                            #{order.id.substring(0, 6).toUpperCase()} · {order.product} · {order.date}
-                                                        </p>
-                                                    </div>
-                                                    <div className="flex flex-wrap sm:justify-end gap-2">
-                                                        <StatusBadge status={order.status} language={language} />
-                                                        {selectedQuote && (
-                                                            <span className="px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-cyan-500/10 text-cyan-300 border-cyan-500/30">
-                                                                {selectedQuote.price} {selectedQuote.currency || 'BYN'} · {selectedQuote.production_days} {t(language, 'quoteDaysShort')}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <DealerOrderDetails order={order} language={language} full />
-                                                <ProductionPacket
-                                                    order={order}
-                                                    language={language}
-                                                    imposition={impositionMap[order.id]}
-                                                    techcardBusy={techcardBusy === order.id}
-                                                    onDownloadTechcard={downloadTechcard}
-                                                    onPrint={printProductionPacket}
-                                                    onChanged={(updated) => setClientOrders(prev => prev.map(o => String(o.id) === String(order.id)
-                                                        ? { ...o, status: updated.status || o.status, approvalStatus: updated.approval_status || o.approvalStatus, dealerConfirmedAt: updated.dealer_confirmed_at || o.dealerConfirmedAt, stageHistory: updated.stage_history || o.stageHistory }
-                                                        : o))}
-                                                />
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    <ClientsTab
+                        loading={loading}
+                        clientOrders={clientOrders}
+                        setClientOrders={setClientOrders}
+                        impositionMap={impositionMap}
+                        techcardBusy={techcardBusy}
+                        downloadTechcard={downloadTechcard}
+                        printProductionPacket={printProductionPacket}
+                        language={language}
+                    />
                 )}
             </main>
 

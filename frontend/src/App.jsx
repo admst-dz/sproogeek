@@ -373,7 +373,7 @@ function MainApp() {
             targetScreen = 'dealer';
         } else if (userRole === 'manufacturer') {
             targetScreen = 'manufacturer';
-        } else if (userRole === 'client') {
+        } else if (userRole === 'client' && screen !== 'configurator') {
             targetScreen = 'client_dashboard';
         } else if (!userRole && ['dealer', 'manufacturer', 'client_dashboard', 'admin_dashboard'].includes(screen)) {
             targetScreen = 'home';
