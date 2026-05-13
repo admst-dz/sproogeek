@@ -4,13 +4,13 @@ import { t } from '../../i18n';
 import { BlockPDFPreview } from './BlockPDFPreview';
 import { BlockBuilder } from './BlockBuilder';
 import {
-    ColorSwatches,
+    ColorDropdown,
     ConstructorDock,
     DockGrid,
     FileUploadChip,
     FloatingLogoSettings,
     LogoList,
-    MiniSegment,
+    MiniDropdown,
     MiniToggle,
     RotationScrub,
     SettingGroup,
@@ -111,14 +111,14 @@ export const Interface = ({ onFinish }) => {
                 >
                     <SettingGroup title={t(language, 'formatLabel')} compact>
                         <SettingRow label={t(language, 'formatLabel')} inline>
-                            <MiniSegment
+                            <MiniDropdown
                                 value={format}
                                 onChange={setFormat}
                                 options={['A5', 'A6'].map(value => ({ value, label: value }))}
                             />
                         </SettingRow>
                         <SettingRow label={t(language, 'bindingTypeLabel')} inline>
-                            <MiniSegment
+                            <MiniDropdown
                                 value={bindingType}
                                 onChange={setBindingType}
                                 options={[
@@ -137,7 +137,7 @@ export const Interface = ({ onFinish }) => {
 
                     <SettingGroup title={t(language, 'coverColorLabel')} compact>
                         <SettingRow label={t(language, 'coverColorLabel')}>
-                            <ColorSwatches colors={palette} currentColor={coverColor} onSelect={(c) => setColor('cover', c)} />
+                            <ColorDropdown colors={palette} currentColor={coverColor} onSelect={(c) => setColor('cover', c)} />
                         </SettingRow>
                         {bindingType !== 'hard' && (
                             <>
@@ -146,14 +146,14 @@ export const Interface = ({ onFinish }) => {
                                 </SettingRow>
                                 {hasElastic && (
                                     <SettingRow label={t(language, 'elasticColorLabel')}>
-                                        <ColorSwatches colors={palette} currentColor={elasticColor} onSelect={(c) => setColor('elastic', c)} />
+                                        <ColorDropdown colors={palette} currentColor={elasticColor} onSelect={(c) => setColor('elastic', c)} />
                                     </SettingRow>
                                 )}
                             </>
                         )}
                         {bindingType === 'spiral' && (
                             <SettingRow label={t(language, 'spiralColorLabel')}>
-                                <ColorSwatches colors={palette} currentColor={spiralColor} onSelect={(c) => setColor('spiral', c)} />
+                                <ColorDropdown colors={palette} currentColor={spiralColor} onSelect={(c) => setColor('spiral', c)} />
                             </SettingRow>
                         )}
                     </SettingGroup>
@@ -239,7 +239,7 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
                 <FileUploadChip label={t(language, 'addLogo')} onFile={(file) => addLogo(file, activeSide)} />
             </SettingRow>
             <SettingRow label={t(language, 'applicationSide') || t(language, 'sideFront')} inline={compact}>
-                <MiniSegment
+                <MiniDropdown
                     value={activeSide}
                     onChange={selectSide}
                     options={[

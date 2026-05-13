@@ -1,13 +1,13 @@
 import { useConfigurator, captureRender } from '../../store';
 import { t } from '../../i18n';
 import {
-    ColorSwatches,
+    ColorDropdown,
     ConstructorDock,
     DockGrid,
     FileUploadChip,
     FloatingLogoSettings,
     LogoList,
-    MiniSegment,
+    MiniDropdown,
     RotationScrub,
     SettingGroup,
     SettingRow,
@@ -16,7 +16,7 @@ import {
 } from '../configurator/ConstructorDock';
 
 const palette = [
-    { bg: '#75787B' },
+    { bg: '#75787B', name: 'Серебристый' },
 ];
 
 export const PowerbankInterface = ({ onFinish }) => {
@@ -54,7 +54,7 @@ export const PowerbankInterface = ({ onFinish }) => {
             >
                 <SettingGroup title={t(language, 'bodyColor')}>
                     <SettingRow label={t(language, 'bodyColor')}>
-                        <ColorSwatches colors={palette} currentColor={powerbankBodyColor} onSelect={(c) => setColor('powerbankBody', c)} />
+                        <ColorDropdown colors={palette} currentColor={powerbankBodyColor} onSelect={(c) => setColor('powerbankBody', c)} />
                     </SettingRow>
                 </SettingGroup>
 
@@ -105,7 +105,7 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
                 <>
                     <div className="mt-3 space-y-3 md:hidden">
                         <SettingRow label={t(language, 'applicationSide')}>
-                            <MiniSegment
+                            <MiniDropdown
                                 value={selected.side ?? 'outer'}
                                 onChange={setLogoSide}
                                 options={[
@@ -123,7 +123,7 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
                     </div>
                     <FloatingLogoSettings title={t(language, 'logoLabel')} subtitle={selected.filename}>
                     <SettingRow label={t(language, 'applicationSide')}>
-                        <MiniSegment
+                        <MiniDropdown
                             value={selected.side ?? 'outer'}
                             onChange={setLogoSide}
                             options={[

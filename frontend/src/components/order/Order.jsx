@@ -12,6 +12,7 @@ export const Order = ({ onBack, onSuccess }) => {
     const {
         format, coverColor, elasticColor, hasElastic,
         paperPattern, logos, bindingType, spiralColor,
+        hasCorners,
         blockPages, paperType,
         activeProduct, language
     } = useConfigurator();
@@ -58,6 +59,7 @@ export const Order = ({ onBack, onSuccess }) => {
                         type: activeProduct, format, bindingType, coverColor, hasElastic,
                         elasticColor: hasElastic ? elasticColor : null,
                         spiralColor: bindingType === 'spiral' ? spiralColor : null,
+                        hasCorners: (bindingType === 'hard' || bindingType === 'soft') ? hasCorners : false,
                         paperPattern, hasLogo: logos.length > 0,
                         blockPages, paperType,
                     },
@@ -77,7 +79,7 @@ export const Order = ({ onBack, onSuccess }) => {
     };
 
     const patternNames = { blank: t(language, 'patternBlank'), lined: t(language, 'patternLined'), tlined: t(language, 'patternTLined'), grid: t(language, 'patternGrid'), dotted: t(language, 'patternDotted') };
-    const bindingNames = { hard: t(language, 'bindingHard'), spiral: t(language, 'bindingSpiral') };
+    const bindingNames = { hard: t(language, 'bindingHard'), spiral: t(language, 'bindingSpiral'), soft: t(language, 'bindingSoft') };
 
     return (
         <div className="app-bg fixed inset-0 w-full h-full font-zen overflow-y-auto z-50 transition-colors duration-300">
@@ -137,6 +139,9 @@ export const Order = ({ onBack, onSuccess }) => {
                             <Row label={t(language, 'orderFormatLabel')} value={format} />
                             <Row label={t(language, 'orderCoverLabel')} value={<ColorDot color={coverColor} />} />
                             <Row label={t(language, 'orderElasticLabel')} value={hasElastic ? <ColorDot color={elasticColor} /> : t(language, 'orderNo')} />
+                            {(bindingType === 'hard' || bindingType === 'soft') && (
+                                <Row label={t(language, 'cornersLabel')} value={hasCorners ? t(language, 'orderYes') : t(language, 'orderNo')} />
+                            )}
                             <Row label={t(language, 'orderPatternLabel')} value={patternNames[paperPattern]} />
                         </div>
                     </div>

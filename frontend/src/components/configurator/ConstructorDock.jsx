@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 export const ConstructorDock = ({ title, tabs = [], activeTab, onTabChange, onSave, saveLabel, desktopTitleColumn = false, children }) => (
@@ -122,6 +122,88 @@ export const MiniSegment = ({ options, value, onChange }) => (
         ))}
     </div>
 );
+
+export const MiniDropdown = ({ options, value, onChange }) => {
+    const [open, setOpen] = useState(false);
+    const current = options.find(o => o.value === value);
+    return (
+        <div className="relative w-full">
+            <button
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                className="w-full flex items-center justify-between gap-2 rounded-[8px] border border-white/20 bg-white/8 px-2.5 py-1.5 text-[10px] md:text-[12px] font-black uppercase tracking-wider text-white transition hover:bg-white/14"
+            >
+                <span className="truncate">{current?.label ?? value}</span>
+                <svg width="10" height="6" viewBox="0 0 10 6" className={`shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} fill="none">
+                    <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            </button>
+            {open && (
+                <>
+                    <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+                    <div className="absolute left-0 top-full mt-1 z-50 w-full min-w-max rounded-[8px] border border-white/20 bg-[#3a2e31] shadow-2xl overflow-hidden">
+                        {options.map(opt => (
+                            <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => { onChange(opt.value); setOpen(false); }}
+                                className={`w-full px-3 py-2 text-left text-[10px] md:text-[12px] font-black uppercase tracking-wider transition ${opt.value === value ? 'bg-[#fff9ec] text-[#191919]' : 'text-white/80 hover:bg-white/12'}`}
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
+                    </div>
+                </>
+            )}
+        </div>
+    );
+};
+
+export const ColorDropdown = ({ colors, currentColor, onSelect }) => {
+    const [open, setOpen] = useState(false);
+    const current = colors.find(c => (c.bg ?? c) === currentColor);
+    const label = current?.name ?? currentColor;
+    return (
+        <div className="relative w-full">
+            <button
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                className="w-full flex items-center justify-between gap-2 rounded-[8px] border border-white/20 bg-white/8 px-2.5 py-1.5 text-[10px] md:text-[12px] font-black uppercase tracking-wider text-white transition hover:bg-white/14"
+            >
+                <div className="flex items-center gap-2 min-w-0">
+                    <span className="h-[13px] w-[13px] shrink-0 rounded-full border border-white/30" style={{ backgroundColor: currentColor }} />
+                    <span className="truncate">{label}</span>
+                </div>
+                <svg width="10" height="6" viewBox="0 0 10 6" className={`shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} fill="none">
+                    <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            </button>
+            {open && (
+                <>
+                    <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+                    <div className="absolute left-0 top-full mt-1 z-50 w-full min-w-max rounded-[8px] border border-white/20 bg-[#3a2e31] shadow-2xl overflow-hidden">
+                        {colors.map(color => {
+                            const val = color.bg ?? color;
+                            const name = color.name ?? val;
+                            return (
+                                <button
+                                    key={val}
+                                    type="button"
+                                    onClick={() => { onSelect(val); setOpen(false); }}
+                                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-[10px] md:text-[12px] font-black uppercase tracking-wider transition ${val === currentColor ? 'bg-white/20 text-white' : 'text-white/80 hover:bg-white/12'}`}
+                                >
+                                    <span className="h-[14px] w-[14px] shrink-0 rounded-full border border-white/25" style={{ backgroundColor: val }} />
+                                    <span className="truncate">{name}</span>
+                                    {val === currentColor && <span className="ml-auto text-[10px] text-[#fff9ec]">✓</span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </>
+            )}
+        </div>
+    );
+};
 
 export const ColorSwatches = ({ colors, currentColor, onSelect }) => (
     <div className="flex w-full max-w-full flex-wrap justify-start gap-2">

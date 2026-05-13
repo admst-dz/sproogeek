@@ -66,8 +66,8 @@ function getLogoSurfaceProps(logo, bbox, frontZ, backZ) {
     };
 }
 
-function splitCoverAndDecorEntries(meshEntries) {
-    if (meshEntries.length === 0) return { coverEntry: null, decorEntries: [] };
+function classifyMeshEntries(meshEntries) {
+    if (meshEntries.length === 0) return { coverEntry: null, blockEntry: null, cornerEntries: [] };
 
     let coverEntry = meshEntries[0];
     for (const entry of meshEntries) {
@@ -78,10 +78,22 @@ function splitCoverAndDecorEntries(meshEntries) {
         }
     }
 
-    return {
-        coverEntry,
-        decorEntries: meshEntries.filter(entry => entry !== coverEntry),
-    };
+    const rest = meshEntries.filter(e => e !== coverEntry);
+    const coverArea = bboxArea(coverEntry.bbox);
+    const sorted = [...rest].sort((a, b) => bboxArea(b.bbox) - bboxArea(a.bbox));
+
+    // Блок страниц — вторая по площади геометрия >= 15% обложки; уголки — мелкие детали
+    let blockEntry = null;
+    const cornerEntries = [];
+    for (const entry of sorted) {
+        if (!blockEntry && bboxArea(entry.bbox) >= coverArea * 0.15) {
+            blockEntry = entry;
+        } else {
+            cornerEntries.push(entry);
+        }
+    }
+
+    return { coverEntry, blockEntry, cornerEntries };
 }
 
 function cloneSubsetGeometry(sourceGeo, triangles) {
@@ -218,7 +230,6 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos, isNotebookOpen }) {
     const coverMatRef = useRef();
     const frontGroupRef = useRef();
 
-    // Собираем все mesh-ноды
     const meshEntries = useMemo(() => {
         return Object.entries(nodes)
             .filter(([, n]) => n.isMesh || n.geometry)
@@ -230,24 +241,26 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos, isNotebookOpen }) {
             .sort((a, b) => b.vertCount - a.vertCount);
     }, [nodes]);
 
-    const { coverEntry, decorEntries: cornerEntries } = useMemo(() => (
-        splitCoverAndDecorEntries(meshEntries)
+    // coverEntry — обложка (самая большая), blockEntry — блок страниц, cornerEntries — уголки
+    const { coverEntry, blockEntry: separateBlockEntry, cornerEntries } = useMemo(() => (
+        classifyMeshEntries(meshEntries)
     ), [meshEntries]);
 
-    // Общий bbox для позиционирования уголков и резинки
     const sceneBbox = useMemo(() => {
         const box = new THREE.Box3();
         meshEntries.forEach(e => box.union(e.bbox));
         return box;
     }, [meshEntries]);
 
-    // Нормальная карта из оригинального материала
     const mat = materials ? Object.values(materials)[0] : null;
     const normalMap = mat?.normalMap ?? null;
 
-    const { coverGeometry, blockGeometry } = useMemo(() => (
+    // Если в GLB обложка и блок — одна меш, разбиваем геометрически; иначе используем отдельный меш блока
+    const { coverGeometry, blockGeometry: splitBlockGeometry } = useMemo(() => (
         coverEntry ? splitInsetBlockGeometry(coverEntry.geo) : { coverGeometry: null, blockGeometry: null }
     ), [coverEntry]);
+
+    const blockGeometry = separateBlockEntry?.geo ?? splitBlockGeometry;
 
     const frontZ = coverEntry?.bbox.max.z ?? sceneBbox.max.z;
     const backZ = coverEntry?.bbox.min.z ?? sceneBbox.min.z;
@@ -260,7 +273,7 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos, isNotebookOpen }) {
 
     return (
         <group>
-            {/* Обложка */}
+            {/* Обложка — цвет меняется динамически, блок страниц не трогается */}
             {coverEntry && coverGeometry && (
                 <group
                     ref={frontGroupRef}
@@ -296,6 +309,7 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos, isNotebookOpen }) {
                 </group>
             )}
 
+            {/* Блок страниц — всегда белый, не зависит от цвета обложки */}
             {blockGeometry && (
                 <mesh geometry={blockGeometry} castShadow receiveShadow>
                     <meshStandardMaterial
@@ -307,7 +321,7 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos, isNotebookOpen }) {
                 </mesh>
             )}
 
-            {/* Золотистые уголки из самой GLB-модели */}
+            {/* Уголки — металлические, показываются только при hasCorners=true */}
             {hasCorners && cornerEntries.map(e => (
                 <mesh key={e.name} geometry={e.geo} castShadow receiveShadow>
                     <meshStandardMaterial
@@ -409,9 +423,15 @@ function SoftCoverModel({ coverColor, elasticColor, hasElastic, hasCorners, logo
             .sort((a, b) => b.vertCount - a.vertCount);
     }, [nodes]);
 
-    const { coverEntry, decorEntries: cornerEntries } = useMemo(() => (
-        splitCoverAndDecorEntries(meshEntries)
+    const { coverEntry, blockEntry: separateBlockEntry, cornerEntries } = useMemo(() => (
+        classifyMeshEntries(meshEntries)
     ), [meshEntries]);
+
+    const { coverGeometry, blockGeometry: splitBlockGeometry } = useMemo(() => (
+        coverEntry ? splitInsetBlockGeometry(coverEntry.geo) : { coverGeometry: null, blockGeometry: null }
+    ), [coverEntry]);
+
+    const blockGeometry = separateBlockEntry?.geo ?? splitBlockGeometry;
 
     const sceneBbox = useMemo(() => {
         const box = new THREE.Box3();
@@ -431,8 +451,9 @@ function SoftCoverModel({ coverColor, elasticColor, hasElastic, hasCorners, logo
 
     return (
         <group>
-            {coverEntry && (
-                <mesh geometry={coverEntry.geo} castShadow receiveShadow>
+            {/* Обложка — только цветная часть */}
+            {coverEntry && coverGeometry && (
+                <mesh geometry={coverGeometry} castShadow receiveShadow>
                     <meshStandardMaterial
                         key="soft-cover-color-material"
                         ref={coverMatRef}
@@ -458,6 +479,19 @@ function SoftCoverModel({ coverColor, elasticColor, hasElastic, hasCorners, logo
                 );
             })}
 
+            {/* Блок страниц — всегда белый */}
+            {blockGeometry && (
+                <mesh geometry={blockGeometry} castShadow receiveShadow>
+                    <meshStandardMaterial
+                        key="soft-page-block-material"
+                        color="#f7f5ef"
+                        roughness={0.95}
+                        metalness={0}
+                    />
+                </mesh>
+            )}
+
+            {/* Уголки */}
             {hasCorners && cornerEntries.map(e => (
                 <mesh key={e.name} geometry={e.geo} castShadow receiveShadow>
                     <meshStandardMaterial
