@@ -7,7 +7,6 @@ import {
     ColorSwatches,
     ConstructorDock,
     DockGrid,
-    DockTitleColumn,
     FileUploadChip,
     FloatingLogoSettings,
     LogoList,
@@ -105,22 +104,20 @@ export const Interface = ({ onFinish }) => {
             onTabChange={(next) => { setTab(next); setNotebookOpen(next === 'block'); }}
             onSave={handleAddToCart}
             saveLabel={t(language, 'placeOrder')}
-            desktopTitleColumn
         >
             {tab === 'cover' && (
                 <DockGrid
-                    cols="md:grid-cols-[0.78fr_1fr_1fr_1.12fr_0.85fr]"
-                    leading={<DockTitleColumn title={t(language, 'notebook')} />}
+                    cols="md:grid-cols-[1fr_1fr_1.12fr_0.85fr]"
                 >
-                    <SettingGroup title={t(language, 'formatLabel')}>
-                        <SettingRow label={t(language, 'formatLabel')}>
+                    <SettingGroup title={t(language, 'formatLabel')} compact>
+                        <SettingRow label={t(language, 'formatLabel')} inline>
                             <MiniSegment
                                 value={format}
                                 onChange={setFormat}
                                 options={['A5', 'A6'].map(value => ({ value, label: value }))}
                             />
                         </SettingRow>
-                        <SettingRow label={t(language, 'bindingTypeLabel')}>
+                        <SettingRow label={t(language, 'bindingTypeLabel')} inline>
                             <MiniSegment
                                 value={bindingType}
                                 onChange={setBindingType}
@@ -132,19 +129,19 @@ export const Interface = ({ onFinish }) => {
                             />
                         </SettingRow>
                         {(bindingType === 'hard' || bindingType === 'soft') && (
-                            <SettingRow label={t(language, 'cornersLabel')}>
+                            <SettingRow label={t(language, 'cornersLabel')} inline>
                                 <MiniToggle checked={hasCorners} onChange={toggleCorners} />
                             </SettingRow>
                         )}
                     </SettingGroup>
 
-                    <SettingGroup title={t(language, 'coverColorLabel')}>
+                    <SettingGroup title={t(language, 'coverColorLabel')} compact>
                         <SettingRow label={t(language, 'coverColorLabel')}>
                             <ColorSwatches colors={palette} currentColor={coverColor} onSelect={(c) => setColor('cover', c)} />
                         </SettingRow>
                         {bindingType !== 'hard' && (
                             <>
-                                <SettingRow label={t(language, 'elasticLabel')}>
+                                <SettingRow label={t(language, 'elasticLabel')} inline>
                                     <MiniToggle checked={hasElastic} onChange={setHasElastic} />
                                 </SettingRow>
                                 {hasElastic && (
@@ -173,17 +170,18 @@ export const Interface = ({ onFinish }) => {
                         setLogoScale={setLogoScale}
                         setLogoSide={setLogoSide}
                         language={language}
+                        compact
                     />
 
-                    <SettingGroup title={t(language, 'placeOrder')}>
-                        <SettingRow label={t(language, 'quantityLabel')}>
+                    <SettingGroup title={t(language, 'placeOrder')} compact>
+                        <SettingRow label={t(language, 'quantityLabel')} inline>
                             <div className="flex items-center gap-1">
                                 <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="h-6 w-6 rounded-full bg-white/10 font-black">−</button>
                                 <span className="w-7 text-center text-sm font-black">{quantity}</span>
                                 <button onClick={() => setQuantity(q => q + 1)} className="h-6 w-6 rounded-full bg-white/10 font-black">+</button>
                             </div>
                         </SettingRow>
-                        <SettingRow label={t(language, 'sampleLabel')}>
+                        <SettingRow label={t(language, 'sampleLabel')} inline>
                             <MiniToggle checked={isSample} onChange={setIsSample} />
                         </SettingRow>
                         <p className="text-[10px] leading-tight text-white/35">{t(language, 'sampleDesc')}</p>
@@ -193,8 +191,7 @@ export const Interface = ({ onFinish }) => {
 
             {tab === 'block' && (
                 <DockGrid
-                    cols="md:grid-cols-[0.78fr_4.05fr]"
-                    leading={<DockTitleColumn title={t(language, 'notebook')} />}
+                    cols="md:grid-cols-1"
                 >
                     <div className="min-w-0 space-y-3 md:pl-5 lg:pl-6">
                         <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-5 gap-2">
@@ -226,7 +223,7 @@ export const Interface = ({ onFinish }) => {
 }
 
 // --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
-const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide, language }) => {
+const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide, language, compact = false }) => {
     const selected = logos.find(l => l.id === selectedLogoId) || null;
     const [uploadSide, setUploadSide] = useState('front');
     const activeSide = selected?.side ?? uploadSide;
@@ -237,11 +234,11 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
     };
 
     return (
-        <SettingGroup title={t(language, 'embossing')}>
-            <SettingRow label={t(language, 'embossing')}>
+        <SettingGroup title={t(language, 'embossing')} compact={compact}>
+            <SettingRow label={t(language, 'embossing')} inline={compact}>
                 <FileUploadChip label={t(language, 'addLogo')} onFile={(file) => addLogo(file, activeSide)} />
             </SettingRow>
-            <SettingRow label={t(language, 'applicationSide') || t(language, 'sideFront')}>
+            <SettingRow label={t(language, 'applicationSide') || t(language, 'sideFront')} inline={compact}>
                 <MiniSegment
                     value={activeSide}
                     onChange={selectSide}

@@ -70,7 +70,7 @@ export const FloatingLogoSettings = ({ title, subtitle, children }) => {
     if (typeof document === 'undefined') return null;
 
     return createPortal(
-        <aside className="pointer-events-auto hidden md:block fixed right-5 lg:right-8 top-1/2 z-[90] w-[320px] max-w-[calc(100vw-2.5rem)] max-h-[min(560px,calc(100vh-8rem))] -translate-y-1/2 overflow-y-auto rounded-[12px] border border-white/30 bg-[#3f3438]/94 px-5 py-4 font-zen text-white shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-2xl custom-scrollbar">
+        <aside className="pointer-events-auto hidden md:block fixed right-5 lg:right-8 top-[38%] z-[90] w-[320px] max-w-[calc(100vw-2.5rem)] max-h-[min(560px,calc(100vh-8rem))] -translate-y-1/2 overflow-y-auto rounded-[12px] border border-white/30 bg-[#3f3438]/94 px-5 py-4 font-zen text-white shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-2xl custom-scrollbar">
             <div className="mb-4 border-b border-white/12 pb-3">
                 <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/42">{title}</p>
                 {subtitle && <h3 className="mt-1 truncate text-[18px] font-black leading-tight">{subtitle}</h3>}
@@ -81,17 +81,17 @@ export const FloatingLogoSettings = ({ title, subtitle, children }) => {
     );
 };
 
-export const SettingGroup = ({ title, children }) => (
-    <div className="space-y-3 px-0 py-2 md:px-5 md:py-0 lg:px-6 first:md:pl-0 last:md:pr-0">
-        {title && <p className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.2em] text-white/42">{title}</p>}
-        <div className="space-y-3">{children}</div>
+export const SettingGroup = ({ title, children, compact = false }) => (
+    <div className={`${compact ? 'space-y-1.5 px-0 py-1 md:px-4 md:py-0 lg:px-5' : 'space-y-3 px-0 py-2 md:px-5 md:py-0 lg:px-6'} first:md:pl-0 last:md:pr-0`}>
+        {title && <p className={`${compact ? 'text-[9px] md:text-[10px]' : 'text-[10px] md:text-[12px]'} font-black uppercase tracking-[0.2em] text-white/42`}>{title}</p>}
+        <div className={compact ? 'space-y-1.5' : 'space-y-3'}>{children}</div>
     </div>
 );
 
-export const SettingRow = ({ label, children }) => (
-    <div className="flex min-w-0 flex-col items-start gap-2 text-[13px] md:text-[15px] lg:text-[16px] leading-tight">
-        <span className="min-w-0 font-bold text-white/92">{label}</span>
-        <div className="w-full min-w-0">{children}</div>
+export const SettingRow = ({ label, children, inline = false }) => (
+    <div className={`flex min-w-0 leading-tight ${inline ? 'flex-row items-center justify-between gap-2 text-[11px] md:text-[12px]' : 'flex-col items-start gap-2 text-[13px] md:text-[15px] lg:text-[16px]'}`}>
+        <span className={`font-bold ${inline ? 'shrink-0 text-white/70' : 'min-w-0 text-white/92'}`}>{label}</span>
+        <div className={inline ? 'shrink-0' : 'w-full min-w-0'}>{children}</div>
     </div>
 );
 

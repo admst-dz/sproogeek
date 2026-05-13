@@ -4,7 +4,6 @@ import {
     ColorSwatches,
     ConstructorDock,
     DockGrid,
-    DockTitleColumn,
     FileUploadChip,
     FloatingLogoSettings,
     LogoList,
@@ -49,10 +48,9 @@ export const PowerbankInterface = ({ onFinish }) => {
     };
 
     return (
-        <ConstructorDock title={t(language, 'powerbankTitle')} onSave={handleAddToCart} saveLabel={t(language, 'placeOrder')} desktopTitleColumn>
+        <ConstructorDock title={t(language, 'powerbankTitle')} onSave={handleAddToCart} saveLabel={t(language, 'placeOrder')}>
             <DockGrid
-                cols="md:grid-cols-[0.78fr_0.9fr_1.16fr_0.85fr]"
-                leading={<DockTitleColumn title={t(language, 'powerbankTitle')} />}
+                cols="md:grid-cols-[0.9fr_1.16fr_0.85fr]"
             >
                 <SettingGroup title={t(language, 'bodyColor')}>
                     <SettingRow label={t(language, 'bodyColor')}>

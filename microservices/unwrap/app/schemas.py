@@ -20,6 +20,8 @@ class LogoPlacement(BaseModel):
     rotation: float = 0.0
     scale: float = 0.3
     filename: Optional[str] = None
+    mode: Optional[Literal["decal", "wrap"]] = None
+    side: Optional[str] = None
     decal_url: Optional[str] = None
     decal_data_url: Optional[str] = None  # base64 data URL
 

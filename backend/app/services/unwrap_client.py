@@ -32,6 +32,24 @@ def _detect_kind(product_config: dict[str, Any]) -> str:
     return "notebook"
 
 
+def _logo_target(kind: str, item: dict[str, Any]) -> str:
+    if kind == "thermos":
+        return str(item.get("target") or "body")
+    if kind == "powerbank":
+        return str(item.get("target") or item.get("side") or "outer")
+    return str(item.get("target") or item.get("side") or "front")
+
+
+def _logo_position(item: dict[str, Any]) -> list[float]:
+    raw = item.get("position") or [0.0, 0.0]
+    if not isinstance(raw, (list, tuple)) or len(raw) < 2:
+        return [0.0, 0.0]
+    try:
+        return [float(raw[0]), float(raw[1])]
+    except (TypeError, ValueError):
+        return [0.0, 0.0]
+
+
 def _logos_for(kind: str, product_config: dict[str, Any]) -> list[dict[str, Any]]:
     bucket_key = {
         "thermos": "thermosLogos",
@@ -45,8 +63,10 @@ def _logos_for(kind: str, product_config: dict[str, Any]) -> list[dict[str, Any]
             continue
         out.append({
             "id": str(item.get("id") or ""),
-            "target": str(item.get("target") or ("body" if kind == "thermos" else "front")),
-            "position": item.get("position") or [0.5, 0.5],
+            "target": _logo_target(kind, item),
+            "side": item.get("side"),
+            "mode": item.get("mode") or "decal",
+            "position": _logo_position(item),
             "rotation": float(item.get("rotation") or 0.0),
             "scale": float(item.get("scale") or 0.3),
             "filename": item.get("filename"),
