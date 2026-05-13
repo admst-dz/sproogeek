@@ -224,22 +224,52 @@ function splitInsetBlockGeometry(geo) {
     };
 }
 
+function splitCoverFrontBack(geo, midZ) {
+    if (!geo?.attributes?.position) return { frontGeometry: geo, backGeometry: null };
+
+    const pos = geo.attributes.position;
+    const index = geo.index;
+    const triCount = index ? Math.floor(index.count / 3) : Math.floor(pos.count / 3);
+    const frontTriangles = [];
+    const backTriangles = [];
+
+    for (let tri = 0; tri < triCount; tri++) {
+        const a = index ? index.getX(tri * 3) : tri * 3;
+        const b = index ? index.getX(tri * 3 + 1) : tri * 3 + 1;
+        const c = index ? index.getX(tri * 3 + 2) : tri * 3 + 2;
+        const avgZ = (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3;
+        if (avgZ > midZ) frontTriangles.push(tri);
+        else backTriangles.push(tri);
+    }
+
+    if (frontTriangles.length === 0) return { frontGeometry: null, backGeometry: geo };
+    if (backTriangles.length === 0) return { frontGeometry: geo, backGeometry: null };
+
+    return {
+        frontGeometry: cloneSubsetGeometry(geo, frontTriangles),
+        backGeometry: cloneSubsetGeometry(geo, backTriangles),
+    };
+}
+
 // ─── ТВЁРДЫЙ ПЕРЕПЛЁТ (GLB) ───────────────────────────────────────────────────
 function HardCoverGLBModel({ coverColor, hasCorners, logos, isNotebookOpen }) {
-    const { nodes, materials } = useGLTF(tverdiyPerepletUrl);
-    const coverMatRef = useRef();
+    const { scene, nodes, materials } = useGLTF(tverdiyPerepletUrl);
+    const frontCoverMatRef = useRef();
+    const backCoverMatRef = useRef();
     const frontGroupRef = useRef();
 
     const meshEntries = useMemo(() => {
+        scene.updateMatrixWorld(true);
         return Object.entries(nodes)
             .filter(([, n]) => n.isMesh || n.geometry)
             .map(([name, node]) => {
-                const geo = node.geometry;
+                const geo = node.geometry.clone();
+                geo.applyMatrix4(node.matrixWorld);
                 geo.computeBoundingBox();
                 return { name, node, geo, bbox: geo.boundingBox, vertCount: geo.attributes.position?.count ?? 0 };
             })
             .sort((a, b) => b.vertCount - a.vertCount);
-    }, [nodes]);
+    }, [nodes, scene]);
 
     // coverEntry — обложка (самая большая), blockEntry — блок страниц, cornerEntries — уголки
     const { coverEntry, blockEntry: separateBlockEntry, cornerEntries } = useMemo(() => (
@@ -264,33 +294,71 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos, isNotebookOpen }) {
 
     const frontZ = coverEntry?.bbox.max.z ?? sceneBbox.max.z;
     const backZ = coverEntry?.bbox.min.z ?? sceneBbox.min.z;
+    const midZ = (frontZ + backZ) / 2;
+
+    // Разбиваем оболочку обложки: передняя крышка (Z > midZ) анимируется, задняя + корешок — статичны
+    const { frontGeometry: frontCoverGeometry, backGeometry: backCoverGeometry } = useMemo(() => (
+        coverGeometry ? splitCoverFrontBack(coverGeometry, midZ) : { frontGeometry: null, backGeometry: null }
+    ), [coverGeometry, midZ]);
+
+    const frontLogos = logos.filter(l => (l.side ?? 'front') === 'front');
+    const backLogos = logos.filter(l => l.side === 'back');
 
     useFrame((_, delta) => {
-        if (coverMatRef.current) easing.dampC(coverMatRef.current.color, coverColor, 0.25, delta);
+        if (frontCoverMatRef.current) easing.dampC(frontCoverMatRef.current.color, coverColor, 0.25, delta);
+        if (backCoverMatRef.current) easing.dampC(backCoverMatRef.current.color, coverColor, 0.25, delta);
         const target = isNotebookOpen ? -Math.PI * 0.98 : 0;
         if (frontGroupRef.current) easing.dampE(frontGroupRef.current.rotation, [0, target, 0], 0.35, delta);
     });
 
     return (
         <group>
-            {/* Обложка — цвет меняется динамически, блок страниц не трогается */}
-            {coverEntry && coverGeometry && (
+            {/* Задняя обложка + корешок — статичны */}
+            {coverEntry && backCoverGeometry && (
+                <mesh geometry={backCoverGeometry} castShadow receiveShadow>
+                    <meshStandardMaterial
+                        key="hard-back-cover-material"
+                        ref={backCoverMatRef}
+                        color={coverColor}
+                        roughness={0.5}
+                        metalness={0.05}
+                    />
+                </mesh>
+            )}
+            {backLogos.map(logo => {
+                const surface = getLogoSurfaceProps(logo, coverEntry.bbox, frontZ, backZ);
+                return (
+                    <LogoPlane
+                        key={logo.id}
+                        texture={logo.texture}
+                        x={surface.x}
+                        y={surface.y}
+                        z={surface.z}
+                        side="back"
+                        rotation={logo.rotation ?? 0}
+                        scale={logo.scale ?? 0.6}
+                    />
+                );
+            })}
+
+            {/* Передняя обложка — открывается как книга */}
+            {coverEntry && frontCoverGeometry && (
                 <group
                     ref={frontGroupRef}
                     position={[sceneBbox.min.x, 0, 0]}
                     rotation={[0, 0, 0]}
                 >
                     <group position={[-sceneBbox.min.x, 0, 0]}>
-                        <mesh geometry={coverGeometry} castShadow receiveShadow>
+                        <mesh geometry={frontCoverGeometry} castShadow receiveShadow>
                             <meshStandardMaterial
-                                key="hard-cover-color-material"
-                                ref={coverMatRef}
+                                key="hard-front-cover-material"
+                                ref={frontCoverMatRef}
                                 color={coverColor}
                                 roughness={0.5}
                                 metalness={0.05}
                             />
                         </mesh>
-                        {logos.map(logo => {
+                        {frontLogos.map(logo => {
                             const surface = getLogoSurfaceProps(logo, coverEntry.bbox, frontZ, backZ);
                             return (
                                 <LogoPlane
@@ -299,7 +367,7 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos, isNotebookOpen }) {
                                     x={surface.x}
                                     y={surface.y}
                                     z={surface.z}
-                                    side={surface.side}
+                                    side="front"
                                     rotation={logo.rotation ?? 0}
                                     scale={logo.scale ?? 0.6}
                                 />

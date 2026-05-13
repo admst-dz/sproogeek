@@ -13,10 +13,7 @@ export const ConstructorDock = ({ title, tabs = [], activeTab, onTabChange, onSa
 
         <section className="w-full h-full md:h-auto md:max-h-[calc(64vh-54px)] min-h-0 flex flex-col rounded-t-[24px] md:rounded-[8px] border border-white/35 bg-[#4b393c]/84 shadow-2xl backdrop-blur-xl overflow-hidden">
             <div className={`${desktopTitleColumn && tabs.length === 0 ? 'md:hidden ' : ''}flex items-center justify-between gap-3 border-b border-white/20 px-4 py-3 md:pl-4 md:pr-7 md:py-4 lg:pl-5 lg:pr-8`}>
-                <div className={`${desktopTitleColumn ? 'md:hidden ' : ''}min-w-0`}>
-                    <p className="text-[10px] md:text-[11px] font-black uppercase tracking-[0.24em] text-white/45">Конструктор</p>
-                    <h2 className="truncate text-lg md:text-[22px] font-black leading-tight">{title}</h2>
-                </div>
+                <div className={`${desktopTitleColumn ? 'md:hidden ' : ''}min-w-0`} />
                 {tabs.length > 0 && (
                     <div className="flex shrink-0 gap-1 rounded-full border border-white/15 bg-white/10 p-1">
                         {tabs.map(tab => (
@@ -60,10 +57,7 @@ export const DockGrid = ({ children, cols = 'md:grid-cols-4', leading = null }) 
 );
 
 export const DockTitleColumn = ({ title }) => (
-    <div className="hidden md:flex min-w-0 flex-col justify-start px-0 py-0 pr-5 lg:pr-6">
-        <p className="text-[11px] font-black uppercase tracking-[0.24em] text-white/45">Конструктор</p>
-        <h2 className="mt-1 truncate text-[22px] font-black leading-tight text-white">{title}</h2>
-    </div>
+    <div className="hidden md:flex min-w-0 flex-col justify-start px-0 py-0 pr-5 lg:pr-6" />
 );
 
 export const FloatingLogoSettings = ({ title, subtitle, children }) => {
