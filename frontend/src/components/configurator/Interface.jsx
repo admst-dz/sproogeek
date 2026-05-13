@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useConfigurator, captureRender } from "../../store";
+import { useConfigurator, captureRender, getNotebookBindingCapabilities } from "../../store";
 import { t } from '../../i18n';
 import { BlockPDFPreview } from './BlockPDFPreview';
 import { BlockBuilder } from './BlockBuilder';
@@ -72,18 +72,23 @@ export const Interface = ({ onFinish }) => {
         );
     }
 
+    const bindingCaps = getNotebookBindingCapabilities(bindingType);
+
     const handleAddToCart = () => {
         const snapshot = captureRender();
         if (snapshot) setRenderSnapshot(snapshot);
         const bindingLabel = bindingType === 'hard' ? t(language, 'bindingHard') : bindingType === 'spiral' ? t(language, 'bindingSpiral') : t(language, 'bindingSoft');
-        const orderHasElastic = bindingType !== 'hard' && hasElastic;
+        const orderHasElastic = bindingCaps.hasElastic && hasElastic;
+        const orderHasCorners = bindingCaps.hasCorners && hasCorners;
+        const orderSpiralColor = bindingCaps.hasSpiralColor ? spiralColor : null;
         const newItem = {
             productName: `${t(language, 'notebook')} ${format}`,
             design: `${t(language, 'bindingFormatLabel')} ${bindingLabel}, ${t(language, 'patternLabel')}: ${paperPattern}`,
             priceBYN: 1500,
             type: 'notebook',
-            config: { format, coverColor, hasElastic: orderHasElastic, elasticColor, paperPattern, bindingType, spiralColor, hasCorners, blockPages, paperType },
-            format, coverColor, hasElastic: orderHasElastic, elasticColor, paperPattern, bindingType, spiralColor, hasCorners, blockPages, paperType,
+            activeProduct: 'notebook',
+            config: { format, coverColor, hasElastic: orderHasElastic, elasticColor: orderHasElastic ? elasticColor : null, paperPattern, bindingType, spiralColor: orderSpiralColor, hasCorners: orderHasCorners, blockPages, paperType, logos },
+            format, coverColor, hasElastic: orderHasElastic, elasticColor: orderHasElastic ? elasticColor : null, paperPattern, bindingType, spiralColor: orderSpiralColor, hasCorners: orderHasCorners, blockPages, paperType, logos,
             status: 'draft',
             rendersGenerated: 0,
             quantity,
@@ -141,7 +146,7 @@ export const Interface = ({ onFinish }) => {
                                 ]}
                             />
                         </SettingRow>
-                        {(bindingType === 'hard' || bindingType === 'soft') && (
+                        {bindingCaps.hasCorners && (
                             <SettingRow label={t(language, 'cornersLabel')} inline>
                                 <MiniToggle checked={hasCorners} onChange={toggleCorners} />
                             </SettingRow>
@@ -152,7 +157,7 @@ export const Interface = ({ onFinish }) => {
                         <SettingRow label={t(language, 'coverColorLabel')}>
                             <ColorDropdown colors={palette} currentColor={coverColor} onSelect={(c) => setColor('cover', c)} />
                         </SettingRow>
-                        {bindingType !== 'hard' && (
+                        {bindingCaps.hasElastic && (
                             <>
                                 <SettingRow label={t(language, 'elasticLabel')} inline>
                                     <MiniToggle checked={hasElastic} onChange={setHasElastic} />
@@ -164,7 +169,7 @@ export const Interface = ({ onFinish }) => {
                                 )}
                             </>
                         )}
-                        {bindingType === 'spiral' && (
+                        {bindingCaps.hasSpiralColor && (
                             <SettingRow label={t(language, 'spiralColorLabel')}>
                                 <ColorDropdown colors={palette} currentColor={spiralColor} onSelect={(c) => setColor('spiral', c)} />
                             </SettingRow>

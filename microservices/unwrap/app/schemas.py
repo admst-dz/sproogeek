@@ -10,13 +10,15 @@ class LogoPlacement(BaseModel):
     """Placement of a single decal as captured by the configurator scene.
 
     `target` is the named slot on the product (e.g. "body", "capTop", "front").
-    `position` and `scale` are normalized [0..1] of the corresponding slot.
+    `position` is the configurator's signed editor coordinate for the target
+    surface (center is [0, 0]); the renderer maps each target to print-space.
+    `scale` is the configurator's visual size value, not a full-face fraction.
     `decal_url` is optional — if present, the service can embed the artwork into
     the unwrap; otherwise we draw a placeholder rectangle showing the print area.
     """
     id: Optional[str] = None
     target: str
-    position: Tuple[float, float] = (0.5, 0.5)
+    position: Tuple[float, float] = (0.0, 0.0)
     rotation: float = 0.0
     scale: float = 0.3
     filename: Optional[str] = None

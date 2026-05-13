@@ -124,8 +124,9 @@ function PowerbankFaceDetails({ bbox, frontZ, bodyColor }) {
     );
 }
 
-export function Powerbank(props) {
-    const { powerbankBodyColor, powerbankLogos } = useConfigurator();
+export function Powerbank({ config: configProp, ...props }) {
+    const store = useConfigurator();
+    const { powerbankBodyColor, powerbankLogos } = configProp || store;
     const { nodes, materials } = useGLTF(powerbankModelUrl);
     const matRef = useRef();
 

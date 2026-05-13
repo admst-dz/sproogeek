@@ -1,7 +1,7 @@
 import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { easing } from 'maath'
-import { useConfigurator } from '../../store'
+import { getNotebookBindingCapabilities, useConfigurator } from '../../store'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { useLogoTexture } from '../../utils/threeTextures'
@@ -279,7 +279,7 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos }) {
                     />
                 </mesh>
             )}
-            {logos.map(logo => {
+            {coverEntry && logos.map(logo => {
                 const surface = getLogoSurfaceProps(logo, coverEntry.bbox, frontZ, backZ);
                 return (
                     <LogoPlane
@@ -323,9 +323,10 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos }) {
 }
 
 // ─── НА ПРУЖИНЕ (GLB) ─────────────────────────────────────────────────────────
-function NaPruzhineModel({ coverColor, logos }) {
+function NaPruzhineModel({ coverColor, spiralColor, logos }) {
     const { scene, nodes, materials } = useGLTF(naPruzhineUrl);
     const coverMatRef = useRef();
+    const spiralMatRef = useRef();
 
     const meshEntries = useMemo(() => {
         scene.updateMatrixWorld(true);
@@ -335,13 +336,12 @@ function NaPruzhineModel({ coverColor, logos }) {
                 const geo = node.geometry.clone();
                 geo.applyMatrix4(node.matrixWorld);
                 geo.computeBoundingBox();
-                return { name, node, geo, bbox: geo.boundingBox };
+                return { name, node, geo, bbox: geo.boundingBox, vertCount: geo.attributes.position?.count ?? 0 };
             });
     }, [nodes, scene]);
 
     const mat = materials ? Object.values(materials)[0] : null;
 
-    // Вычисляем bbox для позиционирования лого
     const sceneBbox = useMemo(() => {
         const box = new THREE.Box3();
         meshEntries.forEach(e => {
@@ -350,30 +350,45 @@ function NaPruzhineModel({ coverColor, logos }) {
         return box;
     }, [meshEntries]);
 
-    const frontZ = sceneBbox.max.z;
-    const backZ = sceneBbox.min.z;
+    const { spiralEntry, coverEntry, blockEntry, detailEntries } = useMemo(() => {
+        if (meshEntries.length === 0) {
+            return { spiralEntry: null, coverEntry: null, blockEntry: null, detailEntries: [] };
+        }
+
+        const spiral = [...meshEntries].sort((a, b) => b.vertCount - a.vertCount)[0];
+        const withoutSpiral = meshEntries.filter(e => e !== spiral);
+        const byArea = [...withoutSpiral].sort((a, b) => bboxArea(b.bbox) - bboxArea(a.bbox));
+        const cover = byArea[0] ?? null;
+        const block = byArea[1] ?? null;
+        const details = withoutSpiral.filter(e => e !== cover && e !== block);
+
+        return { spiralEntry: spiral, coverEntry: cover, blockEntry: block, detailEntries: details };
+    }, [meshEntries]);
+
+    const frontZ = coverEntry?.bbox.max.z ?? sceneBbox.max.z;
+    const backZ = coverEntry?.bbox.min.z ?? sceneBbox.min.z;
+    const safeLogos = logos ?? [];
 
     useFrame((_, delta) => {
         if (coverMatRef.current) easing.dampC(coverMatRef.current.color, coverColor, 0.25, delta);
+        if (spiralMatRef.current) easing.dampC(spiralMatRef.current.color, spiralColor, 0.25, delta);
     });
 
     return (
         <group>
-            {meshEntries.map(({ name, geo }, i) => (
-                <mesh key={name} geometry={geo} castShadow receiveShadow>
+            {coverEntry && (
+                <mesh geometry={coverEntry.geo} castShadow receiveShadow>
                     <meshStandardMaterial
-                        ref={i === 0 ? coverMatRef : undefined}
-                        color={i === 0 ? coverColor : undefined}
-                        map={i === 0 ? null : mat?.map}
-                        normalMap={mat?.normalMap}
-                        roughnessMap={mat?.roughnessMap}
-                        roughness={mat?.roughness ?? 0.6}
-                        metalness={mat?.metalness ?? 0.1}
+                        key="spiral-cover-color-material"
+                        ref={coverMatRef}
+                        color={coverColor}
+                        roughness={0.62}
+                        metalness={0.02}
                     />
                 </mesh>
-            ))}
-            {logos.map(logo => {
-                const surface = getLogoSurfaceProps(logo, sceneBbox, frontZ, backZ);
+            )}
+            {coverEntry && safeLogos.map(logo => {
+                const surface = getLogoSurfaceProps(logo, coverEntry.bbox, frontZ, backZ);
                 return (
                     <LogoPlane
                         key={logo.id}
@@ -387,6 +402,42 @@ function NaPruzhineModel({ coverColor, logos }) {
                     />
                 );
             })}
+
+            {blockEntry && (
+                <mesh geometry={blockEntry.geo} castShadow receiveShadow>
+                    <meshStandardMaterial
+                        key="spiral-page-block-material"
+                        color="#f7f5ef"
+                        roughness={0.95}
+                        metalness={0}
+                    />
+                </mesh>
+            )}
+
+            {spiralEntry && (
+                <mesh geometry={spiralEntry.geo} castShadow receiveShadow>
+                    <meshStandardMaterial
+                        key="spiral-wire-color-material"
+                        ref={spiralMatRef}
+                        color={spiralColor}
+                        metalness={0.7}
+                        roughness={0.24}
+                    />
+                </mesh>
+            )}
+
+            {detailEntries.map(({ name, geo }) => (
+                <mesh key={name} geometry={geo} castShadow receiveShadow>
+                    <meshStandardMaterial
+                        key={`spiral-detail-material-${name}`}
+                        map={mat?.map}
+                        normalMap={mat?.normalMap}
+                        roughnessMap={mat?.roughnessMap}
+                        roughness={mat?.roughness ?? 0.6}
+                        metalness={mat?.metalness ?? 0.1}
+                    />
+                </mesh>
+            ))}
         </group>
     );
 }
@@ -504,10 +555,17 @@ export function Notebook({ config: configProp, ...props }) {
     const store = useConfigurator();
     const {
         bindingType,
-        coverColor, hasElastic, elasticColor,
-        logos,
+        coverColor = '#D2B48C', hasElastic, elasticColor = '#1a1a1a',
+        spiralColor = '#1a1a1a',
+        logos = [],
         hasCorners,
     } = configProp || store;
+    const resolvedBindingType = bindingType || 'hard';
+    const bindingCaps = getNotebookBindingCapabilities(resolvedBindingType);
+    const resolvedCoverColor = coverColor || '#D2B48C';
+    const resolvedElasticColor = elasticColor || '#1a1a1a';
+    const resolvedSpiralColor = spiralColor || '#1a1a1a';
+    const safeLogos = Array.isArray(logos) ? logos : [];
 
     useGLTF.preload(tverdiyPerepletUrl);
     useGLTF.preload(naPruzhineUrl);
@@ -515,26 +573,27 @@ export function Notebook({ config: configProp, ...props }) {
 
     return (
         <group {...props} dispose={null}>
-            {bindingType === 'hard' && (
+            {resolvedBindingType === 'hard' && (
                 <HardCoverGLBModel
-                    coverColor={coverColor}
-                    hasCorners={hasCorners}
-                    logos={logos}
+                    coverColor={resolvedCoverColor}
+                    hasCorners={bindingCaps.hasCorners && hasCorners}
+                    logos={safeLogos}
                 />
             )}
-            {bindingType === 'spiral' && (
+            {resolvedBindingType === 'spiral' && (
                 <NaPruzhineModel
-                    coverColor={coverColor}
-                    logos={logos}
+                    coverColor={resolvedCoverColor}
+                    spiralColor={resolvedSpiralColor}
+                    logos={safeLogos}
                 />
             )}
-            {bindingType === 'soft' && (
+            {resolvedBindingType === 'soft' && (
                 <SoftCoverModel
-                    coverColor={coverColor}
-                    elasticColor={elasticColor}
-                    hasElastic={hasElastic}
-                    hasCorners={hasCorners}
-                    logos={logos}
+                    coverColor={resolvedCoverColor}
+                    elasticColor={resolvedElasticColor}
+                    hasElastic={bindingCaps.hasElastic && hasElastic}
+                    hasCorners={bindingCaps.hasCorners && hasCorners}
+                    logos={safeLogos}
                 />
             )}
         </group>

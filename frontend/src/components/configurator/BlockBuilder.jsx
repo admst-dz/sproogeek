@@ -36,6 +36,7 @@ export const BlockBuilder = () => {
     }, []);
 
     const templates = manifest?.templates || [];
+    const templatesLocked = true;
     const byId = useMemo(() => {
         const map = new Map();
         for (const tpl of templates) map.set(tpl.id, tpl);
@@ -128,28 +129,39 @@ export const BlockBuilder = () => {
             </div>
 
             {/* Каталог шаблонов */}
-            <div className="glass-panel rounded-[11px] overflow-hidden">
-                <div className="p-4 flex items-center justify-between">
-                    <span className="text-xl font-bold tracking-wide">{t(language, 'blockTemplatesLabel')}</span>
-                    <span className="text-xs opacity-60">{templates.length}</span>
+            <div className="glass-panel relative rounded-[11px] overflow-hidden cursor-not-allowed" aria-disabled={templatesLocked}>
+                <div className={templatesLocked ? 'pointer-events-none select-none blur-[2px] opacity-55' : undefined}>
+                    <div className="p-4 flex items-center justify-between">
+                        <span className="text-xl font-bold tracking-wide">{t(language, 'blockTemplatesLabel')}</span>
+                        <span className="text-xs opacity-60">{templates.length}</span>
+                    </div>
+                    <div className="border-t border-white/10 p-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                        {templates.map(tpl => (
+                            <button
+                                key={tpl.id}
+                                type="button"
+                                disabled={templatesLocked}
+                                onClick={() => addBlockPage(tpl.id)}
+                                className="relative rounded-[6px] overflow-hidden border border-white/15 hover:border-white/40 transition group disabled:pointer-events-none"
+                                title={`#${tpl.id} · ${tpl.width_mm}×${tpl.height_mm} mm`}
+                                tabIndex={templatesLocked ? -1 : undefined}
+                            >
+                                <img src={tpl.preview} alt={`template ${tpl.id}`} className="w-full block aspect-[2/3] object-cover" />
+                                <span className="absolute top-0 left-0 bg-black/60 text-[10px] px-1.5 py-0.5 rounded-br-[6px]">#{tpl.id}</span>
+                                <span className="absolute inset-0 bg-emerald-500/0 group-hover:bg-emerald-500/15 transition flex items-center justify-center">
+                                    <span className="opacity-0 group-hover:opacity-100 text-emerald-200 text-2xl font-bold transition">＋</span>
+                                </span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
-                <div className="border-t border-white/10 p-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-                    {templates.map(tpl => (
-                        <button
-                            key={tpl.id}
-                            type="button"
-                            onClick={() => addBlockPage(tpl.id)}
-                            className="relative rounded-[6px] overflow-hidden border border-white/15 hover:border-white/40 transition group"
-                            title={`#${tpl.id} · ${tpl.width_mm}×${tpl.height_mm} mm`}
-                        >
-                            <img src={tpl.preview} alt={`template ${tpl.id}`} className="w-full block aspect-[2/3] object-cover" />
-                            <span className="absolute top-0 left-0 bg-black/60 text-[10px] px-1.5 py-0.5 rounded-br-[6px]">#{tpl.id}</span>
-                            <span className="absolute inset-0 bg-emerald-500/0 group-hover:bg-emerald-500/15 transition flex items-center justify-center">
-                                <span className="opacity-0 group-hover:opacity-100 text-emerald-200 text-2xl font-bold transition">＋</span>
-                            </span>
-                        </button>
-                    ))}
-                </div>
+                {templatesLocked && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/10 backdrop-blur-[1px]">
+                        <span className="rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-white/55">
+                            {t(language, 'comingSoon')}
+                        </span>
+                    </div>
+                )}
             </div>
         </div>
     );

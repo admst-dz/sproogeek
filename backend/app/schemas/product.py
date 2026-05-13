@@ -23,7 +23,7 @@ class ProductCreate(BaseModel):
     @field_validator("binding")
     @classmethod
     def validate_binding(cls, value):
-        allowed = {"hard", "spiral"}
+        allowed = {"hard", "soft", "spiral"}
         if any(item not in allowed for item in value):
             raise ValueError("Unsupported binding value")
         return value

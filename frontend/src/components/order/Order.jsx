@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { useConfigurator } from "../../store";
+import { getNotebookBindingCapabilities, useConfigurator } from "../../store";
 import { t } from '../../i18n';
 import { orderApi } from '../../api';
 import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { Notebook } from '../shared/Notebook';
 import { Thermos } from '../thermos/Thermos';
+import { Powerbank } from '../powerbank/Powerbank';
 import { SceneLoadingOverlay } from '../shared/VibeLoader';
 
 export const Order = ({ onBack, onSuccess }) => {
@@ -14,7 +15,9 @@ export const Order = ({ onBack, onSuccess }) => {
         paperPattern, logos, bindingType, spiralColor,
         hasCorners,
         blockPages, paperType,
-        activeProduct, language
+        activeProduct, language,
+        thermosBodyColor, thermosCapVisible, thermosLogos,
+        powerbankBodyColor, powerbankLogos,
     } = useConfigurator();
 
     const [clientType, setClientType] = useState('phys');
@@ -40,6 +43,52 @@ export const Order = ({ onBack, onSuccess }) => {
         if (quantity === '' || quantity < 1) setQuantity(1);
     };
 
+    const buildProductConfig = () => {
+        if (activeProduct === 'thermos') {
+            return {
+                type: 'thermos',
+                activeProduct: 'thermos',
+                thermosBodyColor,
+                thermosCapColor: thermosBodyColor,
+                thermosCapVisible,
+                thermosLogos,
+            };
+        }
+        if (activeProduct === 'powerbank') {
+            return {
+                type: 'powerbank',
+                activeProduct: 'powerbank',
+                powerbankBodyColor,
+                powerbankLogos,
+            };
+        }
+        const bindingCaps = getNotebookBindingCapabilities(bindingType);
+        const orderHasElastic = bindingCaps.hasElastic && hasElastic;
+        const orderHasCorners = bindingCaps.hasCorners && hasCorners;
+        return {
+            type: activeProduct,
+            activeProduct,
+            format,
+            bindingType,
+            coverColor,
+            hasElastic: orderHasElastic,
+            elasticColor: orderHasElastic ? elasticColor : null,
+            spiralColor: bindingCaps.hasSpiralColor ? spiralColor : null,
+            hasCorners: orderHasCorners,
+            paperPattern,
+            hasLogo: logos.length > 0,
+            logos,
+            blockPages,
+            paperType,
+        };
+    };
+
+    const getProductName = () => {
+        if (activeProduct === 'thermos') return t(language, 'thermos');
+        if (activeProduct === 'powerbank') return t(language, 'powerbank');
+        return t(language, 'notebook');
+    };
+
     const handleSubmit = async () => {
         if (!formData.name || !formData.phone) {
             alert(t(language, 'orderValidation'));
@@ -47,22 +96,16 @@ export const Order = ({ onBack, onSuccess }) => {
         }
         setLoading(true);
         try {
+            const productConfig = buildProductConfig();
             await orderApi.createOrder({
                 user_id: null,
                 user_email: formData.email || '',
-                product_name: t(language, 'notebook'),
+                product_name: getProductName(),
                 configuration: {
                     clientType,
                     contact: { ...formData },
                     isSample,
-                    productConfig: {
-                        type: activeProduct, format, bindingType, coverColor, hasElastic,
-                        elasticColor: hasElastic ? elasticColor : null,
-                        spiralColor: bindingType === 'spiral' ? spiralColor : null,
-                        hasCorners: (bindingType === 'hard' || bindingType === 'soft') ? hasCorners : false,
-                        paperPattern, hasLogo: logos.length > 0,
-                        blockPages, paperType,
-                    },
+                    productConfig,
                 },
                 quantity,
                 total_price: null,
@@ -80,6 +123,7 @@ export const Order = ({ onBack, onSuccess }) => {
 
     const patternNames = { blank: t(language, 'patternBlank'), lined: t(language, 'patternLined'), tlined: t(language, 'patternTLined'), grid: t(language, 'patternGrid'), dotted: t(language, 'patternDotted') };
     const bindingNames = { hard: t(language, 'bindingHard'), spiral: t(language, 'bindingSpiral'), soft: t(language, 'bindingSoft') };
+    const bindingCaps = getNotebookBindingCapabilities(bindingType);
 
     return (
         <div className="app-bg fixed inset-0 w-full h-full font-zen overflow-y-auto z-50 transition-colors duration-300">
@@ -109,6 +153,7 @@ export const Order = ({ onBack, onSuccess }) => {
                                         <Stage environment={null} intensity={0} contactShadow={false}>
                                             {activeProduct === 'notebook' && <Notebook />}
                                             {activeProduct === 'thermos' && <Thermos />}
+                                            {activeProduct === 'powerbank' && <Powerbank />}
                                         </Stage>
                                     </PresentationControls>
                                 </Canvas>
@@ -135,11 +180,11 @@ export const Order = ({ onBack, onSuccess }) => {
 
                         <div className="space-y-3 border-t border-gray-100 dark:border-white/8 p-6 text-sm font-bold text-[#1a1a1a] dark:text-white">
                             <Row label={t(language, 'orderBindingLabel')} value={bindingNames[bindingType]} />
-                            {bindingType === 'spiral' && <Row label={t(language, 'orderSpiralLabel')} value={<ColorDot color={spiralColor} />} />}
+                            {bindingCaps.hasSpiralColor && <Row label={t(language, 'orderSpiralLabel')} value={<ColorDot color={spiralColor} />} />}
                             <Row label={t(language, 'orderFormatLabel')} value={format} />
                             <Row label={t(language, 'orderCoverLabel')} value={<ColorDot color={coverColor} />} />
-                            <Row label={t(language, 'orderElasticLabel')} value={hasElastic ? <ColorDot color={elasticColor} /> : t(language, 'orderNo')} />
-                            {(bindingType === 'hard' || bindingType === 'soft') && (
+                            {bindingCaps.hasElastic && <Row label={t(language, 'orderElasticLabel')} value={hasElastic ? <ColorDot color={elasticColor} /> : t(language, 'orderNo')} />}
+                            {bindingCaps.hasCorners && (
                                 <Row label={t(language, 'cornersLabel')} value={hasCorners ? t(language, 'orderYes') : t(language, 'orderNo')} />
                             )}
                             <Row label={t(language, 'orderPatternLabel')} value={patternNames[paperPattern]} />

@@ -23,6 +23,16 @@ export const captureRender = () => {
     try { return _webglCanvas.toDataURL('image/png') } catch { return null }
 }
 
+export const NOTEBOOK_BINDING_CAPABILITIES = {
+    hard: { hasCoverColor: true, hasCorners: true, hasElastic: false, hasSpiralColor: false },
+    soft: { hasCoverColor: true, hasCorners: true, hasElastic: true, hasSpiralColor: false },
+    spiral: { hasCoverColor: true, hasCorners: false, hasElastic: false, hasSpiralColor: true },
+};
+
+export const getNotebookBindingCapabilities = (bindingType) => (
+    NOTEBOOK_BINDING_CAPABILITIES[bindingType] ?? NOTEBOOK_BINDING_CAPABILITIES.hard
+);
+
 // Поля, которые откатываются по Undo/Redo и сравниваются с defaults для "грязного" состояния.
 // Сюда НЕ попадают auth/UI-state/корзина/тема/zoom — они не должны влиять на историю конструктора.
 export const NOTEBOOK_DEFAULTS = {
@@ -30,7 +40,7 @@ export const NOTEBOOK_DEFAULTS = {
     format: 'A5',
     paperPattern: 'blank',
     coverColor: '#D2B48C',
-    hasElastic: true,
+    hasElastic: false,
     elasticColor: '#1a1a1a',
     spiralColor: '#1a1a1a',
     hasCorners: true,
@@ -98,7 +108,7 @@ export const useConfigurator = create(temporal((set, get) => ({
     isNotebookOpen: false,
     paperPattern: 'blank',
     coverColor: '#D2B48C',
-    hasElastic: true,
+    hasElastic: false,
     elasticColor: '#1a1a1a',
     spiralColor: '#1a1a1a',
     logos: [],
@@ -167,10 +177,15 @@ export const useConfigurator = create(temporal((set, get) => ({
     setRenderSnapshot: (url) => set({ renderSnapshot: url }),
 
     setProduct: (type) => set({ activeProduct: normalizeProduct(type) }),
-    setBindingType: (type) => set((state) => ({
-        bindingType: type,
-        hasElastic: type === 'hard' ? false : state.hasElastic,
-    })),
+    setBindingType: (type) => set((state) => {
+        const currentCaps = getNotebookBindingCapabilities(state.bindingType);
+        const nextCaps = getNotebookBindingCapabilities(type);
+        return {
+            bindingType: type,
+            hasElastic: nextCaps.hasElastic ? (currentCaps.hasElastic ? state.hasElastic : true) : false,
+            hasCorners: nextCaps.hasCorners ? state.hasCorners : false,
+        };
+    }),
     setFormat: (fmt) => set({ format: fmt }),
     setColor: (part, color) => set((state) => {
         if (part === 'thermosBody') {

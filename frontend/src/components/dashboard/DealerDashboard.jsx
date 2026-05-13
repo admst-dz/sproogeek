@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useConfigurator } from "../../store";
+import { getNotebookBindingCapabilities, useConfigurator } from "../../store";
 import { t } from '../../i18n';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 import { ApprovalPanel } from '../shared/ApprovalPanel';
@@ -211,10 +211,15 @@ const ProductModal = ({ product, dealerId, onClose, onSaved, language = 'ru' }) 
     const handleSave = async () => {
         setSaving(true);
         try {
+            const productHasSpiralBinding = form.binding.includes('spiral');
+            const productSupportsElastic = form.binding.includes('soft');
             const data = {
                 ...form,
                 dealerId,
                 retailPrice: Number(form.retailPrice) || 0,
+                spiralColors: productHasSpiralBinding ? form.spiralColors : [],
+                hasElastic: productSupportsElastic && form.hasElastic,
+                elasticColors: productSupportsElastic && form.hasElastic ? form.elasticColors : [],
             };
             if (isEdit) {
                 await updateProduct(product.id, data);
@@ -229,6 +234,7 @@ const ProductModal = ({ product, dealerId, onClose, onSaved, language = 'ru' }) 
     };
 
     const hasSpiralBinding = form.binding.includes('spiral');
+    const supportsElastic = form.binding.includes('soft');
 
     return (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/70 backdrop-blur-sm p-0 md:p-6">
@@ -258,6 +264,7 @@ const ProductModal = ({ product, dealerId, onClose, onSaved, language = 'ru' }) 
                     <Section title={t(language, 'bindingSection')}>
                         <div className="flex flex-col gap-3">
                             <CheckToggle label={t(language, 'bindingHardShort')} checked={form.binding.includes('hard')} onChange={() => toggleBinding('hard')} />
+                            <CheckToggle label={t(language, 'bindingSoft')} checked={form.binding.includes('soft')} onChange={() => toggleBinding('soft')} />
                             <CheckToggle label={t(language, 'bindingSpiralShort')} checked={form.binding.includes('spiral')} onChange={() => toggleBinding('spiral')} />
                         </div>
                     </Section>
@@ -275,12 +282,14 @@ const ProductModal = ({ product, dealerId, onClose, onSaved, language = 'ru' }) 
                     )}
 
                     {/* Elastic */}
-                    <Section title={t(language, 'elasticSection')}>
-                        <CheckToggle label={t(language, 'hasElasticLabel')} checked={form.hasElastic} onChange={() => setForm(f => ({ ...f, hasElastic: !f.hasElastic }))} />
-                    </Section>
+                    {supportsElastic && (
+                        <Section title={t(language, 'elasticSection')}>
+                            <CheckToggle label={t(language, 'hasElasticLabel')} checked={form.hasElastic} onChange={() => setForm(f => ({ ...f, hasElastic: !f.hasElastic }))} />
+                        </Section>
+                    )}
 
                     {/* Elastic colors */}
-                    {form.hasElastic && (
+                    {supportsElastic && form.hasElastic && (
                         <Section title={t(language, 'elasticColorSection')}>
                             <div className="flex flex-wrap gap-2 mb-1">
                                 {form.elasticColors.map((c, i) => (
@@ -384,7 +393,7 @@ const ProductModal = ({ product, dealerId, onClose, onSaved, language = 'ru' }) 
 
 // ─── DealerDashboard ──────────────────────────────────────────────────────────
 
-const getBindingLabel = (binding, language) => ({ hard: t(language, 'bindingHardShort'), spiral: t(language, 'bindingSpiralShort') })[binding] || binding;
+const getBindingLabel = (binding, language) => ({ hard: t(language, 'bindingHardShort'), soft: t(language, 'bindingSoft'), spiral: t(language, 'bindingSpiralShort') })[binding] || binding;
 
 const normalizeDashboardOrder = (order) => ({
     id: String(order.id),
@@ -467,6 +476,7 @@ const DealerOrderDetails = ({ order, language, full = false }) => {
     const type = getProductType(order);
     const selectedQuote = (order.manufacturerQuotes || []).find(q => q.id === order.selectedQuoteId);
     const thermosColor = cfg.thermosBodyColor || cfg.thermosCapColor;
+    const bindingCaps = getNotebookBindingCapabilities(cfg.bindingType);
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
@@ -484,8 +494,9 @@ const DealerOrderDetails = ({ order, language, full = false }) => {
                         <DetailRow label={t(language, 'formatLabel')} value={cfg.format} />
                         <DetailRow label={t(language, 'bindingLabel')} value={cfg.bindingType ? getBindingLabel(cfg.bindingType, language) : null} />
                         <DetailRow label={t(language, 'coverLabel')} value={<ColorValue color={cfg.coverColor} />} />
-                        {cfg.hasElastic && <DetailRow label={t(language, 'elasticLabel')} value={<ColorValue color={cfg.elasticColor} />} />}
-                        {cfg.bindingType === 'spiral' && <DetailRow label={t(language, 'spiralLabel')} value={<ColorValue color={cfg.spiralColor} />} />}
+                        {bindingCaps.hasElastic && cfg.hasElastic && <DetailRow label={t(language, 'elasticLabel')} value={<ColorValue color={cfg.elasticColor} />} />}
+                        {bindingCaps.hasSpiralColor && cfg.spiralColor && <DetailRow label={t(language, 'spiralLabel')} value={<ColorValue color={cfg.spiralColor} />} />}
+                        {bindingCaps.hasCorners && cfg.hasCorners !== undefined && <DetailRow label={t(language, 'cornersLabel')} value={cfg.hasCorners ? t(language, 'orderYes') : t(language, 'orderNo')} />}
                         <DetailRow label={t(language, 'patternLabel')} value={cfg.paperPattern} />
                     </>
                 )}

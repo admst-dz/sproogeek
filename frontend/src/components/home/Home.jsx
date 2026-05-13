@@ -9,6 +9,17 @@ import { SceneLoadingOverlay } from '../shared/VibeLoader';
 import termosModelUrl from '../../assets/termos3.glb?url';
 import powerbankModelUrl from '../../assets/poverbank.glb?url';
 import { FeedbackPanel } from './FeedbackPanel';
+import { Notebook } from '../shared/Notebook';
+
+const NOTEBOOK_PREVIEW_CONFIG = {
+    bindingType: 'hard',
+    coverColor: '#D2B48C',
+    hasCorners: true,
+    hasElastic: false,
+    elasticColor: '#1a1a1a',
+    spiralColor: '#1a1a1a',
+    logos: [],
+};
 
 function ThermosPreviewScene() {
     const groupRef = useRef();
@@ -162,6 +173,38 @@ function PowerbankPreview() {
     );
 }
 
+function NotebookPreviewScene() {
+    const groupRef = useRef();
+
+    useFrame(({ clock }) => {
+        if (groupRef.current) {
+            groupRef.current.rotation.y = -0.36 + Math.sin(clock.elapsedTime * 0.7) * 0.1;
+        }
+    });
+
+    return (
+        <group ref={groupRef} position={[0, -0.04, 0]} rotation={[0.18, -0.36, -0.03]} scale={0.62}>
+            <Notebook config={NOTEBOOK_PREVIEW_CONFIG} />
+        </group>
+    );
+}
+
+function NotebookPreview() {
+    return (
+        <div className="relative w-full h-full">
+            <Canvas camera={{ position: [0, 0.25, 5.2], fov: 36 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
+                <ambientLight intensity={0.75} />
+                <directionalLight position={[5, 8, 5]} intensity={1.5} />
+                <directionalLight position={[-4, 3, 2]} intensity={0.7} />
+                <Suspense fallback={null}>
+                    <NotebookPreviewScene />
+                </Suspense>
+            </Canvas>
+            <SceneLoadingOverlay compact label="3D" />
+        </div>
+    );
+}
+
 
 // ─── Mac-dock карточки ──────────────────────────────────────────────────────
 // Идея как в macOS dock: при наведении мыши соседние карточки увеличиваются
@@ -263,12 +306,8 @@ export function ConfiguratorProductMenu({ onStart }) {
                     >
                         <div className="group relative flex flex-col items-center p-5 md:p-6 rounded-[20px] md:rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-colors duration-500 overflow-hidden">
                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-blue-500/10 dark:bg-blue-500/20 blur-[60px] group-hover:bg-blue-500/20 dark:group-hover:bg-blue-400/30 transition-colors duration-500"></div>
-                            <div className="h-40 sm:h-48 lg:h-56 w-full flex items-center justify-center relative z-10">
-                                <svg width="120" height="160" viewBox="0 0 100 130" fill="none" className="drop-shadow-xl dark:drop-shadow-2xl">
-                                    <rect x="20" y="10" width="60" height="110" rx="3" fill="#151515" stroke="#333" strokeWidth="1" />
-                                    <path d="M76 12 V118 L82 116 V14 Z" fill="#D4AF37" />
-                                    <rect x="20" y="10" width="8" height="110" fill="black" fillOpacity="0.4" />
-                                </svg>
+                            <div className="h-40 sm:h-48 lg:h-56 w-full relative z-10">
+                                <NotebookPreview />
                             </div>
                             <div className="text-center relative z-10 mt-2">
                                 <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{t(language, 'notebook')}</h3>

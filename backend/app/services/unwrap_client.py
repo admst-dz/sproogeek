@@ -50,6 +50,11 @@ def _logo_position(item: dict[str, Any]) -> list[float]:
         return [0.0, 0.0]
 
 
+def _logo_mode(item: dict[str, Any]) -> str:
+    raw = str(item.get("mode") or "decal").lower()
+    return raw if raw in {"decal", "wrap"} else "decal"
+
+
 def _logos_for(kind: str, product_config: dict[str, Any]) -> list[dict[str, Any]]:
     bucket_key = {
         "thermos": "thermosLogos",
@@ -64,8 +69,8 @@ def _logos_for(kind: str, product_config: dict[str, Any]) -> list[dict[str, Any]
         out.append({
             "id": str(item.get("id") or ""),
             "target": _logo_target(kind, item),
-            "side": item.get("side"),
-            "mode": item.get("mode") or "decal",
+            "side": str(item.get("side")) if item.get("side") is not None else None,
+            "mode": _logo_mode(item),
             "position": _logo_position(item),
             "rotation": float(item.get("rotation") or 0.0),
             "scale": float(item.get("scale") or 0.3),
