@@ -96,15 +96,28 @@ export const Interface = ({ onFinish }) => {
     return (
         <ConstructorDock
             title={t(language, 'notebook')}
-            tabs={[
-                { id: 'cover', label: t(language, 'tabCover') },
-                { id: 'block', label: t(language, 'tabBlock') },
-            ]}
-            activeTab={tab}
-            onTabChange={(next) => { setTab(next); setNotebookOpen(next === 'block'); }}
             onSave={handleAddToCart}
             saveLabel={t(language, 'placeOrder')}
         >
+            <div className="flex justify-center mb-3 md:mb-4">
+                <div className="flex gap-1 rounded-full border border-white/15 bg-white/10 p-1">
+                    {[
+                        { id: 'cover', label: t(language, 'tabCover') },
+                        { id: 'block', label: t(language, 'tabBlock') },
+                    ].map(({ id, label }) => (
+                        <button
+                            key={id}
+                            type="button"
+                            onClick={() => { setTab(id); setNotebookOpen(id === 'block'); }}
+                            className={`rounded-full px-4 py-1.5 md:px-6 md:py-2 text-[11px] md:text-[12px] font-black uppercase tracking-wider transition ${
+                                tab === id ? 'bg-[#fff9ec] text-[#1b1b1b]' : 'text-white/60 hover:text-white'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            </div>
             {tab === 'cover' && (
                 <DockGrid
                     cols="md:grid-cols-[1fr_1fr_1.12fr_0.85fr]"

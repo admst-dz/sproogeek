@@ -12,9 +12,9 @@ export const ConstructorDock = ({ title, tabs = [], activeTab, onTabChange, onSa
         </button>
 
         <section className="w-full h-full md:h-auto md:max-h-[calc(64vh-54px)] min-h-0 flex flex-col rounded-t-[24px] md:rounded-[8px] border border-white/35 bg-[#4b393c]/84 shadow-2xl backdrop-blur-xl overflow-hidden">
-            <div className={`${desktopTitleColumn && tabs.length === 0 ? 'md:hidden ' : ''}flex items-center justify-between gap-3 border-b border-white/20 px-4 py-3 md:pl-4 md:pr-7 md:py-4 lg:pl-5 lg:pr-8`}>
-                <div className={`${desktopTitleColumn ? 'md:hidden ' : ''}min-w-0`} />
-                {tabs.length > 0 && (
+            {tabs.length > 0 && (
+                <div className="flex items-center justify-between gap-3 border-b border-white/20 px-4 py-3 md:pl-4 md:pr-7 md:py-4 lg:pl-5 lg:pr-8">
+                    <div className="min-w-0" />
                     <div className="flex shrink-0 gap-1 rounded-full border border-white/15 bg-white/10 p-1">
                         {tabs.map(tab => (
                             <button
@@ -29,8 +29,8 @@ export const ConstructorDock = ({ title, tabs = [], activeTab, onTabChange, onSa
                             </button>
                         ))}
                     </div>
-                )}
-            </div>
+                </div>
+            )}
 
             <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar px-4 py-3 md:px-7 md:py-5">
                 {children}
@@ -117,12 +117,38 @@ export const MiniSegment = ({ options, value, onChange }) => (
     </div>
 );
 
+const DropdownPortal = ({ btnRef, open, onClose, children }) => {
+    if (!open) return null;
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return null;
+    const panelStyle = {
+        position: 'fixed',
+        left: r.left,
+        width: Math.max(r.width, 100),
+        zIndex: 9999,
+        ...(window.innerHeight - r.bottom < 180
+            ? { bottom: window.innerHeight - r.top + 4 }
+            : { top: r.bottom + 4 }),
+    };
+    return createPortal(
+        <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={onClose} />
+            <div style={panelStyle} className="rounded-[8px] border border-white/20 bg-[#3a2e31] shadow-2xl overflow-hidden font-zen">
+                {children}
+            </div>
+        </>,
+        document.body
+    );
+};
+
 export const MiniDropdown = ({ options, value, onChange }) => {
     const [open, setOpen] = useState(false);
+    const btnRef = useRef(null);
     const current = options.find(o => o.value === value);
     return (
-        <div className="relative w-full">
+        <div className="w-full">
             <button
+                ref={btnRef}
                 type="button"
                 onClick={() => setOpen(o => !o)}
                 className="w-full flex items-center justify-between gap-2 rounded-[8px] border border-white/20 bg-white/8 px-2.5 py-1.5 text-[10px] md:text-[12px] font-black uppercase tracking-wider text-white transition hover:bg-white/14"
@@ -132,34 +158,31 @@ export const MiniDropdown = ({ options, value, onChange }) => {
                     <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
             </button>
-            {open && (
-                <>
-                    <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-                    <div className="absolute left-0 top-full mt-1 z-50 w-full min-w-max rounded-[8px] border border-white/20 bg-[#3a2e31] shadow-2xl overflow-hidden">
-                        {options.map(opt => (
-                            <button
-                                key={opt.value}
-                                type="button"
-                                onClick={() => { onChange(opt.value); setOpen(false); }}
-                                className={`w-full px-3 py-2 text-left text-[10px] md:text-[12px] font-black uppercase tracking-wider transition ${opt.value === value ? 'bg-[#fff9ec] text-[#191919]' : 'text-white/80 hover:bg-white/12'}`}
-                            >
-                                {opt.label}
-                            </button>
-                        ))}
-                    </div>
-                </>
-            )}
+            <DropdownPortal btnRef={btnRef} open={open} onClose={() => setOpen(false)}>
+                {options.map(opt => (
+                    <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => { onChange(opt.value); setOpen(false); }}
+                        className={`w-full px-3 py-2 text-left text-[10px] md:text-[12px] font-black uppercase tracking-wider transition ${opt.value === value ? 'bg-[#fff9ec] text-[#191919]' : 'text-white/80 hover:bg-white/12'}`}
+                    >
+                        {opt.label}
+                    </button>
+                ))}
+            </DropdownPortal>
         </div>
     );
 };
 
 export const ColorDropdown = ({ colors, currentColor, onSelect }) => {
     const [open, setOpen] = useState(false);
+    const btnRef = useRef(null);
     const current = colors.find(c => (c.bg ?? c) === currentColor);
     const label = current?.name ?? currentColor;
     return (
-        <div className="relative w-full">
+        <div className="w-full">
             <button
+                ref={btnRef}
                 type="button"
                 onClick={() => setOpen(o => !o)}
                 className="w-full flex items-center justify-between gap-2 rounded-[8px] border border-white/20 bg-white/8 px-2.5 py-1.5 text-[10px] md:text-[12px] font-black uppercase tracking-wider text-white transition hover:bg-white/14"
@@ -172,29 +195,24 @@ export const ColorDropdown = ({ colors, currentColor, onSelect }) => {
                     <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
             </button>
-            {open && (
-                <>
-                    <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-                    <div className="absolute left-0 top-full mt-1 z-50 w-full min-w-max rounded-[8px] border border-white/20 bg-[#3a2e31] shadow-2xl overflow-hidden">
-                        {colors.map(color => {
-                            const val = color.bg ?? color;
-                            const name = color.name ?? val;
-                            return (
-                                <button
-                                    key={val}
-                                    type="button"
-                                    onClick={() => { onSelect(val); setOpen(false); }}
-                                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-[10px] md:text-[12px] font-black uppercase tracking-wider transition ${val === currentColor ? 'bg-white/20 text-white' : 'text-white/80 hover:bg-white/12'}`}
-                                >
-                                    <span className="h-[14px] w-[14px] shrink-0 rounded-full border border-white/25" style={{ backgroundColor: val }} />
-                                    <span className="truncate">{name}</span>
-                                    {val === currentColor && <span className="ml-auto text-[10px] text-[#fff9ec]">✓</span>}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </>
-            )}
+            <DropdownPortal btnRef={btnRef} open={open} onClose={() => setOpen(false)}>
+                {colors.map(color => {
+                    const val = color.bg ?? color;
+                    const name = color.name ?? val;
+                    return (
+                        <button
+                            key={val}
+                            type="button"
+                            onClick={() => { onSelect(val); setOpen(false); }}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-[10px] md:text-[12px] font-black uppercase tracking-wider transition ${val === currentColor ? 'bg-white/20 text-white' : 'text-white/80 hover:bg-white/12'}`}
+                        >
+                            <span className="h-[14px] w-[14px] shrink-0 rounded-full border border-white/25" style={{ backgroundColor: val }} />
+                            <span className="truncate">{name}</span>
+                            {val === currentColor && <span className="ml-auto text-[10px] text-[#fff9ec]">✓</span>}
+                        </button>
+                    );
+                })}
+            </DropdownPortal>
         </div>
     );
 };

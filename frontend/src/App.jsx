@@ -577,10 +577,14 @@ function MainApp() {
 
                     <button
                         onClick={() => guardedNavigate(currentUser ? (userRole === 'dealer' ? 'dealer' : 'client_dashboard') : 'home')}
-                        className="absolute top-3 left-3 md:top-8 md:left-9 z-50 max-w-[42vw] md:max-w-none truncate rounded-full border border-white/18 bg-[#1b2c3c]/72 px-4 py-2 text-xs font-bold text-white shadow-[0_14px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl transition-all hover:bg-[#24384b]/86 hover:border-white/28 active:scale-95 md:px-5 md:text-sm font-zen"
+                        className="absolute top-2 left-3 md:top-3 md:left-5 z-50 max-w-[38vw] md:max-w-none truncate rounded-full border border-white/18 bg-[#1b2c3c]/72 px-4 py-2 text-xs font-bold text-white shadow-[0_14px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl transition-all hover:bg-[#24384b]/86 hover:border-white/28 active:scale-95 md:px-5 md:text-sm font-zen"
                     >
                         {currentUser ? t(language, 'backToCabinet') : t(language, 'backToMenu')}
                     </button>
+
+                    <div className="absolute top-2 left-1/2 -translate-x-1/2 md:top-3 z-50">
+                        <UndoRedoControls />
+                    </div>
 
                     <ConfiguratorToolbar
                         onReset={() => resetConfigurator(activeProduct)}
@@ -676,8 +680,7 @@ function ConfiguratorToolbar({ onReset, productLabel, language = 'ru' }) {
     const [confirmReset, setConfirmReset] = useState(false);
     return (
         <>
-            <div className="absolute top-3 right-3 md:top-8 md:right-9 z-50 flex items-center gap-2">
-                <UndoRedoControls />
+            <div className="absolute top-2 right-3 md:top-3 md:right-5 z-50 flex items-center gap-2">
                 <button
                     onClick={() => setConfirmReset(true)}
                     title={t(language, 'resetConfigTitle')}

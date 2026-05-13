@@ -281,7 +281,7 @@ export const Experience = () => {
                     polar={[-0.1, Math.PI / 4]}
                 >
                     <Stage environment={null} intensity={0} contactShadow={false} adjustCamera={false}>
-                        {activeProduct === 'notebook' && <Notebook />}
+                        {activeProduct === 'notebook' && <Notebook position={[0, 0.28, 0]} />}
                         {activeProduct === 'calendar' && <Calendar />}
                     </Stage>
                 </PresentationControls>
