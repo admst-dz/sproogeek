@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { temporal } from 'zundo'
 import { getCookie, setCookie, deleteCookie, hasCookieConsent } from './utils/cookies'
-import { clearMemoryToken } from './api'
 import { normalizeImageFile } from './utils/images'
 
 const CART_COOKIE = 'spruzhuk_cart';
@@ -154,7 +153,7 @@ export const useConfigurator = create(temporal((set, get) => ({
         localStorage.removeItem('token');
         deleteCookie(AUTH_COOKIE);
         deleteCookie(CART_COOKIE);
-        clearMemoryToken();
+        import('./api').then(({ clearMemoryToken }) => clearMemoryToken()).catch(() => {});
         set({ currentUser: null, userRole: null, clientSubRole: 'PL', cartItem: null, cartRestoredFromCookie: false });
     },
 
