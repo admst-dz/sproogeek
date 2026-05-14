@@ -128,12 +128,8 @@ export const Interface = ({ onFinish }) => {
                     cols="md:grid-cols-[1fr_1fr_1.12fr_0.85fr]"
                 >
                     <SettingGroup title={t(language, 'formatLabel')} compact>
-                        <SettingRow label={t(language, 'formatLabel')} inline>
-                            <MiniDropdown
-                                value={format}
-                                onChange={setFormat}
-                                options={['A5', 'A6'].map(value => ({ value, label: value }))}
-                            />
+                        <SettingRow label={t(language, 'formatLabel')}>
+                            <FormatGlassTable value={format} onChange={setFormat} />
                         </SettingRow>
                         <SettingRow label={t(language, 'bindingTypeLabel')} inline>
                             <MiniDropdown
@@ -241,6 +237,31 @@ export const Interface = ({ onFinish }) => {
 }
 
 // --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
+const FormatGlassTable = ({ value, onChange }) => (
+    <div className="grid w-full grid-cols-2 overflow-hidden rounded-[9px] border border-white/25 bg-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.18)] backdrop-blur-md">
+        {[
+            { value: 'A5', size: '148 x 210' },
+            { value: 'A6', size: '105 x 148' },
+        ].map(option => {
+            const selected = value === option.value;
+            return (
+                <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => onChange(option.value)}
+                    className={`min-h-[52px] border-white/15 px-3 py-2 text-left transition first:border-r ${
+                        selected ? 'bg-[#fff9ec] text-[#191919] shadow-inner' : 'bg-white/6 text-white hover:bg-white/14'
+                    }`}
+                    aria-pressed={selected}
+                >
+                    <span className="block text-[16px] font-black leading-none tracking-wider">{option.value}</span>
+                    <span className={`mt-1 block text-[9px] font-black uppercase tracking-[0.16em] ${selected ? 'text-black/48' : 'text-white/42'}`}>{option.size}</span>
+                </button>
+            );
+        })}
+    </div>
+);
+
 const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide, language, compact = false }) => {
     const selected = logos.find(l => l.id === selectedLogoId) || null;
     const [uploadSide, setUploadSide] = useState('front');

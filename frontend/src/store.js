@@ -25,7 +25,7 @@ export const captureRender = () => {
 export const NOTEBOOK_BINDING_CAPABILITIES = {
     hard: { hasCoverColor: true, hasCorners: true, hasElastic: false, hasSpiralColor: false },
     soft: { hasCoverColor: true, hasCorners: true, hasElastic: true, hasSpiralColor: false },
-    spiral: { hasCoverColor: true, hasCorners: false, hasElastic: false, hasSpiralColor: true },
+    spiral: { hasCoverColor: true, hasCorners: false, hasElastic: true, hasSpiralColor: true },
 };
 
 export const getNotebookBindingCapabilities = (bindingType) => (

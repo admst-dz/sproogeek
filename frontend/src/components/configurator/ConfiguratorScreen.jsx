@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Experience } from './Experience'
 import { Interface, ZoomControls } from './Interface'
@@ -12,6 +12,10 @@ import { useUndoRedoHotkeys } from '../../hooks/useTemporalConfigurator'
 import { useConfigurator } from '../../store'
 import { t } from '../../i18n'
 
+const MIN_ZOOM = 0.35;
+const MAX_ZOOM = 2.5;
+const clampZoom = (value) => Math.min(Math.max(value, MIN_ZOOM), MAX_ZOOM);
+
 export function ConfiguratorScreen({ currentUser, userRole, logout, onNavigate, onFinish, onAuth }) {
     const configuratorCanvasRef = useRef(null);
     const {
@@ -23,6 +27,16 @@ export function ConfiguratorScreen({ currentUser, userRole, logout, onNavigate, 
     } = useConfigurator();
 
     useUndoRedoHotkeys(true);
+
+    const handleSceneWheel = useCallback((event) => {
+        if (activeProduct === 'thermos' || activeProduct === 'powerbank') return;
+
+        event.preventDefault();
+        const modeMultiplier = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 80 : 1;
+        const wheelDelta = event.deltaY * modeMultiplier;
+        const sensitivity = event.ctrlKey ? 0.006 : 0.0018;
+        setZoom(clampZoom(zoomLevel - wheelDelta * sensitivity));
+    }, [activeProduct, setZoom, zoomLevel]);
 
     const goBack = () => {
         onNavigate?.(currentUser ? (userRole === 'dealer' ? 'dealer' : 'client_dashboard') : 'home');
@@ -61,7 +75,11 @@ export function ConfiguratorScreen({ currentUser, userRole, logout, onNavigate, 
                 </div>
             ) : (
                 <>
-                    <div ref={configuratorCanvasRef} className="app-bg relative w-full h-[40svh] min-h-[270px] max-h-[46svh] shrink-0 md:absolute md:inset-0 md:w-full md:h-full md:max-h-none md:bg-transparent dark:md:bg-transparent">
+                    <div
+                        ref={configuratorCanvasRef}
+                        onWheelCapture={handleSceneWheel}
+                        className="app-bg relative w-full h-[40svh] min-h-[270px] max-h-[46svh] shrink-0 md:absolute md:inset-0 md:w-full md:h-full md:max-h-none md:bg-transparent dark:md:bg-transparent"
+                    >
                         <div className="absolute bottom-3 right-3 z-10 md:hidden">
                             <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
                         </div>

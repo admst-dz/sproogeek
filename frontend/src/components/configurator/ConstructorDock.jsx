@@ -117,23 +117,31 @@ export const MiniSegment = ({ options, value, onChange }) => (
     </div>
 );
 
-const DropdownPortal = ({ btnRef, open, onClose, children }) => {
+const DropdownPortal = ({ btnRef, open, onClose, itemCount = 4 }) => {
     if (!open) return null;
     const r = btnRef.current?.getBoundingClientRect();
     if (!r) return null;
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+    const gap = 4;
+    const viewportPadding = 12;
+    const estimatedPanelHeight = Math.min(Math.max(itemCount * 34, 44), 260);
+    const spaceBelow = viewportHeight - r.bottom - viewportPadding;
+    const spaceAbove = r.top - viewportPadding;
+    const openUp = spaceBelow < estimatedPanelHeight && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(44, Math.min(estimatedPanelHeight, openUp ? spaceAbove - gap : spaceBelow - gap));
     const panelStyle = {
         position: 'fixed',
-        left: r.left,
+        left: Math.min(r.left, viewportWidth - Math.max(r.width, 100) - viewportPadding),
         width: Math.max(r.width, 100),
+        maxHeight,
         zIndex: 9999,
-        ...(window.innerHeight - r.bottom < 180
-            ? { bottom: window.innerHeight - r.top + 4 }
-            : { top: r.bottom + 4 }),
+        ...(openUp ? { bottom: viewportHeight - r.top + gap } : { top: r.bottom + gap }),
     };
     return createPortal(
         <>
             <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={onClose} />
-            <div style={panelStyle} className="rounded-[8px] border border-white/20 bg-[#3a2e31] shadow-2xl overflow-hidden font-zen">
+            <div style={panelStyle} className="rounded-[8px] border border-white/20 bg-[#3a2e31] shadow-2xl overflow-y-auto font-zen custom-scrollbar">
                 {children}
             </div>
         </>,
@@ -158,7 +166,7 @@ export const MiniDropdown = ({ options, value, onChange }) => {
                     <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
             </button>
-            <DropdownPortal btnRef={btnRef} open={open} onClose={() => setOpen(false)}>
+            <DropdownPortal btnRef={btnRef} open={open} onClose={() => setOpen(false)} itemCount={options.length}>
                 {options.map(opt => (
                     <button
                         key={opt.value}
@@ -195,7 +203,7 @@ export const ColorDropdown = ({ colors, currentColor, onSelect }) => {
                     <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
             </button>
-            <DropdownPortal btnRef={btnRef} open={open} onClose={() => setOpen(false)}>
+            <DropdownPortal btnRef={btnRef} open={open} onClose={() => setOpen(false)} itemCount={colors.length}>
                 {colors.map(color => {
                     const val = color.bg ?? color;
                     const name = color.name ?? val;

@@ -53,10 +53,22 @@ function bboxArea(bbox) {
     return size.x * size.y;
 }
 
+function getSafeLogoOffset(position = 0, axisSize = 1, logoSize = 0.6) {
+    const safeHalfRange = Math.max(0, (axisSize - logoSize) / 2);
+    return THREE.MathUtils.clamp(position, -1, 1) * safeHalfRange;
+}
+
+function getLogoAxisSize(logo) {
+    const logoSize = logo.scale ?? 0.6;
+    const rotation = logo.rotation ?? 0;
+    return logoSize * (Math.abs(Math.cos(rotation)) + Math.abs(Math.sin(rotation)));
+}
+
 function getLogoSurfaceProps(logo, bbox, frontZ, backZ) {
     const size = bboxSize(bbox);
-    const x = (bbox.min.x + bbox.max.x) / 2 + THREE.MathUtils.clamp(logo.position?.[0] ?? 0, -1, 1) * size.x * 0.43;
-    const y = (bbox.min.y + bbox.max.y) / 2 + THREE.MathUtils.clamp(logo.position?.[1] ?? 0, -1, 1) * size.y * 0.43;
+    const logoSize = getLogoAxisSize(logo);
+    const x = (bbox.min.x + bbox.max.x) / 2 + getSafeLogoOffset(logo.position?.[0], size.x, logoSize);
+    const y = (bbox.min.y + bbox.max.y) / 2 + getSafeLogoOffset(logo.position?.[1], size.y, logoSize);
     const side = logo.side ?? 'front';
     return {
         x,
@@ -64,6 +76,47 @@ function getLogoSurfaceProps(logo, bbox, frontZ, backZ) {
         z: side === 'back' ? backZ - LOGO_SURFACE_OFFSET : frontZ + LOGO_SURFACE_OFFSET,
         side,
     };
+}
+
+function getHardCoverLogoSurfaceProps(logo, bbox) {
+    const size = bboxSize(bbox);
+    const logoSize = getLogoAxisSize(logo);
+    const side = logo.side ?? 'front';
+    return {
+        x: (bbox.min.x + bbox.max.x) / 2 + getSafeLogoOffset(logo.position?.[0], size.x, logoSize),
+        y: side === 'back' ? bbox.max.y + LOGO_SURFACE_OFFSET : bbox.min.y - LOGO_SURFACE_OFFSET,
+        z: (bbox.min.z + bbox.max.z) / 2 + getSafeLogoOffset(logo.position?.[1], size.z, logoSize),
+        side,
+    };
+}
+
+function HardCoverLogoPlane({ texture, x, y, z, side = 'front', rotation = 0, scale = 0.6 }) {
+    const map = useLogoTexture(texture);
+    const isBack = side === 'back';
+    return (
+        <group
+            position={[x, y, z]}
+            rotation={[isBack ? -Math.PI / 2 : Math.PI / 2, 0, 0]}
+        >
+            <mesh rotation={[0, 0, isBack ? -rotation : rotation]} renderOrder={40}>
+                <planeGeometry args={[scale, scale]} />
+                <meshStandardMaterial
+                    map={map}
+                    transparent
+                    alphaTest={0.08}
+                    alphaToCoverage
+                    depthTest
+                    depthWrite={false}
+                    polygonOffset
+                    polygonOffsetFactor={LOGO_POLYGON_OFFSET}
+                    polygonOffsetUnits={LOGO_POLYGON_OFFSET}
+                    side={THREE.FrontSide}
+                    roughness={0.55}
+                    metalness={0.02}
+                />
+            </mesh>
+        </group>
+    );
 }
 
 function classifyMeshEntries(meshEntries) {
@@ -244,12 +297,6 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos }) {
         classifyMeshEntries(meshEntries)
     ), [meshEntries]);
 
-    const sceneBbox = useMemo(() => {
-        const box = new THREE.Box3();
-        meshEntries.forEach(e => box.union(e.bbox));
-        return box;
-    }, [meshEntries]);
-
     const mat = materials ? Object.values(materials)[0] : null;
     const normalMap = mat?.normalMap ?? null;
 
@@ -258,9 +305,6 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos }) {
     ), [coverEntry]);
 
     const blockGeometry = separateBlockEntry?.geo ?? splitBlockGeometry;
-
-    const frontZ = coverEntry?.bbox.max.z ?? sceneBbox.max.z;
-    const backZ = coverEntry?.bbox.min.z ?? sceneBbox.min.z;
 
     useFrame((_, delta) => {
         if (coverMatRef.current) easing.dampC(coverMatRef.current.color, coverColor, 0.25, delta);
@@ -280,9 +324,9 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos }) {
                 </mesh>
             )}
             {coverEntry && logos.map(logo => {
-                const surface = getLogoSurfaceProps(logo, coverEntry.bbox, frontZ, backZ);
+                const surface = getHardCoverLogoSurfaceProps(logo, coverEntry.bbox);
                 return (
-                    <LogoPlane
+                    <HardCoverLogoPlane
                         key={logo.id}
                         texture={logo.texture}
                         x={surface.x}
@@ -323,7 +367,7 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos }) {
 }
 
 // ─── НА ПРУЖИНЕ (GLB) ─────────────────────────────────────────────────────────
-function NaPruzhineModel({ coverColor, spiralColor, logos }) {
+function NaPruzhineModel({ coverColor, spiralColor, elasticColor, hasElastic, logos }) {
     const { scene, nodes, materials } = useGLTF(naPruzhineUrl);
     const coverMatRef = useRef();
     const spiralMatRef = useRef();
@@ -367,6 +411,7 @@ function NaPruzhineModel({ coverColor, spiralColor, logos }) {
 
     const frontZ = coverEntry?.bbox.max.z ?? sceneBbox.max.z;
     const backZ = coverEntry?.bbox.min.z ?? sceneBbox.min.z;
+    const height = sceneBbox.max.y - sceneBbox.min.y;
     const safeLogos = logos ?? [];
 
     useFrame((_, delta) => {
@@ -438,6 +483,13 @@ function NaPruzhineModel({ coverColor, spiralColor, logos }) {
                     />
                 </mesh>
             ))}
+
+            {hasElastic && (
+                <mesh position={[sceneBbox.max.x * 0.82, (sceneBbox.max.y + sceneBbox.min.y) / 2, (sceneBbox.max.z + sceneBbox.min.z) / 2]}>
+                    <boxGeometry args={[0.04, height + 0.02, (sceneBbox.max.z - sceneBbox.min.z) + 0.01]} />
+                    <meshStandardMaterial color={elasticColor} roughness={0.9} metalness={0} />
+                </mesh>
+            )}
         </group>
     );
 }
@@ -584,6 +636,8 @@ export function Notebook({ config: configProp, ...props }) {
                 <NaPruzhineModel
                     coverColor={resolvedCoverColor}
                     spiralColor={resolvedSpiralColor}
+                    elasticColor={resolvedElasticColor}
+                    hasElastic={bindingCaps.hasElastic && hasElastic}
                     logos={safeLogos}
                 />
             )}
