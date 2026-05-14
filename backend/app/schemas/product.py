@@ -60,6 +60,13 @@ class ProductCreate(BaseModel):
                 raise ValueError("Wholesale tier pricePerUnit must be a positive number")
         return value
 
+    @model_validator(mode="after")
+    def strip_unsupported_elastic(self):
+        if "spiral" not in self.binding:
+            self.hasElastic = False
+            self.elasticColors = []
+        return self
+
 
 class ProductUpdate(ProductCreate):
     pass

@@ -355,7 +355,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                 <directionalLight position={[10, 10, 5]} intensity={1.5} />
                                                 <directionalLight position={[-10, 5, 2]} intensity={0.5} />
                                                 <PresentationControls speed={1.5} global polar={[-0.1, Math.PI / 4]}>
-                                                    <Stage environment={null} intensity={0} contactShadow={false}>
+                                                    <Stage environment={null} intensity={0} shadows={false}>
                                                         {cartProductType === 'notebook' && <Notebook config={cartProductConfig} />}
                                                         {cartProductType === 'thermos' && <Thermos config={cartProductConfig} />}
                                                         {cartProductType === 'powerbank' && <Powerbank config={cartProductConfig} />}
@@ -569,7 +569,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                                     {order.configuration?.productConfig?.coverColor && (
                                                                         <ClientDetailRow label={t(language, 'coverLabel')} value={<ClientColorDot color={order.configuration.productConfig.coverColor} />} />
                                                                     )}
-                                                                    {order.configuration?.productConfig?.hasElastic && order.configuration?.productConfig?.elasticColor && (
+                                                                    {getNotebookBindingCapabilities(order.configuration?.productConfig?.bindingType).hasElastic && order.configuration?.productConfig?.hasElastic && order.configuration?.productConfig?.elasticColor && (
                                                                         <ClientDetailRow label={t(language, 'elasticLabel')} value={<ClientColorDot color={order.configuration.productConfig.elasticColor} />} />
                                                                     )}
                                                                     {getNotebookBindingCapabilities(order.configuration?.productConfig?.bindingType).hasSpiralColor && order.configuration?.productConfig?.spiralColor && (
@@ -708,7 +708,7 @@ const ClientOrder3DPreview = ({ configuration, productName, language = 'ru' }) =
                 <ambientLight intensity={0.6} />
                 <directionalLight position={[10, 10, 5]} intensity={1.5} />
                 <PresentationControls speed={1.5} global polar={[-0.1, Math.PI / 4]}>
-                    <Stage environment={null} intensity={0} contactShadow={false}>
+                    <Stage environment={null} intensity={0} shadows={false}>
                         {isNote && <Notebook config={cfg} />}
                         {isThermos && <Thermos config={cfg} />}
                         {isPowerbank && <Powerbank config={cfg} />}

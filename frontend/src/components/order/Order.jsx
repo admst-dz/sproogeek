@@ -150,7 +150,7 @@ export const Order = ({ onBack, onSuccess }) => {
                                     <directionalLight position={[10, 10, 5]} intensity={1.5} />
                                     <directionalLight position={[-10, 5, 2]} intensity={0.5} />
                                     <PresentationControls speed={1.5} global polar={[-0.1, Math.PI / 4]}>
-                                        <Stage environment={null} intensity={0} contactShadow={false}>
+                                        <Stage environment={null} intensity={0} shadows={false}>
                                             {activeProduct === 'notebook' && <Notebook />}
                                             {activeProduct === 'thermos' && <Thermos />}
                                             {activeProduct === 'powerbank' && <Powerbank />}
@@ -167,7 +167,7 @@ export const Order = ({ onBack, onSuccess }) => {
                         ) : (
                             <div className="p-6 flex gap-4 h-64">
                                 <div className="flex-1 rounded-[12px] shadow-inner relative overflow-hidden transition-colors duration-500 border border-black/5 dark:border-white/10" style={{ backgroundColor: coverColor }}>
-                                    {hasElastic && (<div className="absolute top-0 right-[20%] w-4 h-full shadow-sm z-10" style={{ backgroundColor: elasticColor }} />)}
+                                    {bindingCaps.hasElastic && hasElastic && (<div className="absolute top-0 right-[20%] w-4 h-full shadow-sm z-10" style={{ backgroundColor: elasticColor }} />)}
                                     {logos.length > 0 && (<div className="absolute bottom-6 right-6 text-white/50 text-xs font-bold border border-white/50 px-2 py-1 rounded">LOGO</div>)}
                                     <div className="absolute bottom-2 left-2 text-white/60 text-[10px] font-bold tracking-wider">{t(language, 'coverLabel').toUpperCase()}</div>
                                 </div>

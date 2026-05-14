@@ -277,6 +277,19 @@ function splitInsetBlockGeometry(geo) {
     };
 }
 
+function normalizeMeshName(value = '') {
+    return value.toLowerCase().replace(/\.\d+$/, '');
+}
+
+function entryMatchesName(entry, names) {
+    const entryNames = [entry.name, entry.meshName].map(normalizeMeshName);
+    return names.some(name => entryNames.some(entryName => entryName === name || entryName.includes(name)));
+}
+
+function findEntryByName(entries, names) {
+    return entries.find(entry => entryMatchesName(entry, names));
+}
+
 // ─── ТВЁРДЫЙ ПЕРЕПЛЁТ (GLB) ───────────────────────────────────────────────────
 function HardCoverGLBModel({ coverColor, hasCorners, logos }) {
     const { nodes, materials } = useGLTF(tverdiyPerepletUrl);
@@ -381,7 +394,16 @@ function NaPruzhineModel({ coverColor, spiralColor, elasticColor, hasElastic, lo
                 const geo = node.geometry.clone();
                 geo.applyMatrix4(node.matrixWorld);
                 geo.computeBoundingBox();
-                return { name, node, geo, bbox: geo.boundingBox, vertCount: geo.attributes.position?.count ?? 0 };
+                const material = Array.isArray(node.material) ? node.material[0] : node.material;
+                return {
+                    name,
+                    meshName: node.geometry?.name ?? '',
+                    node,
+                    geo,
+                    bbox: geo.boundingBox,
+                    vertCount: geo.attributes.position?.count ?? 0,
+                    material,
+                };
             });
     }, [nodes, scene]);
 
@@ -403,12 +425,18 @@ function NaPruzhineModel({ coverColor, spiralColor, elasticColor, hasElastic, lo
         const byWidth = [...meshEntries].sort((a, b) => bboxSize(b.bbox).x - bboxSize(a.bbox).x);
         const cover = byWidth[0] ?? null;
         const withoutCover = meshEntries.filter(e => e !== cover);
-        const block = [...withoutCover].sort((a, b) => bboxArea(b.bbox) - bboxArea(a.bbox))[0] ?? null;
+        const block = findEntryByName(withoutCover, ['pages', 'page', 'paper', 'block'])
+            ?? [...withoutCover].sort((a, b) => bboxArea(b.bbox) - bboxArea(a.bbox))[0]
+            ?? null;
         const hardware = withoutCover.filter(e => e !== block);
-        const elastic = hardware.find(e => e.name === 'Cover.007')
+        const elastic = findEntryByName(hardware, ['rubber', 'elastic', 'band'])
+            ?? hardware.find(e => e.name === 'Cover.007')
             ?? [...hardware].sort((a, b) => b.bbox.max.x - a.bbox.max.x)[0]
             ?? null;
-        const spiral = [...hardware].filter(e => e !== elastic).sort((a, b) => a.bbox.min.x - b.bbox.min.x)[0] ?? null;
+        const spiralHardware = hardware.filter(e => e !== elastic);
+        const spiral = findEntryByName(spiralHardware, ['spring', 'spiral', 'wire'])
+            ?? [...spiralHardware].sort((a, b) => a.bbox.min.x - b.bbox.min.x)[0]
+            ?? null;
         const details = meshEntries.filter(e => e !== cover && e !== block && e !== spiral && e !== elastic);
 
         return { spiralEntry: spiral, coverEntry: cover, blockEntry: block, elasticEntry: elastic, detailEntries: details };
@@ -476,18 +504,22 @@ function NaPruzhineModel({ coverColor, spiralColor, elasticColor, hasElastic, lo
                 </mesh>
             )}
 
-            {detailEntries.map(({ name, geo }) => (
-                <mesh key={name} geometry={geo} castShadow receiveShadow>
-                    <meshStandardMaterial
-                        key={`spiral-detail-material-${name}`}
-                        map={mat?.map}
-                        normalMap={mat?.normalMap}
-                        roughnessMap={mat?.roughnessMap}
-                        roughness={mat?.roughness ?? 0.6}
-                        metalness={mat?.metalness ?? 0.1}
-                    />
-                </mesh>
-            ))}
+            {detailEntries.map(({ name, geo, material }) => {
+                const detailMaterial = material ?? mat;
+                return (
+                    <mesh key={name} geometry={geo} castShadow receiveShadow>
+                        <meshStandardMaterial
+                            key={`spiral-detail-material-${name}`}
+                            color={detailMaterial?.color ?? '#1a1a1a'}
+                            map={detailMaterial?.map}
+                            normalMap={detailMaterial?.normalMap}
+                            roughnessMap={detailMaterial?.roughnessMap}
+                            roughness={detailMaterial?.roughness ?? 0.6}
+                            metalness={detailMaterial?.metalness ?? 0.1}
+                        />
+                    </mesh>
+                );
+            })}
 
             {hasElastic && elasticEntry && (
                 <mesh geometry={elasticEntry.geo} castShadow receiveShadow>
@@ -505,7 +537,7 @@ function NaPruzhineModel({ coverColor, spiralColor, elasticColor, hasElastic, lo
 }
 
 // ─── МЯГКИЙ ПЕРЕПЛЁТ (GLB) ────────────────────────────────────────────────────
-function SoftCoverModel({ coverColor, elasticColor, hasElastic, hasCorners, logos }) {
+function SoftCoverModel({ coverColor, hasCorners, logos }) {
     const { nodes, materials } = useGLTF(tonkiyPerepletUrl);
     const coverMatRef = useRef();
 
@@ -520,7 +552,7 @@ function SoftCoverModel({ coverColor, elasticColor, hasElastic, hasCorners, logo
             .sort((a, b) => b.vertCount - a.vertCount);
     }, [nodes]);
 
-    const { coverEntry, blockEntry: separateBlockEntry, cornerEntries } = useMemo(() => (
+    const { coverEntry, blockEntry: separateBlockEntry, cornerEntries: detailEntries } = useMemo(() => (
         classifyMeshEntries(meshEntries)
     ), [meshEntries]);
 
@@ -536,12 +568,19 @@ function SoftCoverModel({ coverColor, elasticColor, hasElastic, hasCorners, logo
         return box;
     }, [meshEntries]);
 
+    const cornerEntries = useMemo(() => {
+        const sceneSize = bboxSize(sceneBbox);
+        return detailEntries.filter((entry) => {
+            const size = bboxSize(entry.bbox);
+            const isElasticBand = size.y > sceneSize.y * 0.75 && size.x < sceneSize.x * 0.22;
+            return !isElasticBand;
+        });
+    }, [detailEntries, sceneBbox]);
+
     const mat = materials ? Object.values(materials)[0] : null;
     const normalMap = mat?.normalMap ?? null;
     const frontZ = coverEntry?.bbox.max.z ?? sceneBbox.max.z;
     const backZ = coverEntry?.bbox.min.z ?? sceneBbox.min.z;
-    const height = sceneBbox.max.y - sceneBbox.min.y;
-
     useFrame((_, delta) => {
         if (coverMatRef.current) easing.dampC(coverMatRef.current.color, coverColor, 0.25, delta);
     });
@@ -602,12 +641,6 @@ function SoftCoverModel({ coverColor, elasticColor, hasElastic, hasCorners, logo
                 </mesh>
             ))}
 
-            {hasElastic && (
-                <mesh position={[sceneBbox.max.x * 0.82, (sceneBbox.max.y + sceneBbox.min.y) / 2, (sceneBbox.max.z + sceneBbox.min.z) / 2]}>
-                    <boxGeometry args={[0.04, height + 0.02, (sceneBbox.max.z - sceneBbox.min.z) + 0.01]} />
-                    <meshStandardMaterial color={elasticColor} roughness={0.9} metalness={0} />
-                </mesh>
-            )}
         </group>
     );
 }
@@ -654,8 +687,6 @@ export function Notebook({ config: configProp, ...props }) {
             {resolvedBindingType === 'soft' && (
                 <SoftCoverModel
                     coverColor={resolvedCoverColor}
-                    elasticColor={resolvedElasticColor}
-                    hasElastic={bindingCaps.hasElastic && hasElastic}
                     hasCorners={bindingCaps.hasCorners && hasCorners}
                     logos={safeLogos}
                 />

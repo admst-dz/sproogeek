@@ -212,7 +212,7 @@ const ProductModal = ({ product, dealerId, onClose, onSaved, language = 'ru' }) 
         setSaving(true);
         try {
             const productHasSpiralBinding = form.binding.includes('spiral');
-            const productSupportsElastic = form.binding.includes('soft');
+            const productSupportsElastic = form.binding.some(binding => getNotebookBindingCapabilities(binding).hasElastic);
             const data = {
                 ...form,
                 dealerId,
@@ -234,7 +234,7 @@ const ProductModal = ({ product, dealerId, onClose, onSaved, language = 'ru' }) 
     };
 
     const hasSpiralBinding = form.binding.includes('spiral');
-    const supportsElastic = form.binding.includes('soft');
+    const supportsElastic = form.binding.some(binding => getNotebookBindingCapabilities(binding).hasElastic);
 
     return (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/70 backdrop-blur-sm p-0 md:p-6">
@@ -460,7 +460,7 @@ const DealerOrder3DPreview = ({ order }) => {
                 <ambientLight intensity={0.6} />
                 <directionalLight position={[10, 10, 5]} intensity={1.5} />
                 <PresentationControls speed={1.5} global polar={[-0.1, Math.PI / 4]}>
-                    <Stage environment={null} intensity={0} contactShadow={false}>
+                    <Stage environment={null} intensity={0} shadows={false}>
                         {(type === 'notebook' || type === 'calendar') && <Notebook config={cfg} />}
                         {type === 'thermos' && <Thermos config={cfg} />}
                     </Stage>

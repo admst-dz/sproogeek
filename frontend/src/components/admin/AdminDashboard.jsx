@@ -2,7 +2,7 @@ import { Fragment, useState, useEffect } from 'react';
 import { adminApi, productApi } from '../../api';
 import { VibeLoader, useLoaderCompletionGate } from '../shared/VibeLoader';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
-import { useConfigurator } from '../../store';
+import { getNotebookBindingCapabilities, useConfigurator } from '../../store';
 import { t } from '../../i18n';
 
 const STATUS_KEYS = {
@@ -162,6 +162,7 @@ function orderSummaryRows(order, language) {
     const config = order.configuration || {};
     const productConfig = config.productConfig || {};
     const contact = config.contact || {};
+    const bindingCaps = getNotebookBindingCapabilities(productConfig.bindingType);
     const rows = [
         [t(language, 'adminClientLabel'), contact.name || contact.contactPerson],
         [t(language, 'adminPhoneLabel'), contact.phone],
@@ -176,7 +177,7 @@ function orderSummaryRows(order, language) {
         [t(language, 'adminPatternLabel'), getPatternLabel(productConfig.paperPattern, language) || productConfig.paperPattern],
         [t(language, 'adminCoverColorLabel'), productConfig.coverColor ? <ColorValue color={productConfig.coverColor} /> : null],
         [t(language, 'bodyLabel'), productConfig.powerbankBodyColor || productConfig.thermosBodyColor ? <ColorValue color={productConfig.powerbankBodyColor || productConfig.thermosBodyColor} /> : null],
-        [t(language, 'adminElasticLabel'), productConfig.hasElastic ? <ColorValue color={productConfig.elasticColor} /> : null],
+        [t(language, 'adminElasticLabel'), bindingCaps.hasElastic && productConfig.hasElastic ? <ColorValue color={productConfig.elasticColor} /> : null],
         [t(language, 'adminSpiralLabel'), productConfig.spiralColor ? <ColorValue color={productConfig.spiralColor} /> : null],
         [t(language, 'adminCornersLabel'), productConfig.hasCorners === undefined ? null : (productConfig.hasCorners ? t(language, 'adminYes') : t(language, 'adminNo'))],
         [t(language, 'adminLogosLabel'), [productConfig.logos, productConfig.thermosLogos, productConfig.powerbankLogos].find(Array.isArray)?.length],

@@ -33,7 +33,7 @@ def estimate_consumption(order: Order) -> dict[str, float]:
         paper_sku: float(qty * sheets_per_book),
         cover_sku: float(qty * 2),
     }
-    if pc.get("hasElastic"):
+    if pc.get("hasElastic") and pc.get("bindingType") == "spiral":
         rough["ELASTIC-CORD-3MM"] = qty * 0.30  # m
     if pc.get("bindingType") == "spiral":
         rough["SPIRAL-WIRE"] = qty * 1.0

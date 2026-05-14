@@ -280,7 +280,7 @@ export const Experience = () => {
                     azimuth={[-Math.PI, Math.PI]}
                     polar={[-0.1, Math.PI / 4]}
                 >
-                    <Stage environment={null} intensity={0} contactShadow={false} adjustCamera={false}>
+                    <Stage environment={null} intensity={0} shadows={false} adjustCamera={false}>
                         {activeProduct === 'notebook' && <Notebook position={[0, 0.28, 0]} />}
                         {activeProduct === 'calendar' && <Calendar />}
                     </Stage>

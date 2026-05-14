@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useRef } from 'react'
-import { ALL_PRODUCT_DEFAULTS, THEME_SWITCHING_ENABLED, useConfigurator } from './store'
+import { ALL_PRODUCT_DEFAULTS, THEME_SWITCHING_ENABLED, getNotebookBindingCapabilities, useConfigurator } from './store'
 import { t } from './i18n'
 import { CookieBanner } from './components/shared/CookieBanner'
 
@@ -245,8 +245,10 @@ function HomeRouteFallback({ onStart, onAuth, user, logout, openCommandPalette }
     const handleSelect = (productType, config = {}) => {
         setProduct(productType);
         setFormat(config.format || 'A5');
-        setBindingType(config.bindingType || 'hard');
-        setHasElastic(config.bindingType === 'hard' ? false : (config.hasElastic !== undefined ? config.hasElastic : true));
+        const nextBindingType = config.bindingType || 'hard';
+        const nextBindingCaps = getNotebookBindingCapabilities(nextBindingType);
+        setBindingType(nextBindingType);
+        setHasElastic(nextBindingCaps.hasElastic && (config.hasElastic !== undefined ? config.hasElastic : true));
         onStart();
     };
 

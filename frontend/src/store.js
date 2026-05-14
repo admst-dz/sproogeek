@@ -25,7 +25,7 @@ export const captureRender = () => {
 
 export const NOTEBOOK_BINDING_CAPABILITIES = {
     hard: { hasCoverColor: true, hasCorners: true, hasElastic: false, hasSpiralColor: false },
-    soft: { hasCoverColor: true, hasCorners: true, hasElastic: true, hasSpiralColor: false },
+    soft: { hasCoverColor: true, hasCorners: true, hasElastic: false, hasSpiralColor: false },
     spiral: { hasCoverColor: true, hasCorners: false, hasElastic: true, hasSpiralColor: true },
 };
 
@@ -197,7 +197,9 @@ export const useConfigurator = create(temporal((set, get) => ({
         }
         return { ...state, [`${part}Color`]: color };
     }),
-    setHasElastic: (has) => set({ hasElastic: has }),
+    setHasElastic: (has) => set((state) => ({
+        hasElastic: getNotebookBindingCapabilities(state.bindingType).hasElastic && has,
+    })),
     setNotebookOpen: (isOpen) => set({ isNotebookOpen: isOpen }),
     setPaperPattern: (pattern) => set({ paperPattern: pattern, isNotebookOpen: true }),
     setPaperType: (type) => set({ paperType: type }),

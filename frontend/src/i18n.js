@@ -167,7 +167,7 @@ export const translations = {
         spiralColorLabel: "Цвет пружины",
         elasticColorLabel: "Цвет резинки",
         coverColorLabel: "Цвет обложки",
-        embossing: "Тиснение",
+        embossing: "Нанесение",
         sideFront: "Лицевая",
         sideBack: "Обратная",
         blankPages: "Чистые страницы без разлиновки",

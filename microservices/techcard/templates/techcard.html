@@ -131,8 +131,8 @@ ul.files li { margin-bottom: 1mm; font-size: 9pt; }
     <tr><td class="k">Картон переплётный (тв. обл.)</td><td class="v">{{ c.hasCardboard | yn }}</td></tr>
     <tr><td class="k">Толщина картона</td><td class="v">{{ c.cardboardThickness | safe_dash }}</td></tr>
     <tr><td class="k">Размер сторонок (картон), мм</td><td class="v">{{ c.cardboardSize | safe_dash }}</td></tr>
-    <tr><td class="k">Резинка вертикальная</td><td class="v">{{ c.hasElastic | yn }}</td></tr>
-    <tr><td class="k">Цвет резинки</td><td class="v">{% if c.elasticColor %}<span class="swatch" style="background:{{ c.elasticColor }}"></span>{{ c.elasticColor }}{% else %}—{% endif %}</td></tr>
+    <tr><td class="k">Резинка вертикальная</td><td class="v">{{ (c.bindingType == 'spiral' and c.hasElastic) | yn }}</td></tr>
+    <tr><td class="k">Цвет резинки</td><td class="v">{% if c.bindingType == 'spiral' and c.hasElastic and c.elasticColor %}<span class="swatch" style="background:{{ c.elasticColor }}"></span>{{ c.elasticColor }}{% else %}—{% endif %}</td></tr>
     <tr><td class="k">Резинка для ручки</td><td class="v">{{ c.hasPenElastic | yn }}</td></tr>
     <tr><td class="k">Цвет резинки для ручки</td><td class="v">{{ c.penElasticColor | safe_dash }}</td></tr>
     <tr><td class="k">Ляссе</td><td class="v">{{ c.hasLasse | yn }}</td></tr>

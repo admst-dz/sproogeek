@@ -2,7 +2,7 @@ import { useEffect, useState, Suspense, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF, Stage } from '@react-three/drei';
 import * as THREE from 'three';
-import { THEME_SWITCHING_ENABLED, useConfigurator } from '../../store';
+import { THEME_SWITCHING_ENABLED, getNotebookBindingCapabilities, useConfigurator } from '../../store';
 import { t } from '../../i18n';
 import { getUserDisplayName } from '../../utils/user';
 import { SceneLoadingOverlay } from '../shared/VibeLoader';
@@ -12,12 +12,12 @@ import { FeedbackPanel } from './FeedbackPanel';
 import { Notebook } from '../shared/Notebook';
 
 const NOTEBOOK_PREVIEW_CONFIG = {
-    bindingType: 'hard',
-    coverColor: '#D2B48C',
-    hasCorners: true,
-    hasElastic: false,
+    bindingType: 'spiral',
+    coverColor: '#1565C0',
+    hasCorners: false,
+    hasElastic: true,
     elasticColor: '#1a1a1a',
-    spiralColor: '#1a1a1a',
+    spiralColor: '#C0C0C0',
     logos: [],
 };
 
@@ -63,7 +63,7 @@ function ThermosPreview() {
                 <directionalLight position={[5, 8, 5]} intensity={1.5} />
                 <directionalLight position={[-4, 3, 2]} intensity={0.6} />
                 <Suspense fallback={null}>
-                    <Stage environment="city" intensity={0.3} contactShadow={false} adjustCamera>
+                    <Stage environment="city" intensity={0.3} shadows={false} adjustCamera>
                         <ThermosPreviewScene />
                     </Stage>
                 </Suspense>
@@ -74,7 +74,6 @@ function ThermosPreview() {
 }
 
 function PowerbankPreviewScene() {
-    const groupRef = useRef();
     const { nodes } = useGLTF(powerbankModelUrl);
     const meshes = useMemo(() => (
         Object.entries(nodes)
@@ -100,6 +99,8 @@ function PowerbankPreviewScene() {
     const ringThickness = Math.max(width * 0.018, 0.018);
     const capsuleWidth = width * 0.06;
     const capsuleHeight = height * 0.18;
+    const centerY = (bbox.min.y + bbox.max.y) / 2;
+    const centerZ = (bbox.min.z + bbox.max.z) / 2;
 
     const ringGeometry = useMemo(() => (
         new THREE.RingGeometry(ringOuterRadius - ringThickness, ringOuterRadius, 96)
@@ -124,32 +125,30 @@ function PowerbankPreviewScene() {
         return new THREE.ShapeGeometry(shape);
     }, [capsuleWidth, capsuleHeight]);
 
-    useFrame((_, delta) => {
-        if (groupRef.current) groupRef.current.rotation.y += delta * 0.5;
-    });
-
     return (
-        <group ref={groupRef} scale={0.75}>
-            {meshes.map(({ name, geo }) => (
-                <mesh key={name} geometry={geo} castShadow receiveShadow>
-                    <meshStandardMaterial color="#6b6f73" metalness={0.02} roughness={0.92} />
-                </mesh>
-            ))}
-            <group position={[centerX, 0, frontZ + 0.006]}>
-                <mesh
-                    geometry={ringGeometry}
-                    position={[0, bbox.min.y + height * 0.72, 0]}
-                    renderOrder={5}
-                >
-                    <meshStandardMaterial color="#2f3235" roughness={0.88} metalness={0.02} depthWrite={false} />
-                </mesh>
-                <mesh
-                    geometry={capsuleGeometry}
-                    position={[0, bbox.min.y + height * 0.35, 0]}
-                    renderOrder={6}
-                >
-                    <meshStandardMaterial color="#2f3235" roughness={0.88} metalness={0.02} depthWrite={false} />
-                </mesh>
+        <group position={[0, -0.02, 0]} rotation={[0.14, -0.48, -0.03]} scale={0.62}>
+            <group position={[-centerX, -centerY, -centerZ]}>
+                {meshes.map(({ name, geo }) => (
+                    <mesh key={name} geometry={geo} castShadow receiveShadow>
+                        <meshStandardMaterial color="#6b6f73" metalness={0.02} roughness={0.92} />
+                    </mesh>
+                ))}
+                <group position={[centerX, 0, frontZ + 0.006]}>
+                    <mesh
+                        geometry={ringGeometry}
+                        position={[0, bbox.min.y + height * 0.72, 0]}
+                        renderOrder={5}
+                    >
+                        <meshStandardMaterial color="#2f3235" roughness={0.88} metalness={0.02} depthWrite={false} />
+                    </mesh>
+                    <mesh
+                        geometry={capsuleGeometry}
+                        position={[0, bbox.min.y + height * 0.35, 0]}
+                        renderOrder={6}
+                    >
+                        <meshStandardMaterial color="#2f3235" roughness={0.88} metalness={0.02} depthWrite={false} />
+                    </mesh>
+                </group>
             </group>
         </group>
     );
@@ -158,12 +157,12 @@ function PowerbankPreviewScene() {
 function PowerbankPreview() {
     return (
         <div className="relative w-full h-full">
-            <Canvas camera={{ position: [0, 0.5, 4], fov: 40 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
+            <Canvas camera={{ position: [0, 0.45, 5], fov: 36 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
                 <ambientLight intensity={0.7} />
                 <directionalLight position={[5, 8, 5]} intensity={1.5} />
                 <directionalLight position={[-4, 3, 2]} intensity={0.6} />
                 <Suspense fallback={null}>
-                    <Stage environment="city" intensity={0.3} contactShadow={false} adjustCamera>
+                    <Stage environment="city" intensity={0.3} shadows={false} adjustCamera={false}>
                         <PowerbankPreviewScene />
                     </Stage>
                 </Suspense>
@@ -178,12 +177,12 @@ function NotebookPreviewScene() {
 
     useFrame(({ clock }) => {
         if (groupRef.current) {
-            groupRef.current.rotation.y = -0.36 + Math.sin(clock.elapsedTime * 0.7) * 0.1;
+            groupRef.current.rotation.y = 0.46 + Math.sin(clock.elapsedTime * 0.7) * 0.1;
         }
     });
 
     return (
-        <group ref={groupRef} position={[0, -0.04, 0]} rotation={[0.18, -0.36, -0.03]} scale={0.62}>
+        <group ref={groupRef} position={[0, -0.04, 0]} rotation={[0.18, 0.46, -0.03]} scale={0.62}>
             <Notebook config={NOTEBOOK_PREVIEW_CONFIG} />
         </group>
     );
@@ -283,14 +282,20 @@ function ProductDock({ children }) {
 export function ConfiguratorProductMenu({ onStart }) {
     const {
         setProduct, setFormat, setBindingType, setHasElastic,
+        setColor,
         language,
     } = useConfigurator();
 
     const handleSelect = (productType, config = {}) => {
         setProduct(productType);
         setFormat(config.format || 'A5');
-        setBindingType(config.bindingType || 'hard');
-        setHasElastic(config.bindingType === 'hard' ? false : (config.hasElastic !== undefined ? config.hasElastic : true));
+        const nextBindingType = config.bindingType || 'hard';
+        const nextBindingCaps = getNotebookBindingCapabilities(nextBindingType);
+        setBindingType(nextBindingType);
+        if (config.coverColor) setColor('cover', config.coverColor);
+        if (config.elasticColor) setColor('elastic', config.elasticColor);
+        if (config.spiralColor) setColor('spiral', config.spiralColor);
+        setHasElastic(nextBindingCaps.hasElastic && (config.hasElastic !== undefined ? config.hasElastic : true));
         onStart();
     };
 
@@ -302,7 +307,14 @@ export function ConfiguratorProductMenu({ onStart }) {
                     <DockCard
                         mouseX={mouseX}
                         dockEnabled={dockEnabled}
-                        onClick={() => handleSelect('notebook', { format: 'A5', bindingType: 'hard', hasElastic: false })}
+                        onClick={() => handleSelect('notebook', {
+                            format: 'A5',
+                            bindingType: 'spiral',
+                            hasElastic: true,
+                            coverColor: '#1565C0',
+                            spiralColor: '#C0C0C0',
+                            elasticColor: '#1a1a1a',
+                        })}
                     >
                         <div className="group relative flex flex-col items-center p-5 md:p-6 rounded-[20px] md:rounded-[24px] bg-white border border-gray-200 shadow-xl hover:shadow-2xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none dark:hover:bg-white/[0.06] dark:hover:border-white/20 transition-colors duration-500 overflow-hidden">
                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-blue-500/10 dark:bg-blue-500/20 blur-[60px] group-hover:bg-blue-500/20 dark:group-hover:bg-blue-400/30 transition-colors duration-500"></div>
@@ -401,7 +413,7 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
                     className="flex items-center gap-3 bg-white border border-gray-200 dark:bg-white/5 dark:border-white/10 px-4 py-2 rounded-full backdrop-blur-md shadow-sm dark:shadow-none transition-colors hover:bg-gray-50 dark:hover:bg-white/10 active:scale-95"
                 >
                     <img src="/SprooGeek.svg" alt="Spruzhuk logo" className="w-4 h-4 object-contain" />
-                    <span className="font-bold text-sm tracking-wide">Spruzhuk</span>
+                    <span className="font-bold text-sm tracking-wide">Sproogeek 3D</span>
                 </button>
 
                 <button
