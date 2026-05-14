@@ -5,6 +5,7 @@ import { normalizeImageFile } from './utils/images'
 
 const CART_COOKIE = 'spruzhuk_cart';
 const AUTH_COOKIE = 'spruzhuk_auth';
+export const THEME_SWITCHING_ENABLED = false;
 
 const _initialCart = (() => {
     try {
@@ -159,6 +160,10 @@ export const useConfigurator = create(temporal((set, get) => ({
 
     setLanguage: (lang) => set({ language: lang }),
     toggleTheme: () => set((state) => {
+        if (!THEME_SWITCHING_ENABLED) {
+            document.documentElement.classList.add('dark');
+            return { theme: 'dark' };
+        }
         const newTheme = state.theme === 'light' ? 'dark' : 'light';
         if (newTheme === 'dark') document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');

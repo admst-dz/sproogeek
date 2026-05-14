@@ -371,6 +371,7 @@ function NaPruzhineModel({ coverColor, spiralColor, elasticColor, hasElastic, lo
     const { scene, nodes, materials } = useGLTF(naPruzhineUrl);
     const coverMatRef = useRef();
     const spiralMatRef = useRef();
+    const elasticMatRef = useRef();
 
     const meshEntries = useMemo(() => {
         scene.updateMatrixWorld(true);
@@ -394,29 +395,33 @@ function NaPruzhineModel({ coverColor, spiralColor, elasticColor, hasElastic, lo
         return box;
     }, [meshEntries]);
 
-    const { spiralEntry, coverEntry, blockEntry, detailEntries } = useMemo(() => {
+    const { spiralEntry, coverEntry, blockEntry, elasticEntry, detailEntries } = useMemo(() => {
         if (meshEntries.length === 0) {
-            return { spiralEntry: null, coverEntry: null, blockEntry: null, detailEntries: [] };
+            return { spiralEntry: null, coverEntry: null, blockEntry: null, elasticEntry: null, detailEntries: [] };
         }
 
-        const spiral = [...meshEntries].sort((a, b) => b.vertCount - a.vertCount)[0];
-        const withoutSpiral = meshEntries.filter(e => e !== spiral);
-        const byArea = [...withoutSpiral].sort((a, b) => bboxArea(b.bbox) - bboxArea(a.bbox));
-        const cover = byArea[0] ?? null;
-        const block = byArea[1] ?? null;
-        const details = withoutSpiral.filter(e => e !== cover && e !== block);
+        const byWidth = [...meshEntries].sort((a, b) => bboxSize(b.bbox).x - bboxSize(a.bbox).x);
+        const cover = byWidth[0] ?? null;
+        const withoutCover = meshEntries.filter(e => e !== cover);
+        const block = [...withoutCover].sort((a, b) => bboxArea(b.bbox) - bboxArea(a.bbox))[0] ?? null;
+        const hardware = withoutCover.filter(e => e !== block);
+        const elastic = hardware.find(e => e.name === 'Cover.007')
+            ?? [...hardware].sort((a, b) => b.bbox.max.x - a.bbox.max.x)[0]
+            ?? null;
+        const spiral = [...hardware].filter(e => e !== elastic).sort((a, b) => a.bbox.min.x - b.bbox.min.x)[0] ?? null;
+        const details = meshEntries.filter(e => e !== cover && e !== block && e !== spiral && e !== elastic);
 
-        return { spiralEntry: spiral, coverEntry: cover, blockEntry: block, detailEntries: details };
+        return { spiralEntry: spiral, coverEntry: cover, blockEntry: block, elasticEntry: elastic, detailEntries: details };
     }, [meshEntries]);
 
     const frontZ = coverEntry?.bbox.max.z ?? sceneBbox.max.z;
     const backZ = coverEntry?.bbox.min.z ?? sceneBbox.min.z;
-    const height = sceneBbox.max.y - sceneBbox.min.y;
     const safeLogos = logos ?? [];
 
     useFrame((_, delta) => {
         if (coverMatRef.current) easing.dampC(coverMatRef.current.color, coverColor, 0.25, delta);
         if (spiralMatRef.current) easing.dampC(spiralMatRef.current.color, spiralColor, 0.25, delta);
+        if (elasticMatRef.current) easing.dampC(elasticMatRef.current.color, elasticColor, 0.25, delta);
     });
 
     return (
@@ -484,10 +489,15 @@ function NaPruzhineModel({ coverColor, spiralColor, elasticColor, hasElastic, lo
                 </mesh>
             ))}
 
-            {hasElastic && (
-                <mesh position={[sceneBbox.max.x * 0.82, (sceneBbox.max.y + sceneBbox.min.y) / 2, (sceneBbox.max.z + sceneBbox.min.z) / 2]}>
-                    <boxGeometry args={[0.04, height + 0.02, (sceneBbox.max.z - sceneBbox.min.z) + 0.01]} />
-                    <meshStandardMaterial color={elasticColor} roughness={0.9} metalness={0} />
+            {hasElastic && elasticEntry && (
+                <mesh geometry={elasticEntry.geo} castShadow receiveShadow>
+                    <meshStandardMaterial
+                        key="spiral-elastic-color-material"
+                        ref={elasticMatRef}
+                        color={elasticColor}
+                        roughness={0.9}
+                        metalness={0}
+                    />
                 </mesh>
             )}
         </group>

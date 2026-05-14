@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useRef } from 'react'
-import { ALL_PRODUCT_DEFAULTS, useConfigurator } from './store'
+import { ALL_PRODUCT_DEFAULTS, THEME_SWITCHING_ENABLED, useConfigurator } from './store'
 import { t } from './i18n'
 import { CookieBanner } from './components/shared/CookieBanner'
 
@@ -191,14 +191,144 @@ function App() {
 
 function RouteLoader() {
     return (
-        <div className="app-bg fixed inset-0 flex items-center justify-center font-sans text-sm font-bold uppercase tracking-[0.2em] text-gray-500 dark:text-white/50">
-            Loading
-        </div>
+        <div className="app-bg fixed inset-0" aria-hidden="true" />
     );
 }
 
-function RouteSuspense({ children }) {
-    return <Suspense fallback={<RouteLoader />}>{children}</Suspense>;
+function RouteSuspense({ children, fallback = <RouteLoader /> }) {
+    return <Suspense fallback={fallback}>{children}</Suspense>;
+}
+
+function HomeFallbackCard({ title, actionLabel, tone, onClick }) {
+    const toneClass = {
+        blue: 'bg-blue-500/10 dark:bg-blue-400/15',
+        slate: 'bg-slate-500/10 dark:bg-slate-400/15',
+        emerald: 'bg-emerald-500/10 dark:bg-emerald-400/15',
+    }[tone] || 'bg-gray-500/10 dark:bg-white/10';
+
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="group relative flex flex-col items-center p-5 md:p-6 rounded-[20px] md:rounded-[24px] bg-white border border-gray-200 shadow-xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none transition-colors duration-500 overflow-hidden text-center"
+        >
+            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 ${toneClass} blur-[60px] transition-colors duration-500`} />
+            <div className="h-40 sm:h-48 lg:h-56 w-full relative z-10 flex items-center justify-center">
+                <div className="w-28 h-28 rounded-full bg-white/55 border border-gray-200/80 dark:bg-white/8 dark:border-white/10" />
+            </div>
+            <div className="relative z-10 mt-2">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{title}</h3>
+                <span className="inline-flex mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 dark:bg-white/10 dark:text-gray-300 dark:border-white/5 text-xs font-bold">
+                    {actionLabel}
+                </span>
+            </div>
+        </button>
+    );
+}
+
+function HomeRouteFallback({ onStart, onAuth, user, logout, openCommandPalette }) {
+    const {
+        language,
+        setLanguage,
+        setProduct,
+        setFormat,
+        setBindingType,
+        setHasElastic,
+    } = useConfigurator();
+
+    const cycleLanguage = () => {
+        if (language === 'ru') setLanguage('en');
+        else if (language === 'en') setLanguage('by');
+        else setLanguage('ru');
+    };
+
+    const handleSelect = (productType, config = {}) => {
+        setProduct(productType);
+        setFormat(config.format || 'A5');
+        setBindingType(config.bindingType || 'hard');
+        setHasElastic(config.bindingType === 'hard' ? false : (config.hasElastic !== undefined ? config.hasElastic : true));
+        onStart();
+    };
+
+    return (
+        <div className="app-bg h-full w-full flex flex-col font-sans transition-colors duration-500 text-gray-900 dark:text-white overflow-y-auto overflow-x-hidden selection:bg-blue-500/30">
+            <header className="w-full px-4 sm:px-6 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-3 z-50 shrink-0">
+                <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="flex items-center gap-3 bg-white border border-gray-200 dark:bg-white/5 dark:border-white/10 px-4 py-2 rounded-full backdrop-blur-md shadow-sm dark:shadow-none transition-colors hover:bg-gray-50 dark:hover:bg-white/10 active:scale-95"
+                >
+                    <img src="/SprooGeek.svg" alt="Spruzhuk logo" className="w-4 h-4 object-contain" />
+                    <span className="font-bold text-sm tracking-wide">Spruzhuk</span>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={openCommandPalette}
+                    className="hidden md:flex items-center gap-3 bg-white border border-gray-200 dark:bg-white/5 dark:border-white/10 px-4 py-2 rounded-full backdrop-blur-md w-96 max-w-full text-sm text-gray-400 shadow-sm dark:shadow-none transition-colors hover:bg-gray-50 dark:hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/40 text-left"
+                    aria-label={t(language, 'search')}
+                >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <span className="flex-1">{t(language, 'search')}</span>
+                    <span className="bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-widest">⌘K</span>
+                </button>
+
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <button
+                        type="button"
+                        onClick={openCommandPalette}
+                        className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 text-gray-600 dark:bg-white/5 dark:border-white/10 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors rounded-full backdrop-blur-md shadow-sm dark:shadow-none focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                        aria-label={t(language, 'search')}
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </button>
+                    <button onClick={cycleLanguage} className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 text-gray-600 dark:bg-white/5 dark:border-white/10 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors rounded-full backdrop-blur-md text-xs font-bold uppercase">
+                        {language}
+                    </button>
+                    {user ? (
+                        <button onClick={logout} className="bg-white border border-gray-200 text-red-500 dark:bg-white/5 dark:border-white/10 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors px-4 sm:px-5 py-2 rounded-full backdrop-blur-md text-sm font-bold shadow-sm dark:shadow-none">
+                            {t(language, 'logout')}
+                        </button>
+                    ) : (
+                        <button onClick={onAuth} className="flex items-center gap-2 bg-white border border-gray-200 text-gray-800 dark:bg-white/5 dark:border-white/10 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors px-4 sm:px-5 py-2 rounded-full backdrop-blur-md text-sm font-bold shadow-sm dark:shadow-none">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                            {t(language, 'login')}
+                        </button>
+                    )}
+                </div>
+            </header>
+
+            <main className="flex-1 flex flex-col items-center pt-6 sm:pt-12 pb-16 sm:pb-24 px-4 z-10">
+                <h1 className="text-[clamp(2.35rem,11vw,4.5rem)] md:text-7xl font-bold text-center leading-[1.05] tracking-tight mb-4 sm:mb-6 text-gray-900 dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-b dark:from-white dark:to-gray-400 drop-shadow-sm dark:drop-shadow-2xl transition-colors">
+                    {t(language, 'title1')}<br />{t(language, 'title2')}
+                </h1>
+                <p className="text-gray-500 dark:text-gray-400 text-sm md:text-base text-center max-w-lg mb-8 sm:mb-12 lg:mb-16 font-medium leading-relaxed transition-colors">
+                    {t(language, 'subtitle')}
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full max-w-5xl">
+                    <HomeFallbackCard
+                        title={t(language, 'notebook')}
+                        actionLabel={t(language, 'openBtn')}
+                        tone="blue"
+                        onClick={() => handleSelect('notebook', { format: 'A5', bindingType: 'hard', hasElastic: false })}
+                    />
+                    <HomeFallbackCard
+                        title={t(language, 'thermos')}
+                        actionLabel={t(language, 'openBtn')}
+                        tone="slate"
+                        onClick={() => handleSelect('thermos')}
+                    />
+                    <HomeFallbackCard
+                        title={t(language, 'powerbank')}
+                        actionLabel={t(language, 'openBtn')}
+                        tone="emerald"
+                        onClick={() => handleSelect('powerbank')}
+                    />
+                </div>
+            </main>
+        </div>
+    );
 }
 
 function CommandPaletteGate(props) {
@@ -311,6 +441,11 @@ function MainApp() {
     };
 
     useEffect(() => {
+        if (!THEME_SWITCHING_ENABLED) {
+            document.documentElement.classList.add('dark');
+            if (theme !== 'dark') useConfigurator.setState({ theme: 'dark' });
+            return;
+        }
         if (theme === 'dark') document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
     }, [theme]);
@@ -427,6 +562,10 @@ function MainApp() {
         }
     };
 
+    const openCommandPalette = () => {
+        window.dispatchEvent(new Event('spruzhuk:open-command-palette'));
+    };
+
     return (
         <>
             <CookieBanner />
@@ -531,7 +670,20 @@ function MainApp() {
 
             {/* --- ЭКРАН: ГЛАВНАЯ СТРАНИЦА --- */}
             {screen === 'home' && (
-                <RouteSuspense>
+                <RouteSuspense
+                    fallback={(
+                        <HomeRouteFallback
+                            onStart={() => {
+                                setClientTab(null);
+                                setScreen('configurator');
+                            }}
+                            onAuth={() => setShowAuth(true)}
+                            user={currentUser}
+                            logout={logout}
+                            openCommandPalette={openCommandPalette}
+                        />
+                    )}
+                >
                     <Home
                         onStart={() => {
                             setClientTab(null);

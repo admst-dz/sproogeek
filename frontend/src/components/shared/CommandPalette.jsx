@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { Command } from 'cmdk';
-import { useConfigurator } from '../../store';
+import { THEME_SWITCHING_ENABLED, useConfigurator } from '../../store';
 import { t } from '../../i18n';
 
 export const CommandPalette = ({ navigate, screen, onClose, openAuth, open: controlledOpen, onOpenChange }) => {
@@ -87,12 +87,14 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth, open: cont
         list.push({ group: cfg, id: 'cfg-notebook', label: t(language, 'notebook'), onSelect: () => goConfigurator('notebook') });
         list.push({ group: cfg, id: 'cfg-thermos', label: t(language, 'thermos'), onSelect: () => goConfigurator('thermos') });
         list.push({ group: cfg, id: 'cfg-powerbank', label: t(language, 'powerbank'), onSelect: () => goConfigurator('powerbank') });
-        list.push({
-            group: actions,
-            id: 'act-theme',
-            label: theme === 'dark' ? t(language, 'cmdLightTheme') : t(language, 'cmdDarkTheme'),
-            onSelect: () => { toggleTheme(); close(); },
-        });
+        if (THEME_SWITCHING_ENABLED) {
+            list.push({
+                group: actions,
+                id: 'act-theme',
+                label: theme === 'dark' ? t(language, 'cmdLightTheme') : t(language, 'cmdDarkTheme'),
+                onSelect: () => { toggleTheme(); close(); },
+            });
+        }
         if (screen === 'configurator') {
             list.push({
                 group: actions,

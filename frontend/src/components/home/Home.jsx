@@ -2,7 +2,7 @@ import { useEffect, useState, Suspense, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF, Stage } from '@react-three/drei';
 import * as THREE from 'three';
-import { useConfigurator } from '../../store';
+import { THEME_SWITCHING_ENABLED, useConfigurator } from '../../store';
 import { t } from '../../i18n';
 import { getUserDisplayName } from '../../utils/user';
 import { SceneLoadingOverlay } from '../shared/VibeLoader';
@@ -369,6 +369,11 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
     } = useConfigurator();
 
     useEffect(() => {
+        if (!THEME_SWITCHING_ENABLED) {
+            document.documentElement.classList.add('dark');
+            if (theme !== 'dark') useConfigurator.setState({ theme: 'dark' });
+            return;
+        }
         if (theme === 'dark') document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
     }, [theme]);
@@ -422,9 +427,11 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
                     <button onClick={cycleLanguage} className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 text-gray-600 dark:bg-white/5 dark:border-white/10 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors rounded-full backdrop-blur-md text-xs font-bold uppercase">
                         {language}
                     </button>
-                    <button onClick={toggleTheme} className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 text-gray-600 dark:bg-white/5 dark:border-white/10 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors rounded-full backdrop-blur-md">
-                        {theme === 'light' ? (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>) : (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>)}
-                    </button>
+                    {THEME_SWITCHING_ENABLED && (
+                        <button onClick={toggleTheme} className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 text-gray-600 dark:bg-white/5 dark:border-white/10 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors rounded-full backdrop-blur-md">
+                            {theme === 'light' ? (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>) : (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>)}
+                        </button>
+                    )}
                     {user ? (
                         <div className="flex items-center gap-2 sm:gap-3 bg-white border border-gray-200 dark:bg-white/5 dark:border-white/10 px-3 sm:px-4 py-2 rounded-full backdrop-blur-md shadow-sm dark:shadow-none transition-colors min-w-0 max-w-[52vw] sm:max-w-none">
                             <span className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 truncate">{getUserDisplayName(user)}</span>
