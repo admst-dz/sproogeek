@@ -10,7 +10,7 @@
 [![Architecture: Microservices](https://img.shields.io/badge/Architecture-Microservices-8A2BE2.svg)]()
 [![Infrastructure: Docker](https://img.shields.io/badge/Deploy-Docker%20%2B%20Traefik-2496ED.svg)]()
 
-[Сайт команды SproogeekDev](https://www.sproogeek.com/)
+[Продукт команды SproogeekDev](https://www.sproogeek.com/)
 
 </div>
 
