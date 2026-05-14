@@ -117,7 +117,7 @@ export const MiniSegment = ({ options, value, onChange }) => (
     </div>
 );
 
-const DropdownPortal = ({ btnRef, open, onClose, itemCount = 4 }) => {
+const DropdownPortal = ({ btnRef, open, onClose, children, itemCount = 4 }) => {
     if (!open) return null;
     const r = btnRef.current?.getBoundingClientRect();
     if (!r) return null;
