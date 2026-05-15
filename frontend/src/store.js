@@ -24,9 +24,9 @@ export const captureRender = () => {
 }
 
 export const NOTEBOOK_BINDING_CAPABILITIES = {
-    hard: { hasCoverColor: true, hasCorners: true, hasElastic: false, hasSpiralColor: false },
-    soft: { hasCoverColor: true, hasCorners: true, hasElastic: false, hasSpiralColor: false },
-    spiral: { hasCoverColor: true, hasCorners: false, hasElastic: true, hasSpiralColor: true },
+    hard: { hasCoverColor: true, hasInnerCoverColor: false, hasCorners: true, hasElastic: false, hasSpiralColor: false },
+    soft: { hasCoverColor: true, hasInnerCoverColor: false, hasCorners: true, hasElastic: false, hasSpiralColor: false },
+    spiral: { hasCoverColor: true, hasInnerCoverColor: true, hasCorners: false, hasElastic: true, hasSpiralColor: true },
 };
 
 export const getNotebookBindingCapabilities = (bindingType) => (
@@ -40,6 +40,7 @@ export const NOTEBOOK_DEFAULTS = {
     format: 'A5',
     paperPattern: 'blank',
     coverColor: '#D2B48C',
+    innerCoverColor: '#D2B48C',
     hasElastic: false,
     elasticColor: '#1a1a1a',
     spiralColor: '#1a1a1a',
@@ -100,7 +101,11 @@ const getThermosLogoStartPosition = (logos, target) => {
 
 export const useConfigurator = create(temporal((set, get) => ({
     activeProduct: 'notebook', // 'notebook' | 'calendar' | 'thermos' | 'powerbank'
-    applyRenderConfig: (config) => set((state) => ({ ...state, ...config })),
+    applyRenderConfig: (config) => set((state) => ({
+        ...state,
+        ...config,
+        innerCoverColor: config.innerCoverColor ?? config.coverColor ?? state.innerCoverColor,
+    })),
 
     // --- Параметры 3D модели ---
     bindingType: 'hard',
@@ -108,6 +113,7 @@ export const useConfigurator = create(temporal((set, get) => ({
     isNotebookOpen: false,
     paperPattern: 'blank',
     coverColor: '#D2B48C',
+    innerCoverColor: '#D2B48C',
     hasElastic: false,
     elasticColor: '#1a1a1a',
     spiralColor: '#1a1a1a',
@@ -194,6 +200,9 @@ export const useConfigurator = create(temporal((set, get) => ({
     setColor: (part, color) => set((state) => {
         if (part === 'thermosBody') {
             return { ...state, thermosBodyColor: color, thermosCapColor: color };
+        }
+        if (part === 'cover' && !getNotebookBindingCapabilities(state.bindingType).hasInnerCoverColor) {
+            return { ...state, coverColor: color, innerCoverColor: color };
         }
         return { ...state, [`${part}Color`]: color };
     }),

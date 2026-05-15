@@ -380,9 +380,10 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos }) {
 }
 
 // ─── НА ПРУЖИНЕ (GLB) ─────────────────────────────────────────────────────────
-function NaPruzhineModel({ coverColor, spiralColor, elasticColor, hasElastic, logos }) {
+function NaPruzhineModel({ coverColor, innerCoverColor, spiralColor, elasticColor, hasElastic, logos }) {
     const { scene, nodes, materials } = useGLTF(naPruzhineUrl);
-    const coverMatRef = useRef();
+    const outerCoverMatRef = useRef();
+    const innerCoverMatRef = useRef();
     const spiralMatRef = useRef();
     const elasticMatRef = useRef();
 
@@ -417,18 +418,22 @@ function NaPruzhineModel({ coverColor, spiralColor, elasticColor, hasElastic, lo
         return box;
     }, [meshEntries]);
 
-    const { spiralEntry, coverEntry, blockEntry, elasticEntry, detailEntries } = useMemo(() => {
+    const { spiralEntry, outerCoverEntry, innerCoverEntry, blockEntry, elasticEntry, detailEntries } = useMemo(() => {
         if (meshEntries.length === 0) {
-            return { spiralEntry: null, coverEntry: null, blockEntry: null, elasticEntry: null, detailEntries: [] };
+            return { spiralEntry: null, outerCoverEntry: null, innerCoverEntry: null, blockEntry: null, elasticEntry: null, detailEntries: [] };
         }
 
         const byWidth = [...meshEntries].sort((a, b) => bboxSize(b.bbox).x - bboxSize(a.bbox).x);
-        const cover = byWidth[0] ?? null;
-        const withoutCover = meshEntries.filter(e => e !== cover);
-        const block = findEntryByName(withoutCover, ['pages', 'page', 'paper', 'block'])
-            ?? [...withoutCover].sort((a, b) => bboxArea(b.bbox) - bboxArea(a.bbox))[0]
+        const outerCover = findEntryByName(meshEntries, ['cover_out', 'coverout', 'outercover'])
+            ?? byWidth[0]
             ?? null;
-        const hardware = withoutCover.filter(e => e !== block);
+        const innerCover = findEntryByName(meshEntries.filter(e => e !== outerCover), ['cover_in', 'coverin', 'innercover'])
+            ?? null;
+        const withoutCovers = meshEntries.filter(e => e !== outerCover && e !== innerCover);
+        const block = findEntryByName(withoutCovers, ['pages', 'page', 'paper', 'block'])
+            ?? [...withoutCovers].sort((a, b) => bboxArea(b.bbox) - bboxArea(a.bbox))[0]
+            ?? null;
+        const hardware = withoutCovers.filter(e => e !== block);
         const elastic = findEntryByName(hardware, ['rubber', 'elastic', 'band'])
             ?? hardware.find(e => e.name === 'Cover.007')
             ?? [...hardware].sort((a, b) => b.bbox.max.x - a.bbox.max.x)[0]
@@ -437,36 +442,48 @@ function NaPruzhineModel({ coverColor, spiralColor, elasticColor, hasElastic, lo
         const spiral = findEntryByName(spiralHardware, ['spring', 'spiral', 'wire'])
             ?? [...spiralHardware].sort((a, b) => a.bbox.min.x - b.bbox.min.x)[0]
             ?? null;
-        const details = meshEntries.filter(e => e !== cover && e !== block && e !== spiral && e !== elastic);
+        const details = meshEntries.filter(e => e !== outerCover && e !== innerCover && e !== block && e !== spiral && e !== elastic);
 
-        return { spiralEntry: spiral, coverEntry: cover, blockEntry: block, elasticEntry: elastic, detailEntries: details };
+        return { spiralEntry: spiral, outerCoverEntry: outerCover, innerCoverEntry: innerCover, blockEntry: block, elasticEntry: elastic, detailEntries: details };
     }, [meshEntries]);
 
-    const frontZ = coverEntry?.bbox.max.z ?? sceneBbox.max.z;
-    const backZ = coverEntry?.bbox.min.z ?? sceneBbox.min.z;
+    const frontZ = outerCoverEntry?.bbox.max.z ?? sceneBbox.max.z;
+    const backZ = outerCoverEntry?.bbox.min.z ?? sceneBbox.min.z;
     const safeLogos = logos ?? [];
 
     useFrame((_, delta) => {
-        if (coverMatRef.current) easing.dampC(coverMatRef.current.color, coverColor, 0.25, delta);
+        if (outerCoverMatRef.current) easing.dampC(outerCoverMatRef.current.color, coverColor, 0.25, delta);
+        if (innerCoverMatRef.current) easing.dampC(innerCoverMatRef.current.color, innerCoverColor, 0.25, delta);
         if (spiralMatRef.current) easing.dampC(spiralMatRef.current.color, spiralColor, 0.25, delta);
         if (elasticMatRef.current) easing.dampC(elasticMatRef.current.color, elasticColor, 0.25, delta);
     });
 
     return (
         <group>
-            {coverEntry && (
-                <mesh geometry={coverEntry.geo} castShadow receiveShadow>
+            {outerCoverEntry && (
+                <mesh geometry={outerCoverEntry.geo} castShadow receiveShadow>
                     <meshStandardMaterial
-                        key="spiral-cover-color-material"
-                        ref={coverMatRef}
+                        key="spiral-outer-cover-color-material"
+                        ref={outerCoverMatRef}
                         color={coverColor}
                         roughness={0.62}
                         metalness={0.02}
                     />
                 </mesh>
             )}
-            {coverEntry && safeLogos.map(logo => {
-                const surface = getLogoSurfaceProps(logo, coverEntry.bbox, frontZ, backZ);
+            {innerCoverEntry && (
+                <mesh geometry={innerCoverEntry.geo} castShadow receiveShadow>
+                    <meshStandardMaterial
+                        key="spiral-inner-cover-color-material"
+                        ref={innerCoverMatRef}
+                        color={innerCoverColor}
+                        roughness={0.62}
+                        metalness={0.02}
+                    />
+                </mesh>
+            )}
+            {outerCoverEntry && safeLogos.map(logo => {
+                const surface = getLogoSurfaceProps(logo, outerCoverEntry.bbox, frontZ, backZ);
                 return (
                     <LogoPlane
                         key={logo.id}
@@ -650,7 +667,7 @@ export function Notebook({ config: configProp, ...props }) {
     const store = useConfigurator();
     const {
         bindingType,
-        coverColor = '#D2B48C', hasElastic, elasticColor = '#1a1a1a',
+        coverColor = '#D2B48C', innerCoverColor = coverColor, hasElastic, elasticColor = '#1a1a1a',
         spiralColor = '#1a1a1a',
         logos = [],
         hasCorners,
@@ -658,6 +675,7 @@ export function Notebook({ config: configProp, ...props }) {
     const resolvedBindingType = bindingType || 'hard';
     const bindingCaps = getNotebookBindingCapabilities(resolvedBindingType);
     const resolvedCoverColor = coverColor || '#D2B48C';
+    const resolvedInnerCoverColor = innerCoverColor || resolvedCoverColor;
     const resolvedElasticColor = elasticColor || '#1a1a1a';
     const resolvedSpiralColor = spiralColor || '#1a1a1a';
     const safeLogos = Array.isArray(logos) ? logos : [];
@@ -678,6 +696,7 @@ export function Notebook({ config: configProp, ...props }) {
             {resolvedBindingType === 'spiral' && (
                 <NaPruzhineModel
                     coverColor={resolvedCoverColor}
+                    innerCoverColor={resolvedInnerCoverColor}
                     spiralColor={resolvedSpiralColor}
                     elasticColor={resolvedElasticColor}
                     hasElastic={bindingCaps.hasElastic && hasElastic}

@@ -493,7 +493,8 @@ const DealerOrderDetails = ({ order, language, full = false }) => {
                     <>
                         <DetailRow label={t(language, 'formatLabel')} value={cfg.format} />
                         <DetailRow label={t(language, 'bindingLabel')} value={cfg.bindingType ? getBindingLabel(cfg.bindingType, language) : null} />
-                        <DetailRow label={t(language, 'coverLabel')} value={<ColorValue color={cfg.coverColor} />} />
+                        <DetailRow label={bindingCaps.hasInnerCoverColor ? t(language, 'outerCoverLabel') : t(language, 'coverLabel')} value={<ColorValue color={cfg.coverColor} />} />
+                        {bindingCaps.hasInnerCoverColor && cfg.innerCoverColor && <DetailRow label={t(language, 'innerCoverLabel')} value={<ColorValue color={cfg.innerCoverColor} />} />}
                         {bindingCaps.hasElastic && cfg.hasElastic && <DetailRow label={t(language, 'elasticLabel')} value={<ColorValue color={cfg.elasticColor} />} />}
                         {bindingCaps.hasSpiralColor && cfg.spiralColor && <DetailRow label={t(language, 'spiralLabel')} value={<ColorValue color={cfg.spiralColor} />} />}
                         {bindingCaps.hasCorners && cfg.hasCorners !== undefined && <DetailRow label={t(language, 'cornersLabel')} value={cfg.hasCorners ? t(language, 'orderYes') : t(language, 'orderNo')} />}

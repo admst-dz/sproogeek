@@ -24,6 +24,10 @@
       "type": "color",
       "required": true
     },
+    "innerCoverColor": {
+      "type": "color",
+      "required": false
+    },
     "quantity": {
       "type": "integer",
       "required": true,

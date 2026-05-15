@@ -87,7 +87,8 @@ h2 { font-size: 13pt; margin: 6mm 0 3mm; padding-bottom: 1mm; border-bottom: .8p
                         {% if c.format %}Формат: {{ c.format }}{% endif %}
                         {% if c.bindingType %} · Переплёт: {{ c.bindingType }}{% endif %}
                         {% if c.paperPattern %} · Разлиновка: {{ c.paperPattern }}{% endif %}
-                        {% if c.coverColor %} · Обложка: <span class="swatch" style="background:{{ c.coverColor }}"></span>{{ c.coverColor }}{% endif %}
+                        {% if c.coverColor %} · Внешняя обложка: <span class="swatch" style="background:{{ c.coverColor }}"></span>{{ c.coverColor }}{% endif %}
+                        {% if c.innerCoverColor %} · Внутренняя обложка: <span class="swatch" style="background:{{ c.innerCoverColor }}"></span>{{ c.innerCoverColor }}{% endif %}
                     </div>
                 {% endif %}
             </td>

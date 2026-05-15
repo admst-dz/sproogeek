@@ -11,7 +11,7 @@ import { SceneLoadingOverlay } from '../shared/VibeLoader';
 
 export const Order = ({ onBack, onSuccess }) => {
     const {
-        format, coverColor, elasticColor, hasElastic,
+        format, coverColor, innerCoverColor, elasticColor, hasElastic,
         paperPattern, logos, bindingType, spiralColor,
         hasCorners,
         blockPages, paperType,
@@ -71,6 +71,8 @@ export const Order = ({ onBack, onSuccess }) => {
             format,
             bindingType,
             coverColor,
+            innerCoverColor: bindingCaps.hasInnerCoverColor ? innerCoverColor : null,
+            hasInnerCover: bindingCaps.hasInnerCoverColor,
             hasElastic: orderHasElastic,
             elasticColor: orderHasElastic ? elasticColor : null,
             spiralColor: bindingCaps.hasSpiralColor ? spiralColor : null,
@@ -182,7 +184,8 @@ export const Order = ({ onBack, onSuccess }) => {
                             <Row label={t(language, 'orderBindingLabel')} value={bindingNames[bindingType]} />
                             {bindingCaps.hasSpiralColor && <Row label={t(language, 'orderSpiralLabel')} value={<ColorDot color={spiralColor} />} />}
                             <Row label={t(language, 'orderFormatLabel')} value={format} />
-                            <Row label={t(language, 'orderCoverLabel')} value={<ColorDot color={coverColor} />} />
+                            <Row label={bindingCaps.hasInnerCoverColor ? t(language, 'orderOuterCoverLabel') : t(language, 'orderCoverLabel')} value={<ColorDot color={coverColor} />} />
+                            {bindingCaps.hasInnerCoverColor && <Row label={t(language, 'orderInnerCoverLabel')} value={<ColorDot color={innerCoverColor} />} />}
                             {bindingCaps.hasElastic && <Row label={t(language, 'orderElasticLabel')} value={hasElastic ? <ColorDot color={elasticColor} /> : t(language, 'orderNo')} />}
                             {bindingCaps.hasCorners && (
                                 <Row label={t(language, 'cornersLabel')} value={hasCorners ? t(language, 'orderYes') : t(language, 'orderNo')} />

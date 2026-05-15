@@ -127,6 +127,7 @@ ul.files li { margin-bottom: 1mm; font-size: 9pt; }
     <tr><td class="k">Цвет пружины</td><td class="v">{% if c.spiralColor %}<span class="swatch" style="background:{{ c.spiralColor }}"></span>{{ c.spiralColor }}{% else %}—{% endif %}</td></tr>
     <tr><td class="k">Обложка — внешний слой, материал</td><td class="v">{% if c.coverColor %}<span class="swatch" style="background:{{ c.coverColor }}"></span>{{ c.coverColor }}{% else %}—{% endif %}</td></tr>
     <tr><td class="k">Обложка — внутренний слой</td><td class="v">{{ c.hasInnerCover | yn }}</td></tr>
+    <tr><td class="k">Цвет внутренней обложки</td><td class="v">{% if c.innerCoverColor %}<span class="swatch" style="background:{{ c.innerCoverColor }}"></span>{{ c.innerCoverColor }}{% else %}—{% endif %}</td></tr>
     <tr><td class="k">Внутренний материал</td><td class="v">{{ c.innerCoverMaterial | safe_dash }}</td></tr>
     <tr><td class="k">Картон переплётный (тв. обл.)</td><td class="v">{{ c.hasCardboard | yn }}</td></tr>
     <tr><td class="k">Толщина картона</td><td class="v">{{ c.cardboardThickness | safe_dash }}</td></tr>

@@ -14,6 +14,7 @@ import { Notebook } from '../shared/Notebook';
 const NOTEBOOK_PREVIEW_CONFIG = {
     bindingType: 'spiral',
     coverColor: '#1565C0',
+    innerCoverColor: '#1565C0',
     hasCorners: false,
     hasElastic: true,
     elasticColor: '#1a1a1a',
@@ -309,6 +310,7 @@ export function ConfiguratorProductMenu({ onStart }) {
         const nextBindingCaps = getNotebookBindingCapabilities(nextBindingType);
         setBindingType(nextBindingType);
         if (config.coverColor) setColor('cover', config.coverColor);
+        if (config.innerCoverColor) setColor('innerCover', config.innerCoverColor);
         if (config.elasticColor) setColor('elastic', config.elasticColor);
         if (config.spiralColor) setColor('spiral', config.spiralColor);
         setHasElastic(nextBindingCaps.hasElastic && (config.hasElastic !== undefined ? config.hasElastic : true));
@@ -325,6 +327,7 @@ export function ConfiguratorProductMenu({ onStart }) {
                     bindingType: 'spiral',
                     hasElastic: true,
                     coverColor: '#1565C0',
+                    innerCoverColor: '#1565C0',
                     spiralColor: '#C0C0C0',
                     elasticColor: '#1a1a1a',
                 })}
