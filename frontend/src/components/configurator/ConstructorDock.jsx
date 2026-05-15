@@ -64,7 +64,7 @@ export const FloatingLogoSettings = ({ title, subtitle, children }) => {
     if (typeof document === 'undefined') return null;
 
     return createPortal(
-        <aside className="pointer-events-auto hidden md:block fixed right-5 lg:right-8 top-[38%] z-[90] w-[320px] max-w-[calc(100vw-2.5rem)] max-h-[min(560px,calc(100vh-8rem))] -translate-y-1/2 overflow-y-auto rounded-[12px] border border-white/30 bg-[#3f3438]/94 px-5 py-4 font-zen text-white shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-2xl custom-scrollbar">
+        <aside className="pointer-events-auto hidden md:block fixed right-3 lg:right-4 top-3 z-[90] w-[320px] max-w-[calc(100vw-1.5rem)] max-h-[min(560px,calc(100vh-1.5rem))] overflow-y-auto rounded-[12px] border border-white/30 bg-[#3f3438]/94 px-5 py-4 font-zen text-white shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-2xl custom-scrollbar">
             <div className="mb-4 border-b border-white/12 pb-3">
                 <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/42">{title}</p>
                 {subtitle && <h3 className="mt-1 truncate text-[18px] font-black leading-tight">{subtitle}</h3>}

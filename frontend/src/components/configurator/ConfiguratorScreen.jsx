@@ -52,15 +52,14 @@ export function ConfiguratorScreen({ currentUser, userRole, logout, onNavigate, 
                 {currentUser ? t(language, 'backToCabinet') : t(language, 'backToMenu')}
             </button>
 
-            <div className="absolute top-2 left-1/2 -translate-x-1/2 md:top-3 z-50">
+            <div className="absolute top-2 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 md:top-3">
                 <UndoRedoControls />
+                <ConfiguratorToolbar
+                    onReset={() => resetConfigurator(activeProduct)}
+                    productLabel={t(language, activeProduct) || activeProduct}
+                    language={language}
+                />
             </div>
-
-            <ConfiguratorToolbar
-                onReset={() => resetConfigurator(activeProduct)}
-                productLabel={t(language, activeProduct) || activeProduct}
-                language={language}
-            />
 
             {activeProduct === 'calendar' ? (
                 <div className="app-bg w-full h-full flex flex-col items-center justify-center font-zen select-none transition-colors duration-300">
@@ -125,21 +124,19 @@ function ConfiguratorToolbar({ onReset, productLabel, language = 'ru' }) {
     const [confirmReset, setConfirmReset] = useState(false);
     return (
         <>
-            <div className="absolute top-2 right-3 md:top-3 md:right-5 z-50 flex items-center gap-2">
-                <button
-                    onClick={() => setConfirmReset(true)}
-                    title={t(language, 'resetConfigTitle')}
-                    className="h-[34px] w-[34px] flex items-center justify-center bg-[#fff9ec] backdrop-blur-md rounded-full border border-black/10 shadow-xl text-[#1a1a1a] hover:bg-white active:scale-95 transition-all"
-                >
-                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 6h18" />
-                        <path d="M8 6V4h8v2" />
-                        <path d="M19 6l-1 14H6L5 6" />
-                        <path d="M10 11v5" />
-                        <path d="M14 11v5" />
-                    </svg>
-                </button>
-            </div>
+            <button
+                onClick={() => setConfirmReset(true)}
+                title={t(language, 'resetConfigTitle')}
+                className="flex h-[34px] w-[34px] items-center justify-center rounded-full border border-black/10 bg-[#fff9ec] text-[#1a1a1a] shadow-xl backdrop-blur-md transition-all hover:bg-white active:scale-95"
+            >
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4h8v2" />
+                    <path d="M19 6l-1 14H6L5 6" />
+                    <path d="M10 11v5" />
+                    <path d="M14 11v5" />
+                </svg>
+            </button>
             <ConfirmModal
                 open={confirmReset}
                 title={`${t(language, 'resetBtn')} «${productLabel}»?`}
