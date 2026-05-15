@@ -11,7 +11,7 @@ import { SceneLoadingOverlay } from '../shared/VibeLoader';
 
 export const Order = ({ onBack, onSuccess }) => {
     const {
-        format, coverColor, innerCoverColor, elasticColor, hasElastic,
+        format, coverColor, innerCoverColor, stitchColor, elasticColor, hasElastic,
         paperPattern, logos, bindingType, spiralColor,
         hasCorners,
         blockPages, paperType,
@@ -73,6 +73,8 @@ export const Order = ({ onBack, onSuccess }) => {
             coverColor,
             innerCoverColor: bindingCaps.hasInnerCoverColor ? innerCoverColor : null,
             hasInnerCover: bindingCaps.hasInnerCoverColor,
+            hasStitch: bindingCaps.hasStitch,
+            stitchColor: bindingCaps.hasStitchColor ? stitchColor : null,
             hasElastic: orderHasElastic,
             elasticColor: orderHasElastic ? elasticColor : null,
             spiralColor: bindingCaps.hasSpiralColor ? spiralColor : null,
@@ -186,6 +188,7 @@ export const Order = ({ onBack, onSuccess }) => {
                             <Row label={t(language, 'orderFormatLabel')} value={format} />
                             <Row label={bindingCaps.hasInnerCoverColor ? t(language, 'orderOuterCoverLabel') : t(language, 'orderCoverLabel')} value={<ColorDot color={coverColor} />} />
                             {bindingCaps.hasInnerCoverColor && <Row label={t(language, 'orderInnerCoverLabel')} value={<ColorDot color={innerCoverColor} />} />}
+                            {bindingCaps.hasStitchColor && <Row label={t(language, 'orderThreadLabel')} value={<ColorDot color={stitchColor} />} />}
                             {bindingCaps.hasElastic && <Row label={t(language, 'orderElasticLabel')} value={hasElastic ? <ColorDot color={elasticColor} /> : t(language, 'orderNo')} />}
                             {bindingCaps.hasCorners && (
                                 <Row label={t(language, 'cornersLabel')} value={hasCorners ? t(language, 'orderYes') : t(language, 'orderNo')} />

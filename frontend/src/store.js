@@ -24,9 +24,9 @@ export const captureRender = () => {
 }
 
 export const NOTEBOOK_BINDING_CAPABILITIES = {
-    hard: { hasCoverColor: true, hasInnerCoverColor: false, hasCorners: true, hasElastic: false, hasSpiralColor: false },
-    soft: { hasCoverColor: true, hasInnerCoverColor: false, hasCorners: true, hasElastic: false, hasSpiralColor: false },
-    spiral: { hasCoverColor: true, hasInnerCoverColor: true, hasCorners: false, hasElastic: true, hasSpiralColor: true },
+    hard: { hasCoverColor: true, hasInnerCoverColor: false, hasCorners: true, hasElastic: false, hasSpiralColor: false, hasStitch: false, hasStitchColor: false },
+    soft: { hasCoverColor: true, hasInnerCoverColor: false, hasCorners: true, hasElastic: false, hasSpiralColor: false, hasStitch: false, hasStitchColor: false },
+    spiral: { hasCoverColor: true, hasInnerCoverColor: true, hasCorners: false, hasElastic: true, hasSpiralColor: true, hasStitch: true, hasStitchColor: true },
 };
 
 export const getNotebookBindingCapabilities = (bindingType) => (
@@ -41,6 +41,7 @@ export const NOTEBOOK_DEFAULTS = {
     paperPattern: 'blank',
     coverColor: '#D2B48C',
     innerCoverColor: '#D2B48C',
+    stitchColor: '#ffffff',
     hasElastic: false,
     elasticColor: '#1a1a1a',
     spiralColor: '#1a1a1a',
@@ -114,6 +115,7 @@ export const useConfigurator = create(temporal((set, get) => ({
     paperPattern: 'blank',
     coverColor: '#D2B48C',
     innerCoverColor: '#D2B48C',
+    stitchColor: '#ffffff',
     hasElastic: false,
     elasticColor: '#1a1a1a',
     spiralColor: '#1a1a1a',

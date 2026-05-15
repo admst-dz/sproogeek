@@ -4,10 +4,12 @@ import { easing } from 'maath'
 import { getNotebookBindingCapabilities, useConfigurator } from '../../store'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
-import { useLogoTexture } from '../../utils/threeTextures'
+import { useLogoTexture, useMaskTexture } from '../../utils/threeTextures'
 import tverdiyPerepletUrl from '../../assets/tverdiy_pereplet.glb?url'
 import naPruzhineUrl from '../../assets/na_pruzhine.glb?url'
 import tonkiyPerepletUrl from '../../assets/tonkiy_pereplet.glb?url'
+import seamOutMaskUrl from '../../assets/Mask_seam_out.png?url'
+import seamInMaskUrl from '../../assets/Mask_seam_in.png?url'
 
 const LOGO_SURFACE_OFFSET = 0.01;
 const LOGO_POLYGON_OFFSET = -24;
@@ -116,6 +118,26 @@ function HardCoverLogoPlane({ texture, x, y, z, side = 'front', rotation = 0, sc
                 />
             </mesh>
         </group>
+    );
+}
+
+function StitchOverlay({ geometry, alphaMap, materialRef, color }) {
+    return (
+        <mesh geometry={geometry} renderOrder={20}>
+            <meshStandardMaterial
+                ref={materialRef}
+                color={color}
+                alphaMap={alphaMap}
+                transparent
+                alphaTest={0.08}
+                depthWrite={false}
+                polygonOffset
+                polygonOffsetFactor={-4}
+                polygonOffsetUnits={-4}
+                roughness={0.68}
+                metalness={0}
+            />
+        </mesh>
     );
 }
 
@@ -380,10 +402,14 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos }) {
 }
 
 // ─── НА ПРУЖИНЕ (GLB) ─────────────────────────────────────────────────────────
-function NaPruzhineModel({ coverColor, innerCoverColor, spiralColor, elasticColor, hasElastic, logos }) {
+function NaPruzhineModel({ coverColor, innerCoverColor, stitchColor, spiralColor, elasticColor, hasElastic, logos }) {
     const { scene, nodes, materials } = useGLTF(naPruzhineUrl);
+    const seamOutMask = useMaskTexture(seamOutMaskUrl);
+    const seamInMask = useMaskTexture(seamInMaskUrl);
     const outerCoverMatRef = useRef();
     const innerCoverMatRef = useRef();
+    const outerStitchMatRef = useRef();
+    const innerStitchMatRef = useRef();
     const spiralMatRef = useRef();
     const elasticMatRef = useRef();
 
@@ -454,6 +480,8 @@ function NaPruzhineModel({ coverColor, innerCoverColor, spiralColor, elasticColo
     useFrame((_, delta) => {
         if (outerCoverMatRef.current) easing.dampC(outerCoverMatRef.current.color, coverColor, 0.25, delta);
         if (innerCoverMatRef.current) easing.dampC(innerCoverMatRef.current.color, innerCoverColor, 0.25, delta);
+        if (outerStitchMatRef.current) easing.dampC(outerStitchMatRef.current.color, stitchColor, 0.25, delta);
+        if (innerStitchMatRef.current) easing.dampC(innerStitchMatRef.current.color, stitchColor, 0.25, delta);
         if (spiralMatRef.current) easing.dampC(spiralMatRef.current.color, spiralColor, 0.25, delta);
         if (elasticMatRef.current) easing.dampC(elasticMatRef.current.color, elasticColor, 0.25, delta);
     });
@@ -471,6 +499,14 @@ function NaPruzhineModel({ coverColor, innerCoverColor, spiralColor, elasticColo
                     />
                 </mesh>
             )}
+            {outerCoverEntry && (
+                <StitchOverlay
+                    geometry={outerCoverEntry.geo}
+                    alphaMap={seamOutMask}
+                    materialRef={outerStitchMatRef}
+                    color={stitchColor}
+                />
+            )}
             {innerCoverEntry && (
                 <mesh geometry={innerCoverEntry.geo} castShadow receiveShadow>
                     <meshStandardMaterial
@@ -481,6 +517,14 @@ function NaPruzhineModel({ coverColor, innerCoverColor, spiralColor, elasticColo
                         metalness={0.02}
                     />
                 </mesh>
+            )}
+            {innerCoverEntry && (
+                <StitchOverlay
+                    geometry={innerCoverEntry.geo}
+                    alphaMap={seamInMask}
+                    materialRef={innerStitchMatRef}
+                    color={stitchColor}
+                />
             )}
             {outerCoverEntry && safeLogos.map(logo => {
                 const surface = getLogoSurfaceProps(logo, outerCoverEntry.bbox, frontZ, backZ);
@@ -667,7 +711,7 @@ export function Notebook({ config: configProp, ...props }) {
     const store = useConfigurator();
     const {
         bindingType,
-        coverColor = '#D2B48C', innerCoverColor = coverColor, hasElastic, elasticColor = '#1a1a1a',
+        coverColor = '#D2B48C', innerCoverColor = coverColor, stitchColor = '#ffffff', hasElastic, elasticColor = '#1a1a1a',
         spiralColor = '#1a1a1a',
         logos = [],
         hasCorners,
@@ -676,6 +720,7 @@ export function Notebook({ config: configProp, ...props }) {
     const bindingCaps = getNotebookBindingCapabilities(resolvedBindingType);
     const resolvedCoverColor = coverColor || '#D2B48C';
     const resolvedInnerCoverColor = innerCoverColor || resolvedCoverColor;
+    const resolvedStitchColor = stitchColor || '#ffffff';
     const resolvedElasticColor = elasticColor || '#1a1a1a';
     const resolvedSpiralColor = spiralColor || '#1a1a1a';
     const safeLogos = Array.isArray(logos) ? logos : [];
@@ -697,6 +742,7 @@ export function Notebook({ config: configProp, ...props }) {
                 <NaPruzhineModel
                     coverColor={resolvedCoverColor}
                     innerCoverColor={resolvedInnerCoverColor}
+                    stitchColor={resolvedStitchColor}
                     spiralColor={resolvedSpiralColor}
                     elasticColor={resolvedElasticColor}
                     hasElastic={bindingCaps.hasElastic && hasElastic}

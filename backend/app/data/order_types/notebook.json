@@ -28,6 +28,10 @@
       "type": "color",
       "required": false
     },
+    "stitchColor": {
+      "type": "color",
+      "required": false
+    },
     "quantity": {
       "type": "integer",
       "required": true,

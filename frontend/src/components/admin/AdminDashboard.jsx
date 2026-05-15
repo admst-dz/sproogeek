@@ -177,6 +177,7 @@ function orderSummaryRows(order, language) {
         [t(language, 'adminPatternLabel'), getPatternLabel(productConfig.paperPattern, language) || productConfig.paperPattern],
         [bindingCaps.hasInnerCoverColor ? t(language, 'adminOuterCoverColorLabel') : t(language, 'adminCoverColorLabel'), productConfig.coverColor ? <ColorValue color={productConfig.coverColor} /> : null],
         [t(language, 'adminInnerCoverColorLabel'), bindingCaps.hasInnerCoverColor && productConfig.innerCoverColor ? <ColorValue color={productConfig.innerCoverColor} /> : null],
+        [t(language, 'adminThreadColorLabel'), bindingCaps.hasStitchColor && productConfig.stitchColor ? <ColorValue color={productConfig.stitchColor} /> : null],
         [t(language, 'bodyLabel'), productConfig.powerbankBodyColor || productConfig.thermosBodyColor ? <ColorValue color={productConfig.powerbankBodyColor || productConfig.thermosBodyColor} /> : null],
         [t(language, 'adminElasticLabel'), bindingCaps.hasElastic && productConfig.hasElastic ? <ColorValue color={productConfig.elasticColor} /> : null],
         [t(language, 'adminSpiralLabel'), productConfig.spiralColor ? <ColorValue color={productConfig.spiralColor} /> : null],

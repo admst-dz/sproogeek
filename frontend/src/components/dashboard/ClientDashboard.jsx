@@ -126,7 +126,7 @@ const getNotebookBindingLabel = (bindingType, language) => ({
 export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToastShown, initialTab, onTabChange }) => {
     const {
         currentUser, logout, cartItem, clearCart,
-        activeProduct, coverColor, innerCoverColor, elasticColor,
+        activeProduct, coverColor, innerCoverColor, stitchColor, elasticColor,
         paperPattern, bindingType, spiralColor, format,
         thermosBodyColor, language,
     } = useConfigurator();
@@ -147,6 +147,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
     const cartPaperPattern = cartProductConfig?.paperPattern || paperPattern;
     const cartCoverColor = cartProductConfig?.coverColor || coverColor;
     const cartInnerCoverColor = cartProductConfig?.innerCoverColor || innerCoverColor || cartCoverColor;
+    const cartStitchColor = cartProductConfig?.stitchColor || stitchColor;
     const cartHasElastic = !!cartProductConfig?.hasElastic;
     const cartElasticColor = cartProductConfig?.elasticColor || elasticColor;
     const cartSpiralColor = cartProductConfig?.spiralColor || spiralColor;
@@ -382,6 +383,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                     <CartRow label={t(language, 'patternLabel')} value={{ blank: t(language, 'patternBlank'), lined: t(language, 'patternLined'), tlined: t(language, 'patternTLined'), grid: t(language, 'patternGrid'), dotted: t(language, 'patternDotted') }[cartPaperPattern]} />
                                                     <CartRow label={cartBindingCaps.hasInnerCoverColor ? t(language, 'outerCoverLabel') : t(language, 'coverLabel')} value={<ColorDot color={cartCoverColor} />} />
                                                     {cartBindingCaps.hasInnerCoverColor && <CartRow label={t(language, 'innerCoverLabel')} value={<ColorDot color={cartInnerCoverColor} />} />}
+                                                    {cartBindingCaps.hasStitchColor && <CartRow label={t(language, 'threadLabel')} value={<ColorDot color={cartStitchColor} />} />}
                                                     {cartBindingCaps.hasElastic && cartHasElastic && <CartRow label={t(language, 'elasticLabel')} value={<ColorDot color={cartElasticColor} />} />}
                                                     {cartBindingCaps.hasSpiralColor && <CartRow label={t(language, 'spiralLabel')} value={<ColorDot color={cartSpiralColor} />} />}
                                                     {cartBindingCaps.hasCorners && <CartRow label={t(language, 'cornersLabel')} value={cartHasCorners ? t(language, 'orderYes') : t(language, 'orderNo')} />}
@@ -573,6 +575,9 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                                     )}
                                                                     {getNotebookBindingCapabilities(order.configuration?.productConfig?.bindingType).hasInnerCoverColor && order.configuration?.productConfig?.innerCoverColor && (
                                                                         <ClientDetailRow label={t(language, 'innerCoverLabel')} value={<ClientColorDot color={order.configuration.productConfig.innerCoverColor} />} />
+                                                                    )}
+                                                                    {getNotebookBindingCapabilities(order.configuration?.productConfig?.bindingType).hasStitchColor && order.configuration?.productConfig?.stitchColor && (
+                                                                        <ClientDetailRow label={t(language, 'threadLabel')} value={<ClientColorDot color={order.configuration.productConfig.stitchColor} />} />
                                                                     )}
                                                                     {getNotebookBindingCapabilities(order.configuration?.productConfig?.bindingType).hasElastic && order.configuration?.productConfig?.hasElastic && order.configuration?.productConfig?.elasticColor && (
                                                                         <ClientDetailRow label={t(language, 'elasticLabel')} value={<ClientColorDot color={order.configuration.productConfig.elasticColor} />} />

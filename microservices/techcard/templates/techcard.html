@@ -122,7 +122,7 @@ ul.files li { margin-bottom: 1mm; font-size: 9pt; }
     <tr><td class="k">Уголки</td><td class="v">{{ c.hasCorners | yn }}</td></tr>
     <tr><td class="k">Цвет уголков</td><td class="v">{% if c.cornerColor %}<span class="swatch" style="background:{{ c.cornerColor }}"></span>{{ c.cornerColor }}{% else %}—{% endif %}</td></tr>
     <tr><td class="k">Строчка</td><td class="v">{{ c.hasStitch | yn }}</td></tr>
-    <tr><td class="k">Цвет строчки</td><td class="v">{{ c.stitchColor | safe_dash }}</td></tr>
+    <tr><td class="k">Цвет строчки</td><td class="v">{% if c.hasStitch and c.stitchColor %}<span class="swatch" style="background:{{ c.stitchColor }}"></span>{{ c.stitchColor }}{% else %}—{% endif %}</td></tr>
     <tr><td class="k">Пружина (для «На пружине»)</td><td class="v">{{ (c.bindingType == 'spiral') | yn }}</td></tr>
     <tr><td class="k">Цвет пружины</td><td class="v">{% if c.spiralColor %}<span class="swatch" style="background:{{ c.spiralColor }}"></span>{{ c.spiralColor }}{% else %}—{% endif %}</td></tr>
     <tr><td class="k">Обложка — внешний слой, материал</td><td class="v">{% if c.coverColor %}<span class="swatch" style="background:{{ c.coverColor }}"></span>{{ c.coverColor }}{% else %}—{% endif %}</td></tr>

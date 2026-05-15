@@ -89,6 +89,7 @@ h2 { font-size: 13pt; margin: 6mm 0 3mm; padding-bottom: 1mm; border-bottom: .8p
                         {% if c.paperPattern %} · Разлиновка: {{ c.paperPattern }}{% endif %}
                         {% if c.coverColor %} · Внешняя обложка: <span class="swatch" style="background:{{ c.coverColor }}"></span>{{ c.coverColor }}{% endif %}
                         {% if c.innerCoverColor %} · Внутренняя обложка: <span class="swatch" style="background:{{ c.innerCoverColor }}"></span>{{ c.innerCoverColor }}{% endif %}
+                        {% if c.stitchColor %} · Нитка: <span class="swatch" style="background:{{ c.stitchColor }}"></span>{{ c.stitchColor }}{% endif %}
                     </div>
                 {% endif %}
             </td>

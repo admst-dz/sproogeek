@@ -47,7 +47,7 @@ export const Interface = ({ onFinish }) => {
     const {
         format, setFormat,
         bindingType, setBindingType,
-        setColor, coverColor, innerCoverColor, elasticColor, spiralColor,
+        setColor, coverColor, innerCoverColor, stitchColor, elasticColor, spiralColor,
         hasElastic, setHasElastic,
         hasCorners, toggleCorners,
         setNotebookOpen,
@@ -82,14 +82,15 @@ export const Interface = ({ onFinish }) => {
         const orderHasCorners = bindingCaps.hasCorners && hasCorners;
         const orderSpiralColor = bindingCaps.hasSpiralColor ? spiralColor : null;
         const orderInnerCoverColor = bindingCaps.hasInnerCoverColor ? innerCoverColor : null;
+        const orderStitchColor = bindingCaps.hasStitchColor ? stitchColor : null;
         const newItem = {
             productName: `${t(language, 'notebook')} ${format}`,
             design: `${t(language, 'bindingFormatLabel')} ${bindingLabel}, ${t(language, 'patternLabel')}: ${paperPattern}`,
             priceBYN: 1500,
             type: 'notebook',
             activeProduct: 'notebook',
-            config: { format, coverColor, innerCoverColor: orderInnerCoverColor, hasInnerCover: bindingCaps.hasInnerCoverColor, hasElastic: orderHasElastic, elasticColor: orderHasElastic ? elasticColor : null, paperPattern, bindingType, spiralColor: orderSpiralColor, hasCorners: orderHasCorners, blockPages, paperType, logos },
-            format, coverColor, innerCoverColor: orderInnerCoverColor, hasInnerCover: bindingCaps.hasInnerCoverColor, hasElastic: orderHasElastic, elasticColor: orderHasElastic ? elasticColor : null, paperPattern, bindingType, spiralColor: orderSpiralColor, hasCorners: orderHasCorners, blockPages, paperType, logos,
+            config: { format, coverColor, innerCoverColor: orderInnerCoverColor, hasInnerCover: bindingCaps.hasInnerCoverColor, hasStitch: bindingCaps.hasStitch, stitchColor: orderStitchColor, hasElastic: orderHasElastic, elasticColor: orderHasElastic ? elasticColor : null, paperPattern, bindingType, spiralColor: orderSpiralColor, hasCorners: orderHasCorners, blockPages, paperType, logos },
+            format, coverColor, innerCoverColor: orderInnerCoverColor, hasInnerCover: bindingCaps.hasInnerCoverColor, hasStitch: bindingCaps.hasStitch, stitchColor: orderStitchColor, hasElastic: orderHasElastic, elasticColor: orderHasElastic ? elasticColor : null, paperPattern, bindingType, spiralColor: orderSpiralColor, hasCorners: orderHasCorners, blockPages, paperType, logos,
             status: 'draft',
             rendersGenerated: 0,
             quantity,
@@ -157,6 +158,11 @@ export const Interface = ({ onFinish }) => {
                         {bindingCaps.hasInnerCoverColor && (
                             <SettingRow label={t(language, 'innerCoverColorLabel')}>
                                 <ColorDropdown colors={palette} currentColor={innerCoverColor} onSelect={(c) => setColor('innerCover', c)} />
+                            </SettingRow>
+                        )}
+                        {bindingCaps.hasStitchColor && (
+                            <SettingRow label={t(language, 'threadColorLabel')}>
+                                <ColorDropdown colors={palette} currentColor={stitchColor} onSelect={(c) => setColor('stitch', c)} />
                             </SettingRow>
                         )}
                         {bindingCaps.hasElastic && (
