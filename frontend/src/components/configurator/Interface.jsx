@@ -127,7 +127,7 @@ export const Interface = ({ onFinish }) => {
             </div>
             {tab === 'cover' && (
                 <DockGrid
-                    cols="md:grid-cols-[1fr_1fr_1.12fr_0.85fr]"
+                    cols="md:grid-cols-2"
                 >
                     <SettingGroup title={t(language, 'formatLabel')} compact>
                         <SettingRow label={t(language, 'formatLabel')}>
@@ -219,7 +219,7 @@ export const Interface = ({ onFinish }) => {
                 <DockGrid
                     cols="md:grid-cols-1"
                 >
-                    <div className="min-w-0 space-y-3 md:pl-5 lg:pl-6">
+                    <div className="min-w-0 space-y-3 md:-mx-2 lg:-mx-1">
                         <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-5 gap-2">
                             {PATTERN_IDS.map((id) => (
                                 <button
@@ -308,7 +308,7 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
             />
             {selected && (
                 <>
-                    <div className="mt-3 space-y-3 md:hidden">
+                    <div className="mt-3 space-y-3 xl:hidden">
                         <TransformPad label={t(language, 'position')} value={selected.position} onChange={setLogoPosition} onReset={resetLogoTransform} />
                         <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setLogoRotation} />
                         <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.2} max={1.5} step={0.05} onChange={setLogoScale} />

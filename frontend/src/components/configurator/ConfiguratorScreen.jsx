@@ -77,7 +77,7 @@ export function ConfiguratorScreen({ currentUser, userRole, logout, onNavigate, 
                     <div
                         ref={configuratorCanvasRef}
                         onWheelCapture={handleSceneWheel}
-                        className="app-bg relative w-full h-[40svh] min-h-[270px] max-h-[46svh] shrink-0 md:absolute md:inset-0 md:w-full md:h-full md:max-h-none md:bg-transparent dark:md:bg-transparent"
+                        className="app-bg relative w-full h-[40svh] min-h-[270px] max-h-[46svh] shrink-0 md:absolute md:inset-0 md:w-full md:h-full md:max-h-none md:bg-transparent dark:md:bg-transparent lg:right-[430px] lg:w-auto"
                     >
                         <div className="absolute bottom-3 right-3 z-10 md:hidden">
                             <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
@@ -100,7 +100,7 @@ export function ConfiguratorScreen({ currentUser, userRole, logout, onNavigate, 
                         <SceneHints containerRef={configuratorCanvasRef} />
                     </div>
 
-                    <div className="relative flex-1 min-h-0 w-full z-20 pointer-events-none md:absolute md:inset-x-0 md:bottom-5 md:top-auto md:h-auto md:px-6 md:flex md:justify-center">
+                    <div className="relative flex-1 min-h-0 w-full z-20 pointer-events-none md:absolute md:inset-x-0 md:bottom-5 md:top-auto md:h-auto md:px-6 md:flex md:justify-center lg:w-auto lg:inset-x-auto lg:right-5 lg:top-4 lg:bottom-5 lg:px-0 lg:justify-start">
                         {activeProduct === 'thermos' ? (
                             <ThermosInterface onFinish={onFinish} />
                         ) : activeProduct === 'powerbank' ? (

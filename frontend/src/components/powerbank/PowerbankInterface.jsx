@@ -50,7 +50,7 @@ export const PowerbankInterface = ({ onFinish }) => {
     return (
         <ConstructorDock title={t(language, 'powerbankTitle')} onSave={handleAddToCart} saveLabel={t(language, 'placeOrder')}>
             <DockGrid
-                cols="md:grid-cols-[0.9fr_1.16fr_0.85fr]"
+                cols="md:grid-cols-2"
             >
                 <SettingGroup title={t(language, 'bodyColor')}>
                     <SettingRow label={t(language, 'bodyColor')}>
@@ -103,7 +103,7 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
 
             {selected && (
                 <>
-                    <div className="mt-3 space-y-3 md:hidden">
+                    <div className="mt-3 space-y-3 xl:hidden">
                         <SettingRow label={t(language, 'applicationSide')}>
                             <MiniDropdown
                                 value={selected.side ?? 'outer'}

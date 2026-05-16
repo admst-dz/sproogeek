@@ -2,16 +2,8 @@ import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 export const ConstructorDock = ({ title, tabs = [], activeTab, onTabChange, onSave, saveLabel, desktopTitleColumn = false, children }) => (
-    <div className="pointer-events-auto w-full h-full md:h-auto md:w-[min(1120px,calc(100vw-3rem))] lg:w-[min(1180px,calc(100vw-4rem))] md:max-h-[64vh] flex flex-col items-center gap-4 font-zen text-white">
-        <button
-            type="button"
-            onClick={onSave}
-            className="hidden md:inline-flex self-end mr-4 lg:mr-5 min-w-[118px] justify-center rounded-full bg-[#fff9ec] px-7 py-2 text-[14px] font-black text-[#1b1b1b] shadow-lg transition hover:bg-white active:scale-95"
-        >
-            {saveLabel}
-        </button>
-
-        <section className="w-full h-full md:h-auto md:max-h-[calc(64vh-54px)] min-h-0 flex flex-col rounded-t-[24px] md:rounded-[8px] border border-white/35 bg-[#4b393c]/84 shadow-2xl backdrop-blur-xl overflow-hidden">
+    <div className="pointer-events-auto w-full h-full md:h-auto md:w-[min(1120px,calc(100vw-3rem))] lg:h-full lg:w-[min(400px,calc(100vw-2.5rem))] md:max-h-[64vh] lg:max-h-none flex flex-col items-center lg:items-stretch gap-4 lg:gap-3 font-zen text-white">
+        <section className="w-full h-full md:h-auto lg:h-full md:max-h-[calc(64vh-54px)] lg:max-h-none min-h-0 flex flex-col rounded-t-[24px] md:rounded-[8px] lg:rounded-[12px] border border-white/35 bg-[#4b393c]/84 shadow-2xl backdrop-blur-xl overflow-hidden">
             {tabs.length > 0 && (
                 <div className="flex items-center justify-between gap-3 border-b border-white/20 px-4 py-3 md:pl-4 md:pr-7 md:py-4 lg:pl-5 lg:pr-8">
                     <div className="min-w-0" />
@@ -32,7 +24,7 @@ export const ConstructorDock = ({ title, tabs = [], activeTab, onTabChange, onSa
                 </div>
             )}
 
-            <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar px-4 py-3 md:px-7 md:py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar px-4 py-3 md:px-7 md:py-5 lg:px-4 lg:py-4">
                 {children}
             </div>
 
@@ -46,11 +38,19 @@ export const ConstructorDock = ({ title, tabs = [], activeTab, onTabChange, onSa
                 </button>
             </div>
         </section>
+
+        <button
+            type="button"
+            onClick={onSave}
+            className="hidden md:inline-flex self-end mr-4 lg:mr-0 lg:w-full min-w-[118px] justify-center rounded-full bg-[#fff9ec] px-7 py-2 text-[14px] font-black text-[#1b1b1b] shadow-lg transition hover:bg-white active:scale-95"
+        >
+            {saveLabel}
+        </button>
     </div>
 );
 
-export const DockGrid = ({ children, cols = 'md:grid-cols-4', leading = null }) => (
-    <div className={`grid grid-cols-1 sm:grid-cols-2 ${cols} gap-y-4 md:gap-y-0 md:divide-x md:divide-white/25 [&>*]:min-w-0`}>
+export const DockGrid = ({ children, cols = 'md:grid-cols-2', leading = null }) => (
+    <div className={`grid grid-cols-1 sm:grid-cols-2 ${cols} gap-y-4 md:gap-y-0 md:divide-x md:divide-white/25 lg:grid-cols-1 lg:gap-y-4 lg:divide-x-0 lg:[&>*+*]:border-t lg:[&>*+*]:border-white/15 lg:[&>*+*]:pt-4 [&>*]:min-w-0`}>
         {leading}
         {children}
     </div>
@@ -64,7 +64,7 @@ export const FloatingLogoSettings = ({ title, subtitle, children }) => {
     if (typeof document === 'undefined') return null;
 
     return createPortal(
-        <aside className="pointer-events-auto hidden md:block fixed right-3 lg:right-4 top-3 z-[90] w-[320px] max-w-[calc(100vw-1.5rem)] max-h-[min(560px,calc(100vh-1.5rem))] overflow-y-auto rounded-[12px] border border-white/30 bg-[#3f3438]/94 px-5 py-4 font-zen text-white shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-2xl custom-scrollbar">
+        <aside className="pointer-events-auto hidden xl:block fixed left-4 top-[4.75rem] z-[90] w-[320px] max-w-[calc(100vw-1.5rem)] max-h-[min(560px,calc(100vh-6rem))] overflow-y-auto rounded-[12px] border border-white/30 bg-[#3f3438]/94 px-5 py-4 font-zen text-white shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-2xl custom-scrollbar">
             <div className="mb-4 border-b border-white/12 pb-3">
                 <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/42">{title}</p>
                 {subtitle && <h3 className="mt-1 truncate text-[18px] font-black leading-tight">{subtitle}</h3>}
@@ -76,16 +76,16 @@ export const FloatingLogoSettings = ({ title, subtitle, children }) => {
 };
 
 export const SettingGroup = ({ title, children, compact = false }) => (
-    <div className={`${compact ? 'space-y-1.5 px-0 py-1 md:px-4 md:py-0 lg:px-5' : 'space-y-3 px-0 py-2 md:px-5 md:py-0 lg:px-6'} first:md:pl-0 last:md:pr-0`}>
+    <div className={`${compact ? 'space-y-1.5 px-0 py-1 md:px-4 md:py-0 lg:px-0 lg:py-0' : 'space-y-3 px-0 py-2 md:px-5 md:py-0 lg:px-0 lg:py-0'} first:md:pl-0 last:md:pr-0`}>
         {title && <p className={`${compact ? 'text-[9px] md:text-[10px]' : 'text-[10px] md:text-[12px]'} font-black uppercase tracking-[0.2em] text-white/42`}>{title}</p>}
         <div className={compact ? 'space-y-1.5' : 'space-y-3'}>{children}</div>
     </div>
 );
 
 export const SettingRow = ({ label, children, inline = false }) => (
-    <div className={`flex min-w-0 leading-tight ${inline ? 'flex-row items-center justify-between gap-2 text-[11px] md:text-[12px]' : 'flex-col items-start gap-2 text-[13px] md:text-[15px] lg:text-[16px]'}`}>
-        <span className={`font-bold ${inline ? 'shrink-0 text-white/70' : 'min-w-0 text-white/92'}`}>{label}</span>
-        <div className={inline ? 'shrink-0' : 'w-full min-w-0'}>{children}</div>
+    <div className={`min-w-0 leading-tight ${inline ? 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-[11px] md:text-[12px]' : 'flex flex-col items-start gap-2 text-[13px] md:text-[15px] lg:text-[16px]'}`}>
+        <span className={`font-bold ${inline ? 'min-w-0 break-words text-white/70' : 'min-w-0 break-words text-white/92'}`}>{label}</span>
+        <div className={inline ? 'min-w-0 max-w-full justify-self-end' : 'w-full min-w-0'}>{children}</div>
     </div>
 );
 

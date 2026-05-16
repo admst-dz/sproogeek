@@ -64,7 +64,7 @@ export const ThermosInterface = ({ onFinish }) => {
     return (
         <ConstructorDock title={t(language, 'thermosTitle')} onSave={handleAddToCart} saveLabel={t(language, 'placeOrder')}>
             <DockGrid
-                cols="md:grid-cols-[0.9fr_1.08fr_1.24fr_0.85fr]"
+                cols="md:grid-cols-2"
             >
                 <SettingGroup title={t(language, 'thermosBodyPart')}>
                     <SettingRow label={t(language, 'bodyColor')}>
@@ -146,7 +146,7 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, activeLogoTarget, addLogo, se
             <LogoList logos={visibleLogos} selectedLogoId={selectedLogoId} selectLogo={selectLogo} removeLogo={removeLogo} />
             {selected && (
                 <>
-                    <div className="mt-3 space-y-3 md:hidden">
+                    <div className="mt-3 space-y-3 xl:hidden">
                         {selected.mode === 'wrap' && (
                             <div className="rounded-[8px] border border-white/10 bg-white/8 px-3 py-2 text-xs font-bold text-white/60">
                                 {t(language, 'aiWrapApplied')}

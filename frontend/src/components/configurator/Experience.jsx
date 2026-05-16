@@ -164,7 +164,7 @@ function OrbitCameraRig({ activeProduct, controlsRef, isMobile, zoomLevel }) {
 }
 
 export const Experience = () => {
-    const { activeProduct, zoomLevel, setZoom } = useConfigurator()
+    const { activeProduct, bindingType, zoomLevel, setZoom } = useConfigurator()
     const { active: assetsLoading, progress } = useProgress()
     const readyFrames = useRef(0)
     const orbitControlsRef = useRef(null)
@@ -200,9 +200,10 @@ export const Experience = () => {
     // Базовый зум (начальный размер)
     // Мобилка требует зум поменьше (камера дальше), десктоп побольше.
     // Notebook побольше, Calendar поменьше.
+    const notebookBaseZoom = bindingType === 'spiral' ? 1.0 : 0.68;
     const baseZoom = isMobile
         ? (activeProduct === 'calendar' ? 0.6 : activeProduct === 'thermos' ? 0.5 : activeProduct === 'powerbank' ? 0.65 : 0.8)
-        : (activeProduct === 'calendar' ? 0.8 : activeProduct === 'thermos' ? 0.68 : activeProduct === 'powerbank' ? 0.85 : 1.0);
+        : (activeProduct === 'calendar' ? 0.8 : activeProduct === 'thermos' ? 0.68 : activeProduct === 'powerbank' ? 0.85 : notebookBaseZoom);
 
     // Итоговый зум = База * То, что накликали кнопками
     const finalZoom = isOrbitProduct ? 1 : baseZoom * zoomLevel;
