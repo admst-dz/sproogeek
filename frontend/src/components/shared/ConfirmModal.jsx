@@ -37,17 +37,17 @@ export const ConfirmModal = ({
                 {message && (
                     <p className="text-sm text-black/70 dark:text-white/70 mb-6 leading-relaxed">{message}</p>
                 )}
-                <div className="flex gap-2">
+                <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
                     <button
                         onClick={onCancel}
-                        className="flex-1 py-3 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-black dark:text-white text-sm font-bold rounded-[12px] hover:bg-black/10 dark:hover:bg-white/10 active:scale-[0.98] transition-all"
+                        className="min-w-0 py-3 px-3 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-black dark:text-white text-sm font-bold rounded-[12px] hover:bg-black/10 dark:hover:bg-white/10 active:scale-[0.98] transition-all"
                     >
                         {cancelLabel}
                     </button>
                     <button
                         onClick={onConfirm}
                         autoFocus
-                        className={`flex-1 py-3 text-sm font-bold uppercase tracking-widest rounded-[12px] active:scale-[0.98] transition-all ${
+                        className={`min-w-0 py-3 px-3 text-sm font-bold uppercase tracking-[0.12em] whitespace-normal break-words rounded-[12px] active:scale-[0.98] transition-all ${
                             danger
                                 ? 'bg-red-500 text-white hover:bg-red-600'
                                 : 'bg-black text-white dark:bg-white dark:text-black hover:opacity-90'

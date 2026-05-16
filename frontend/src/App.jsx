@@ -145,13 +145,25 @@ function pickConfiguratorDraft(state) {
     return draft;
 }
 
+function hasMeaningfulConfiguratorDraft(state) {
+    return [
+        state?.logos,
+        state?.thermosLogos,
+        state?.powerbankLogos,
+    ].some((items) => Array.isArray(items) && items.length > 0);
+}
+
 function readConfiguratorDraft() {
     if (typeof window === 'undefined') return null;
     try {
         const raw = window.localStorage.getItem(CONFIGURATOR_DRAFT_KEY);
         if (!raw) return null;
         const parsed = JSON.parse(raw);
-        return parsed?.state ? parsed : null;
+        if (!parsed?.state || !hasMeaningfulConfiguratorDraft(parsed.state)) {
+            window.localStorage.removeItem(CONFIGURATOR_DRAFT_KEY);
+            return null;
+        }
+        return parsed;
     } catch {
         return null;
     }
@@ -159,6 +171,10 @@ function readConfiguratorDraft() {
 
 function writeConfiguratorDraft(state) {
     if (typeof window === 'undefined') return null;
+    if (!hasMeaningfulConfiguratorDraft(state)) {
+        clearConfiguratorDraft();
+        return null;
+    }
     const draft = {
         version: 1,
         updatedAt: Date.now(),
