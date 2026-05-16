@@ -131,57 +131,18 @@ jobs:
       tag: latest
 
   deploy:
-    needs: [changes, frontend, backend, renderer, techcard, unwrap, block_builder]
-    if: ${{ always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    needs: [frontend, backend, renderer, techcard, unwrap, block_builder]
+    if: always()
     runs-on: ubuntu-latest
-    concurrency:
-      group: deploy-production
-      cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Write env file
-        run: |
-          mkdir -p .deploy
-          cat > .deploy/.env <<'ENVEOF'
-          ${{ secrets.PROD_ENV_FILE }}
-          ENVEOF
-
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "${{ secrets.PROD_HOST }}" >> ~/.ssh/known_hosts
-
-      - name: Upload compose and env
-        env:
-          USER: ${{ secrets.PROD_USER }}
-          HOST: ${{ secrets.PROD_HOST }}
-          PATH_REMOTE: ${{ secrets.PROD_PATH }}
-        run: |
-          ssh "$USER@$HOST" "mkdir -p $PATH_REMOTE"
-          scp docker-compose.prod.yml "$USER@$HOST:$PATH_REMOTE/docker-compose.prod.yml"
-          scp .deploy/.env "$USER@$HOST:$PATH_REMOTE/.env"
-
-      - name: Pull and restart
-        env:
-          USER: ${{ secrets.PROD_USER }}
-          HOST: ${{ secrets.PROD_HOST }}
-          PATH_REMOTE: ${{ secrets.PROD_PATH }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
-        run: |
-          ssh "$USER@$HOST" bash -s <<EOF
-          set -euo pipefail
-          cd "$PATH_REMOTE"
-          echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-          docker compose -f docker-compose.prod.yml pull
-          docker compose -f docker-compose.prod.yml up -d --remove-orphans --scale backend=2
-          docker image prune -f
-          docker compose -f docker-compose.prod.yml ps
-          EOF
-
-      - name: Wipe env file
-        if: always()
-        run: rm -f .deploy/.env
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd ${{ secrets.PROD_PATH }}
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+            docker image prune -f

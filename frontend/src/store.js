@@ -1,11 +1,11 @@
 import { create } from 'zustand'
 import { temporal } from 'zundo'
 import { getCookie, setCookie, deleteCookie, hasCookieConsent } from './utils/cookies'
-import { clearMemoryToken } from './api'
 import { normalizeImageFile } from './utils/images'
 
 const CART_COOKIE = 'spruzhuk_cart';
 const AUTH_COOKIE = 'spruzhuk_auth';
+export const THEME_SWITCHING_ENABLED = false;
 
 const _initialCart = (() => {
     try {
@@ -23,6 +23,16 @@ export const captureRender = () => {
     try { return _webglCanvas.toDataURL('image/png') } catch { return null }
 }
 
+export const NOTEBOOK_BINDING_CAPABILITIES = {
+    hard: { hasCoverColor: true, hasInnerCoverColor: false, hasCorners: true, hasElastic: false, hasSpiralColor: false, hasStitch: false, hasStitchColor: false },
+    soft: { hasCoverColor: true, hasInnerCoverColor: false, hasCorners: true, hasElastic: false, hasSpiralColor: false, hasStitch: false, hasStitchColor: false },
+    spiral: { hasCoverColor: true, hasInnerCoverColor: true, hasCorners: false, hasElastic: true, hasSpiralColor: true, hasStitch: true, hasStitchColor: true },
+};
+
+export const getNotebookBindingCapabilities = (bindingType) => (
+    NOTEBOOK_BINDING_CAPABILITIES[bindingType] ?? NOTEBOOK_BINDING_CAPABILITIES.hard
+);
+
 // Поля, которые откатываются по Undo/Redo и сравниваются с defaults для "грязного" состояния.
 // Сюда НЕ попадают auth/UI-state/корзина/тема/zoom — они не должны влиять на историю конструктора.
 export const NOTEBOOK_DEFAULTS = {
@@ -30,7 +40,9 @@ export const NOTEBOOK_DEFAULTS = {
     format: 'A5',
     paperPattern: 'blank',
     coverColor: '#D2B48C',
-    hasElastic: true,
+    innerCoverColor: '#D2B48C',
+    stitchColor: '#ffffff',
+    hasElastic: false,
     elasticColor: '#1a1a1a',
     spiralColor: '#1a1a1a',
     hasCorners: true,
@@ -90,7 +102,11 @@ const getThermosLogoStartPosition = (logos, target) => {
 
 export const useConfigurator = create(temporal((set, get) => ({
     activeProduct: 'notebook', // 'notebook' | 'calendar' | 'thermos' | 'powerbank'
-    applyRenderConfig: (config) => set((state) => ({ ...state, ...config })),
+    applyRenderConfig: (config) => set((state) => ({
+        ...state,
+        ...config,
+        innerCoverColor: config.innerCoverColor ?? config.coverColor ?? state.innerCoverColor,
+    })),
 
     // --- Параметры 3D модели ---
     bindingType: 'hard',
@@ -98,7 +114,9 @@ export const useConfigurator = create(temporal((set, get) => ({
     isNotebookOpen: false,
     paperPattern: 'blank',
     coverColor: '#D2B48C',
-    hasElastic: true,
+    innerCoverColor: '#D2B48C',
+    stitchColor: '#ffffff',
+    hasElastic: false,
     elasticColor: '#1a1a1a',
     spiralColor: '#1a1a1a',
     logos: [],
@@ -144,12 +162,16 @@ export const useConfigurator = create(temporal((set, get) => ({
         localStorage.removeItem('token');
         deleteCookie(AUTH_COOKIE);
         deleteCookie(CART_COOKIE);
-        clearMemoryToken();
+        import('./api').then(({ clearMemoryToken }) => clearMemoryToken()).catch(() => {});
         set({ currentUser: null, userRole: null, clientSubRole: 'PL', cartItem: null, cartRestoredFromCookie: false });
     },
 
     setLanguage: (lang) => set({ language: lang }),
     toggleTheme: () => set((state) => {
+        if (!THEME_SWITCHING_ENABLED) {
+            document.documentElement.classList.add('dark');
+            return { theme: 'dark' };
+        }
         const newTheme = state.theme === 'light' ? 'dark' : 'light';
         if (newTheme === 'dark') document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
@@ -167,18 +189,28 @@ export const useConfigurator = create(temporal((set, get) => ({
     setRenderSnapshot: (url) => set({ renderSnapshot: url }),
 
     setProduct: (type) => set({ activeProduct: normalizeProduct(type) }),
-    setBindingType: (type) => set((state) => ({
-        bindingType: type,
-        hasElastic: type === 'hard' ? false : state.hasElastic,
-    })),
+    setBindingType: (type) => set((state) => {
+        const currentCaps = getNotebookBindingCapabilities(state.bindingType);
+        const nextCaps = getNotebookBindingCapabilities(type);
+        return {
+            bindingType: type,
+            hasElastic: nextCaps.hasElastic ? (currentCaps.hasElastic ? state.hasElastic : true) : false,
+            hasCorners: nextCaps.hasCorners ? state.hasCorners : false,
+        };
+    }),
     setFormat: (fmt) => set({ format: fmt }),
     setColor: (part, color) => set((state) => {
         if (part === 'thermosBody') {
             return { ...state, thermosBodyColor: color, thermosCapColor: color };
         }
+        if (part === 'cover' && !getNotebookBindingCapabilities(state.bindingType).hasInnerCoverColor) {
+            return { ...state, coverColor: color, innerCoverColor: color };
+        }
         return { ...state, [`${part}Color`]: color };
     }),
-    setHasElastic: (has) => set({ hasElastic: has }),
+    setHasElastic: (has) => set((state) => ({
+        hasElastic: getNotebookBindingCapabilities(state.bindingType).hasElastic && has,
+    })),
     setNotebookOpen: (isOpen) => set({ isNotebookOpen: isOpen }),
     setPaperPattern: (pattern) => set({ paperPattern: pattern, isNotebookOpen: true }),
     setPaperType: (type) => set({ paperType: type }),

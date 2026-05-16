@@ -1,16 +1,23 @@
 import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { easing } from 'maath'
-import { useConfigurator } from '../../store'
+import { getNotebookBindingCapabilities, useConfigurator } from '../../store'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
-import { useLogoTexture } from '../../utils/threeTextures'
+import { useLogoTexture, useMaskTexture } from '../../utils/threeTextures'
 import tverdiyPerepletUrl from '../../assets/tverdiy_pereplet.glb?url'
 import naPruzhineUrl from '../../assets/na_pruzhine.glb?url'
 import tonkiyPerepletUrl from '../../assets/tonkiy_pereplet.glb?url'
+import seamOutMaskUrl from '../../assets/Mask_seam_out.png?url'
+import seamInMaskUrl from '../../assets/Mask_seam_in.png?url'
 
 const LOGO_SURFACE_OFFSET = 0.01;
 const LOGO_POLYGON_OFFSET = -24;
+const SPIRAL_REFERENCE_FRAME = {
+    centerX: 0.08690843123513758,
+    centerY: 1.0145961622650757,
+    height: 2.1338905657777962,
+};
 
 function LogoPlane({ texture, x, y, z, side = 'front', rotation = 0, scale = 0.6 }) {
     const map = useLogoTexture(texture);
@@ -53,10 +60,40 @@ function bboxArea(bbox) {
     return size.x * size.y;
 }
 
+function getNormalizedNotebookTransform(bbox, rotationX = 0) {
+    const displayBox = bbox.clone();
+    if (rotationX) {
+        displayBox.applyMatrix4(new THREE.Matrix4().makeRotationX(rotationX));
+    }
+    const size = bboxSize(displayBox);
+    const center = displayBox.getCenter(new THREE.Vector3());
+    const scale = SPIRAL_REFERENCE_FRAME.height / Math.max(size.y, 0.001);
+    return {
+        position: [
+            SPIRAL_REFERENCE_FRAME.centerX - center.x * scale,
+            SPIRAL_REFERENCE_FRAME.centerY - center.y * scale,
+            0,
+        ],
+        scale,
+    };
+}
+
+function getSafeLogoOffset(position = 0, axisSize = 1, logoSize = 0.6) {
+    const safeHalfRange = Math.max(0, (axisSize - logoSize) / 2);
+    return THREE.MathUtils.clamp(position, -1, 1) * safeHalfRange;
+}
+
+function getLogoAxisSize(logo) {
+    const logoSize = logo.scale ?? 0.6;
+    const rotation = logo.rotation ?? 0;
+    return logoSize * (Math.abs(Math.cos(rotation)) + Math.abs(Math.sin(rotation)));
+}
+
 function getLogoSurfaceProps(logo, bbox, frontZ, backZ) {
     const size = bboxSize(bbox);
-    const x = (bbox.min.x + bbox.max.x) / 2 + THREE.MathUtils.clamp(logo.position?.[0] ?? 0, -1, 1) * size.x * 0.43;
-    const y = (bbox.min.y + bbox.max.y) / 2 + THREE.MathUtils.clamp(logo.position?.[1] ?? 0, -1, 1) * size.y * 0.43;
+    const logoSize = getLogoAxisSize(logo);
+    const x = (bbox.min.x + bbox.max.x) / 2 + getSafeLogoOffset(logo.position?.[0], size.x, logoSize);
+    const y = (bbox.min.y + bbox.max.y) / 2 + getSafeLogoOffset(logo.position?.[1], size.y, logoSize);
     const side = logo.side ?? 'front';
     return {
         x,
@@ -66,8 +103,69 @@ function getLogoSurfaceProps(logo, bbox, frontZ, backZ) {
     };
 }
 
-function splitCoverAndDecorEntries(meshEntries) {
-    if (meshEntries.length === 0) return { coverEntry: null, decorEntries: [] };
+function getHardCoverLogoSurfaceProps(logo, bbox) {
+    const size = bboxSize(bbox);
+    const logoSize = getLogoAxisSize(logo);
+    const side = logo.side ?? 'front';
+    return {
+        x: (bbox.min.x + bbox.max.x) / 2 + getSafeLogoOffset(logo.position?.[0], size.x, logoSize),
+        y: side === 'back' ? bbox.max.y + LOGO_SURFACE_OFFSET : bbox.min.y - LOGO_SURFACE_OFFSET,
+        z: (bbox.min.z + bbox.max.z) / 2 + getSafeLogoOffset(logo.position?.[1], size.z, logoSize),
+        side,
+    };
+}
+
+function HardCoverLogoPlane({ texture, x, y, z, side = 'front', rotation = 0, scale = 0.6 }) {
+    const map = useLogoTexture(texture);
+    const isBack = side === 'back';
+    return (
+        <group
+            position={[x, y, z]}
+            rotation={[isBack ? -Math.PI / 2 : Math.PI / 2, 0, 0]}
+        >
+            <mesh rotation={[0, 0, isBack ? -rotation : rotation]} renderOrder={40}>
+                <planeGeometry args={[scale, scale]} />
+                <meshStandardMaterial
+                    map={map}
+                    transparent
+                    alphaTest={0.08}
+                    alphaToCoverage
+                    depthTest
+                    depthWrite={false}
+                    polygonOffset
+                    polygonOffsetFactor={LOGO_POLYGON_OFFSET}
+                    polygonOffsetUnits={LOGO_POLYGON_OFFSET}
+                    side={THREE.FrontSide}
+                    roughness={0.55}
+                    metalness={0.02}
+                />
+            </mesh>
+        </group>
+    );
+}
+
+function StitchOverlay({ geometry, alphaMap, materialRef, color }) {
+    return (
+        <mesh geometry={geometry} renderOrder={20}>
+            <meshStandardMaterial
+                ref={materialRef}
+                color={color}
+                alphaMap={alphaMap}
+                transparent
+                alphaTest={0.08}
+                depthWrite={false}
+                polygonOffset
+                polygonOffsetFactor={-4}
+                polygonOffsetUnits={-4}
+                roughness={0.68}
+                metalness={0}
+            />
+        </mesh>
+    );
+}
+
+function classifyMeshEntries(meshEntries) {
+    if (meshEntries.length === 0) return { coverEntry: null, blockEntry: null, cornerEntries: [] };
 
     let coverEntry = meshEntries[0];
     for (const entry of meshEntries) {
@@ -78,10 +176,22 @@ function splitCoverAndDecorEntries(meshEntries) {
         }
     }
 
-    return {
-        coverEntry,
-        decorEntries: meshEntries.filter(entry => entry !== coverEntry),
-    };
+    const rest = meshEntries.filter(e => e !== coverEntry);
+    const coverArea = bboxArea(coverEntry.bbox);
+    const sorted = [...rest].sort((a, b) => bboxArea(b.bbox) - bboxArea(a.bbox));
+
+    // Блок страниц — вторая по площади геометрия >= 15% обложки; уголки — мелкие детали
+    let blockEntry = null;
+    const cornerEntries = [];
+    for (const entry of sorted) {
+        if (!blockEntry && bboxArea(entry.bbox) >= coverArea * 0.15) {
+            blockEntry = entry;
+        } else {
+            cornerEntries.push(entry);
+        }
+    }
+
+    return { coverEntry, blockEntry, cornerEntries };
 }
 
 function cloneSubsetGeometry(sourceGeo, triangles) {
@@ -212,13 +322,24 @@ function splitInsetBlockGeometry(geo) {
     };
 }
 
+function normalizeMeshName(value = '') {
+    return value.toLowerCase().replace(/\.\d+$/, '');
+}
+
+function entryMatchesName(entry, names) {
+    const entryNames = [entry.name, entry.meshName].map(normalizeMeshName);
+    return names.some(name => entryNames.some(entryName => entryName === name || entryName.includes(name)));
+}
+
+function findEntryByName(entries, names) {
+    return entries.find(entry => entryMatchesName(entry, names));
+}
+
 // ─── ТВЁРДЫЙ ПЕРЕПЛЁТ (GLB) ───────────────────────────────────────────────────
-function HardCoverGLBModel({ coverColor, hasCorners, logos, isNotebookOpen }) {
+function HardCoverGLBModel({ coverColor, hasCorners, logos }) {
     const { nodes, materials } = useGLTF(tverdiyPerepletUrl);
     const coverMatRef = useRef();
-    const frontGroupRef = useRef();
 
-    // Собираем все mesh-ноды
     const meshEntries = useMemo(() => {
         return Object.entries(nodes)
             .filter(([, n]) => n.isMesh || n.geometry)
@@ -230,104 +351,101 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos, isNotebookOpen }) {
             .sort((a, b) => b.vertCount - a.vertCount);
     }, [nodes]);
 
-    const { coverEntry, decorEntries: cornerEntries } = useMemo(() => (
-        splitCoverAndDecorEntries(meshEntries)
+    const { coverEntry, blockEntry: separateBlockEntry, cornerEntries } = useMemo(() => (
+        classifyMeshEntries(meshEntries)
     ), [meshEntries]);
 
-    // Общий bbox для позиционирования уголков и резинки
     const sceneBbox = useMemo(() => {
         const box = new THREE.Box3();
         meshEntries.forEach(e => box.union(e.bbox));
         return box;
     }, [meshEntries]);
+    const normalizedTransform = useMemo(() => (
+        getNormalizedNotebookTransform(sceneBbox, -Math.PI / 2)
+    ), [sceneBbox]);
 
-    // Нормальная карта из оригинального материала
     const mat = materials ? Object.values(materials)[0] : null;
     const normalMap = mat?.normalMap ?? null;
 
-    const { coverGeometry, blockGeometry } = useMemo(() => (
+    const { coverGeometry, blockGeometry: splitBlockGeometry } = useMemo(() => (
         coverEntry ? splitInsetBlockGeometry(coverEntry.geo) : { coverGeometry: null, blockGeometry: null }
     ), [coverEntry]);
 
-    const frontZ = coverEntry?.bbox.max.z ?? sceneBbox.max.z;
-    const backZ = coverEntry?.bbox.min.z ?? sceneBbox.min.z;
+    const blockGeometry = separateBlockEntry?.geo ?? splitBlockGeometry;
 
     useFrame((_, delta) => {
         if (coverMatRef.current) easing.dampC(coverMatRef.current.color, coverColor, 0.25, delta);
-        const target = isNotebookOpen ? -Math.PI * 0.98 : 0;
-        if (frontGroupRef.current) easing.dampE(frontGroupRef.current.rotation, [0, target, 0], 0.35, delta);
     });
 
     return (
-        <group>
-            {/* Обложка */}
-            {coverEntry && coverGeometry && (
-                <group
-                    ref={frontGroupRef}
-                    position={[sceneBbox.min.x, 0, 0]}
-                    rotation={[0, 0, 0]}
-                >
-                    <group position={[-sceneBbox.min.x, 0, 0]}>
-                        <mesh geometry={coverGeometry} castShadow receiveShadow>
-                            <meshStandardMaterial
-                                key="hard-cover-color-material"
-                                ref={coverMatRef}
-                                color={coverColor}
-                                roughness={0.5}
-                                metalness={0.05}
-                            />
-                        </mesh>
-                        {logos.map(logo => {
-                            const surface = getLogoSurfaceProps(logo, coverEntry.bbox, frontZ, backZ);
-                            return (
-                                <LogoPlane
-                                    key={logo.id}
-                                    texture={logo.texture}
-                                    x={surface.x}
-                                    y={surface.y}
-                                    z={surface.z}
-                                    side={surface.side}
-                                    rotation={logo.rotation ?? 0}
-                                    scale={logo.scale ?? 0.6}
-                                />
-                            );
-                        })}
-                    </group>
-                </group>
-            )}
+        <group position={normalizedTransform.position} scale={normalizedTransform.scale}>
+            <group rotation={[-Math.PI / 2, 0, 0]}>
+                {coverEntry && coverGeometry && (
+                    <mesh geometry={coverGeometry} castShadow receiveShadow>
+                        <meshStandardMaterial
+                            key="hard-cover-color-material"
+                            ref={coverMatRef}
+                            color={coverColor}
+                            roughness={0.5}
+                            metalness={0.05}
+                        />
+                    </mesh>
+                )}
+                {coverEntry && logos.map(logo => {
+                    const surface = getHardCoverLogoSurfaceProps(logo, coverEntry.bbox);
+                    return (
+                        <HardCoverLogoPlane
+                            key={logo.id}
+                            texture={logo.texture}
+                            x={surface.x}
+                            y={surface.y}
+                            z={surface.z}
+                            side={surface.side}
+                            rotation={logo.rotation ?? 0}
+                            scale={logo.scale ?? 0.6}
+                        />
+                    );
+                })}
 
-            {blockGeometry && (
-                <mesh geometry={blockGeometry} castShadow receiveShadow>
-                    <meshStandardMaterial
-                        key="hard-page-block-material"
-                        color="#f7f5ef"
-                        roughness={0.95}
-                        metalness={0}
-                    />
-                </mesh>
-            )}
+                {blockGeometry && (
+                    <mesh geometry={blockGeometry} castShadow receiveShadow>
+                        <meshStandardMaterial
+                            key="hard-page-block-material"
+                            color="#f7f5ef"
+                            roughness={0.95}
+                            metalness={0}
+                        />
+                    </mesh>
+                )}
 
-            {/* Золотистые уголки из самой GLB-модели */}
-            {hasCorners && cornerEntries.map(e => (
-                <mesh key={e.name} geometry={e.geo} castShadow receiveShadow>
-                    <meshStandardMaterial
-                        key={`hard-corner-material-${e.name}`}
-                        map={mat?.map}
-                        normalMap={normalMap}
-                        roughnessMap={mat?.roughnessMap}
-                        roughness={mat?.roughness ?? 0.35}
-                        metalness={mat?.metalness ?? 0.65}
-                    />
-                </mesh>
-            ))}
+                {hasCorners && cornerEntries.map(e => (
+                    <mesh key={e.name} geometry={e.geo} castShadow receiveShadow>
+                        <meshStandardMaterial
+                            key={`hard-corner-material-${e.name}`}
+                            map={mat?.map}
+                            normalMap={normalMap}
+                            roughnessMap={mat?.roughnessMap}
+                            roughness={mat?.roughness ?? 0.35}
+                            metalness={mat?.metalness ?? 0.65}
+                        />
+                    </mesh>
+                ))}
+            </group>
         </group>
     );
 }
 
 // ─── НА ПРУЖИНЕ (GLB) ─────────────────────────────────────────────────────────
-function NaPruzhineModel({ coverColor, logos }) {
+function NaPruzhineModel({ coverColor, innerCoverColor, stitchColor, spiralColor, elasticColor, hasElastic, logos }) {
     const { scene, nodes, materials } = useGLTF(naPruzhineUrl);
-    const coverMatRef = useRef();
+    const seamOutMask = useMaskTexture(seamOutMaskUrl);
+    const seamInMask = useMaskTexture(seamInMaskUrl);
+    const outerCoverMatRef = useRef();
+    const innerCoverMatRef = useRef();
+    const outerStitchMatRef = useRef();
+    const innerStitchMatRef = useRef();
+    const spiralMatRef = useRef();
+    const elasticMatRef = useRef();
 
     const meshEntries = useMemo(() => {
         scene.updateMatrixWorld(true);
@@ -337,13 +455,21 @@ function NaPruzhineModel({ coverColor, logos }) {
                 const geo = node.geometry.clone();
                 geo.applyMatrix4(node.matrixWorld);
                 geo.computeBoundingBox();
-                return { name, node, geo, bbox: geo.boundingBox };
+                const material = Array.isArray(node.material) ? node.material[0] : node.material;
+                return {
+                    name,
+                    meshName: node.geometry?.name ?? '',
+                    node,
+                    geo,
+                    bbox: geo.boundingBox,
+                    vertCount: geo.attributes.position?.count ?? 0,
+                    material,
+                };
             });
     }, [nodes, scene]);
 
     const mat = materials ? Object.values(materials)[0] : null;
 
-    // Вычисляем bbox для позиционирования лого
     const sceneBbox = useMemo(() => {
         const box = new THREE.Box3();
         meshEntries.forEach(e => {
@@ -352,30 +478,90 @@ function NaPruzhineModel({ coverColor, logos }) {
         return box;
     }, [meshEntries]);
 
-    const frontZ = sceneBbox.max.z;
-    const backZ = sceneBbox.min.z;
+    const { spiralEntry, outerCoverEntry, innerCoverEntry, blockEntry, elasticEntry, detailEntries } = useMemo(() => {
+        if (meshEntries.length === 0) {
+            return { spiralEntry: null, outerCoverEntry: null, innerCoverEntry: null, blockEntry: null, elasticEntry: null, detailEntries: [] };
+        }
+
+        const byWidth = [...meshEntries].sort((a, b) => bboxSize(b.bbox).x - bboxSize(a.bbox).x);
+        const outerCover = findEntryByName(meshEntries, ['cover_out', 'coverout', 'outercover'])
+            ?? byWidth[0]
+            ?? null;
+        const innerCover = findEntryByName(meshEntries.filter(e => e !== outerCover), ['cover_in', 'coverin', 'innercover'])
+            ?? null;
+        const withoutCovers = meshEntries.filter(e => e !== outerCover && e !== innerCover);
+        const block = findEntryByName(withoutCovers, ['pages', 'page', 'paper', 'block'])
+            ?? [...withoutCovers].sort((a, b) => bboxArea(b.bbox) - bboxArea(a.bbox))[0]
+            ?? null;
+        const hardware = withoutCovers.filter(e => e !== block);
+        const elastic = findEntryByName(hardware, ['rubber', 'elastic', 'band'])
+            ?? hardware.find(e => e.name === 'Cover.007')
+            ?? [...hardware].sort((a, b) => b.bbox.max.x - a.bbox.max.x)[0]
+            ?? null;
+        const spiralHardware = hardware.filter(e => e !== elastic);
+        const spiral = findEntryByName(spiralHardware, ['spring', 'spiral', 'wire'])
+            ?? [...spiralHardware].sort((a, b) => a.bbox.min.x - b.bbox.min.x)[0]
+            ?? null;
+        const details = meshEntries.filter(e => e !== outerCover && e !== innerCover && e !== block && e !== spiral && e !== elastic);
+
+        return { spiralEntry: spiral, outerCoverEntry: outerCover, innerCoverEntry: innerCover, blockEntry: block, elasticEntry: elastic, detailEntries: details };
+    }, [meshEntries]);
+
+    const frontZ = outerCoverEntry?.bbox.max.z ?? sceneBbox.max.z;
+    const backZ = outerCoverEntry?.bbox.min.z ?? sceneBbox.min.z;
+    const safeLogos = logos ?? [];
 
     useFrame((_, delta) => {
-        if (coverMatRef.current) easing.dampC(coverMatRef.current.color, coverColor, 0.25, delta);
+        if (outerCoverMatRef.current) easing.dampC(outerCoverMatRef.current.color, coverColor, 0.25, delta);
+        if (innerCoverMatRef.current) easing.dampC(innerCoverMatRef.current.color, innerCoverColor, 0.25, delta);
+        if (outerStitchMatRef.current) easing.dampC(outerStitchMatRef.current.color, stitchColor, 0.25, delta);
+        if (innerStitchMatRef.current) easing.dampC(innerStitchMatRef.current.color, stitchColor, 0.25, delta);
+        if (spiralMatRef.current) easing.dampC(spiralMatRef.current.color, spiralColor, 0.25, delta);
+        if (elasticMatRef.current) easing.dampC(elasticMatRef.current.color, elasticColor, 0.25, delta);
     });
 
     return (
         <group>
-            {meshEntries.map(({ name, geo }, i) => (
-                <mesh key={name} geometry={geo} castShadow receiveShadow>
+            {outerCoverEntry && (
+                <mesh geometry={outerCoverEntry.geo} castShadow receiveShadow>
                     <meshStandardMaterial
-                        ref={i === 0 ? coverMatRef : undefined}
-                        color={i === 0 ? coverColor : undefined}
-                        map={i === 0 ? null : mat?.map}
-                        normalMap={mat?.normalMap}
-                        roughnessMap={mat?.roughnessMap}
-                        roughness={mat?.roughness ?? 0.6}
-                        metalness={mat?.metalness ?? 0.1}
+                        key="spiral-outer-cover-color-material"
+                        ref={outerCoverMatRef}
+                        color={coverColor}
+                        roughness={0.62}
+                        metalness={0.02}
                     />
                 </mesh>
-            ))}
-            {logos.map(logo => {
-                const surface = getLogoSurfaceProps(logo, sceneBbox, frontZ, backZ);
+            )}
+            {outerCoverEntry && (
+                <StitchOverlay
+                    geometry={outerCoverEntry.geo}
+                    alphaMap={seamOutMask}
+                    materialRef={outerStitchMatRef}
+                    color={stitchColor}
+                />
+            )}
+            {innerCoverEntry && (
+                <mesh geometry={innerCoverEntry.geo} castShadow receiveShadow>
+                    <meshStandardMaterial
+                        key="spiral-inner-cover-color-material"
+                        ref={innerCoverMatRef}
+                        color={innerCoverColor}
+                        roughness={0.62}
+                        metalness={0.02}
+                    />
+                </mesh>
+            )}
+            {innerCoverEntry && (
+                <StitchOverlay
+                    geometry={innerCoverEntry.geo}
+                    alphaMap={seamInMask}
+                    materialRef={innerStitchMatRef}
+                    color={stitchColor}
+                />
+            )}
+            {outerCoverEntry && safeLogos.map(logo => {
+                const surface = getLogoSurfaceProps(logo, outerCoverEntry.bbox, frontZ, backZ);
                 return (
                     <LogoPlane
                         key={logo.id}
@@ -389,12 +575,64 @@ function NaPruzhineModel({ coverColor, logos }) {
                     />
                 );
             })}
+
+            {blockEntry && (
+                <mesh geometry={blockEntry.geo} castShadow receiveShadow>
+                    <meshStandardMaterial
+                        key="spiral-page-block-material"
+                        color="#f7f5ef"
+                        roughness={0.95}
+                        metalness={0}
+                    />
+                </mesh>
+            )}
+
+            {spiralEntry && (
+                <mesh geometry={spiralEntry.geo} castShadow receiveShadow>
+                    <meshStandardMaterial
+                        key="spiral-wire-color-material"
+                        ref={spiralMatRef}
+                        color={spiralColor}
+                        metalness={0.7}
+                        roughness={0.24}
+                    />
+                </mesh>
+            )}
+
+            {detailEntries.map(({ name, geo, material }) => {
+                const detailMaterial = material ?? mat;
+                return (
+                    <mesh key={name} geometry={geo} castShadow receiveShadow>
+                        <meshStandardMaterial
+                            key={`spiral-detail-material-${name}`}
+                            color={detailMaterial?.color ?? '#1a1a1a'}
+                            map={detailMaterial?.map}
+                            normalMap={detailMaterial?.normalMap}
+                            roughnessMap={detailMaterial?.roughnessMap}
+                            roughness={detailMaterial?.roughness ?? 0.6}
+                            metalness={detailMaterial?.metalness ?? 0.1}
+                        />
+                    </mesh>
+                );
+            })}
+
+            {hasElastic && elasticEntry && (
+                <mesh geometry={elasticEntry.geo} castShadow receiveShadow>
+                    <meshStandardMaterial
+                        key="spiral-elastic-color-material"
+                        ref={elasticMatRef}
+                        color={elasticColor}
+                        roughness={0.9}
+                        metalness={0}
+                    />
+                </mesh>
+            )}
         </group>
     );
 }
 
 // ─── МЯГКИЙ ПЕРЕПЛЁТ (GLB) ────────────────────────────────────────────────────
-function SoftCoverModel({ coverColor, elasticColor, hasElastic, hasCorners, logos }) {
+function SoftCoverModel({ coverColor, hasCorners, logos }) {
     const { nodes, materials } = useGLTF(tonkiyPerepletUrl);
     const coverMatRef = useRef();
 
@@ -409,30 +647,47 @@ function SoftCoverModel({ coverColor, elasticColor, hasElastic, hasCorners, logo
             .sort((a, b) => b.vertCount - a.vertCount);
     }, [nodes]);
 
-    const { coverEntry, decorEntries: cornerEntries } = useMemo(() => (
-        splitCoverAndDecorEntries(meshEntries)
+    const { coverEntry, blockEntry: separateBlockEntry, cornerEntries: detailEntries } = useMemo(() => (
+        classifyMeshEntries(meshEntries)
     ), [meshEntries]);
+
+    const { coverGeometry, blockGeometry: splitBlockGeometry } = useMemo(() => (
+        coverEntry ? splitInsetBlockGeometry(coverEntry.geo) : { coverGeometry: null, blockGeometry: null }
+    ), [coverEntry]);
+
+    const blockGeometry = separateBlockEntry?.geo ?? splitBlockGeometry;
 
     const sceneBbox = useMemo(() => {
         const box = new THREE.Box3();
         meshEntries.forEach(e => box.union(e.bbox));
         return box;
     }, [meshEntries]);
+    const normalizedTransform = useMemo(() => (
+        getNormalizedNotebookTransform(sceneBbox)
+    ), [sceneBbox]);
+
+    const cornerEntries = useMemo(() => {
+        const sceneSize = bboxSize(sceneBbox);
+        return detailEntries.filter((entry) => {
+            const size = bboxSize(entry.bbox);
+            const isElasticBand = size.y > sceneSize.y * 0.75 && size.x < sceneSize.x * 0.22;
+            return !isElasticBand;
+        });
+    }, [detailEntries, sceneBbox]);
 
     const mat = materials ? Object.values(materials)[0] : null;
     const normalMap = mat?.normalMap ?? null;
     const frontZ = coverEntry?.bbox.max.z ?? sceneBbox.max.z;
     const backZ = coverEntry?.bbox.min.z ?? sceneBbox.min.z;
-    const height = sceneBbox.max.y - sceneBbox.min.y;
-
     useFrame((_, delta) => {
         if (coverMatRef.current) easing.dampC(coverMatRef.current.color, coverColor, 0.25, delta);
     });
 
     return (
-        <group>
-            {coverEntry && (
-                <mesh geometry={coverEntry.geo} castShadow receiveShadow>
+        <group position={normalizedTransform.position} scale={normalizedTransform.scale}>
+            {/* Обложка — только цветная часть */}
+            {coverEntry && coverGeometry && (
+                <mesh geometry={coverGeometry} castShadow receiveShadow>
                     <meshStandardMaterial
                         key="soft-cover-color-material"
                         ref={coverMatRef}
@@ -458,6 +713,19 @@ function SoftCoverModel({ coverColor, elasticColor, hasElastic, hasCorners, logo
                 );
             })}
 
+            {/* Блок страниц — всегда белый */}
+            {blockGeometry && (
+                <mesh geometry={blockGeometry} castShadow receiveShadow>
+                    <meshStandardMaterial
+                        key="soft-page-block-material"
+                        color="#f7f5ef"
+                        roughness={0.95}
+                        metalness={0}
+                    />
+                </mesh>
+            )}
+
+            {/* Уголки */}
             {hasCorners && cornerEntries.map(e => (
                 <mesh key={e.name} geometry={e.geo} castShadow receiveShadow>
                     <meshStandardMaterial
@@ -471,12 +739,6 @@ function SoftCoverModel({ coverColor, elasticColor, hasElastic, hasCorners, logo
                 </mesh>
             ))}
 
-            {hasElastic && (
-                <mesh position={[sceneBbox.max.x * 0.82, (sceneBbox.max.y + sceneBbox.min.y) / 2, (sceneBbox.max.z + sceneBbox.min.z) / 2]}>
-                    <boxGeometry args={[0.04, height + 0.02, (sceneBbox.max.z - sceneBbox.min.z) + 0.01]} />
-                    <meshStandardMaterial color={elasticColor} roughness={0.9} metalness={0} />
-                </mesh>
-            )}
         </group>
     );
 }
@@ -486,11 +748,19 @@ export function Notebook({ config: configProp, ...props }) {
     const store = useConfigurator();
     const {
         bindingType,
-        coverColor, hasElastic, elasticColor,
-        logos,
-        isNotebookOpen,
+        coverColor = '#D2B48C', innerCoverColor = coverColor, stitchColor = '#ffffff', hasElastic, elasticColor = '#1a1a1a',
+        spiralColor = '#1a1a1a',
+        logos = [],
         hasCorners,
     } = configProp || store;
+    const resolvedBindingType = bindingType || 'hard';
+    const bindingCaps = getNotebookBindingCapabilities(resolvedBindingType);
+    const resolvedCoverColor = coverColor || '#D2B48C';
+    const resolvedInnerCoverColor = innerCoverColor || resolvedCoverColor;
+    const resolvedStitchColor = stitchColor || '#ffffff';
+    const resolvedElasticColor = elasticColor || '#1a1a1a';
+    const resolvedSpiralColor = spiralColor || '#1a1a1a';
+    const safeLogos = Array.isArray(logos) ? logos : [];
 
     useGLTF.preload(tverdiyPerepletUrl);
     useGLTF.preload(naPruzhineUrl);
@@ -498,27 +768,29 @@ export function Notebook({ config: configProp, ...props }) {
 
     return (
         <group {...props} dispose={null}>
-            {bindingType === 'hard' && (
+            {resolvedBindingType === 'hard' && (
                 <HardCoverGLBModel
-                    coverColor={coverColor}
-                    hasCorners={hasCorners}
-                    logos={logos}
-                    isNotebookOpen={isNotebookOpen}
+                    coverColor={resolvedCoverColor}
+                    hasCorners={bindingCaps.hasCorners && hasCorners}
+                    logos={safeLogos}
                 />
             )}
-            {bindingType === 'spiral' && (
+            {resolvedBindingType === 'spiral' && (
                 <NaPruzhineModel
-                    coverColor={coverColor}
-                    logos={logos}
+                    coverColor={resolvedCoverColor}
+                    innerCoverColor={resolvedInnerCoverColor}
+                    stitchColor={resolvedStitchColor}
+                    spiralColor={resolvedSpiralColor}
+                    elasticColor={resolvedElasticColor}
+                    hasElastic={bindingCaps.hasElastic && hasElastic}
+                    logos={safeLogos}
                 />
             )}
-            {bindingType === 'soft' && (
+            {resolvedBindingType === 'soft' && (
                 <SoftCoverModel
-                    coverColor={coverColor}
-                    elasticColor={elasticColor}
-                    hasElastic={hasElastic}
-                    hasCorners={hasCorners}
-                    logos={logos}
+                    coverColor={resolvedCoverColor}
+                    hasCorners={bindingCaps.hasCorners && hasCorners}
+                    logos={safeLogos}
                 />
             )}
         </group>

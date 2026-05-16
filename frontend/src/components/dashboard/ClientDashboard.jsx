@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { t } from '../../i18n';
 import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';
-import { useConfigurator } from "../../store";
+import { getNotebookBindingCapabilities, useConfigurator } from "../../store";
 import { fetchUserOrders, createOrderInDB } from '../../api';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 import { ApprovalPanel } from '../shared/ApprovalPanel';
 import { Notebook } from '../shared/Notebook';
 import { Thermos } from '../thermos/Thermos';
+import { Powerbank } from '../powerbank/Powerbank';
 import { ConfiguratorProductMenu } from '../home/Home';
 import { getUserDisplayName, getUserSecondaryLabel } from '../../utils/user';
 import { SceneLoadingOverlay } from '../shared/VibeLoader';
@@ -116,10 +117,16 @@ const OrderStatus = ({ status, language }) => {
     );
 };
 
+const getNotebookBindingLabel = (bindingType, language) => ({
+    hard: t(language, 'bindingHard'),
+    soft: t(language, 'bindingSoft'),
+    spiral: t(language, 'bindingSpiral'),
+})[bindingType] || bindingType;
+
 export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToastShown, initialTab, onTabChange }) => {
     const {
         currentUser, logout, cartItem, clearCart,
-        activeProduct, coverColor, elasticColor, hasElastic,
+        activeProduct, coverColor, innerCoverColor, stitchColor, elasticColor,
         paperPattern, bindingType, spiralColor, format,
         thermosBodyColor, language,
     } = useConfigurator();
@@ -132,8 +139,19 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
             design: `${t(language, 'thermosBodyPart')}: ${savedThermosColor}, ${t(language, 'thermosCapPart')}: ${savedThermosColor}`,
         }
         : cartItem;
-    const cartProductType = cartProductConfig?.activeProduct || activeProduct;
+    const cartProductType = cartProductConfig?.activeProduct || cartProductConfig?.type || activeProduct;
     const cartThermosColor = cartProductConfig?.thermosBodyColor || cartProductConfig?.thermosCapColor || thermosBodyColor;
+    const cartBindingType = cartProductConfig?.bindingType || bindingType;
+    const cartBindingCaps = getNotebookBindingCapabilities(cartBindingType);
+    const cartFormat = cartProductConfig?.format || format;
+    const cartPaperPattern = cartProductConfig?.paperPattern || paperPattern;
+    const cartCoverColor = cartProductConfig?.coverColor || coverColor;
+    const cartInnerCoverColor = cartProductConfig?.innerCoverColor || innerCoverColor || cartCoverColor;
+    const cartStitchColor = cartProductConfig?.stitchColor || stitchColor;
+    const cartHasElastic = !!cartProductConfig?.hasElastic;
+    const cartElasticColor = cartProductConfig?.elasticColor || elasticColor;
+    const cartSpiralColor = cartProductConfig?.spiralColor || spiralColor;
+    const cartHasCorners = cartProductConfig?.hasCorners ?? false;
     const [activeTab, setActiveTab] = useState(initialTab ?? (cartItem ? 'cart' : 'orders'));
 
     useEffect(() => {
@@ -275,10 +293,14 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
             <header className="sticky top-0 z-30 px-4 sm:px-6 py-3 sm:py-4 border-b border-white/5 bg-[#0B0F19]/90 backdrop-blur-xl">
                 <div className="max-w-6xl mx-auto flex justify-between items-center gap-3">
                     <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-2 rounded-full backdrop-blur-md">
+                        <button
+                            type="button"
+                            onClick={() => window.location.reload()}
+                            className="flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-2 rounded-full backdrop-blur-md hover:bg-white/10 active:scale-95 transition-all"
+                        >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                             <span className="font-bold text-sm tracking-wide">Spruzhuk</span>
-                        </div>
+                        </button>
                         <div className="hidden md:flex flex-col">
                             <span className="text-sm font-bold text-white">{getUserDisplayName(currentUser)}</span>
                             <span className="text-[10px] text-gray-500 uppercase tracking-widest">{getUserSecondaryLabel(currentUser)}</span>
@@ -335,9 +357,10 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                 <directionalLight position={[10, 10, 5]} intensity={1.5} />
                                                 <directionalLight position={[-10, 5, 2]} intensity={0.5} />
                                                 <PresentationControls speed={1.5} global polar={[-0.1, Math.PI / 4]}>
-                                                    <Stage environment={null} intensity={0} contactShadow={false}>
-                                                        {activeProduct === 'notebook' && <Notebook />}
-                                                        {activeProduct === 'thermos' && <Thermos />}
+                                                    <Stage environment={null} intensity={0} shadows={false}>
+                                                        {cartProductType === 'notebook' && <Notebook config={cartProductConfig} />}
+                                                        {cartProductType === 'thermos' && <Thermos config={cartProductConfig} />}
+                                                        {cartProductType === 'powerbank' && <Powerbank config={cartProductConfig} />}
                                                     </Stage>
                                                 </PresentationControls>
                                             </Canvas>
@@ -355,12 +378,15 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                 </>
                                             ) : (
                                                 <>
-                                                    <CartRow label={t(language, 'formatLabel')} value={format} />
-                                                    <CartRow label={t(language, 'bindingLabel')} value={bindingType === 'hard' ? t(language, 'bindingHard') : t(language, 'bindingSpiral')} />
-                                                    <CartRow label={t(language, 'patternLabel')} value={{ blank: t(language, 'patternBlank'), lined: t(language, 'patternLined'), tlined: t(language, 'patternTLined'), grid: t(language, 'patternGrid'), dotted: t(language, 'patternDotted') }[paperPattern]} />
-                                                    <CartRow label={t(language, 'coverLabel')} value={<ColorDot color={coverColor} />} />
-                                                    {hasElastic && <CartRow label={t(language, 'elasticLabel')} value={<ColorDot color={elasticColor} />} />}
-                                                    {bindingType === 'spiral' && <CartRow label={t(language, 'spiralLabel')} value={<ColorDot color={spiralColor} />} />}
+                                                    <CartRow label={t(language, 'formatLabel')} value={cartFormat} />
+                                                    <CartRow label={t(language, 'bindingLabel')} value={getNotebookBindingLabel(cartBindingType, language)} />
+                                                    <CartRow label={t(language, 'patternLabel')} value={{ blank: t(language, 'patternBlank'), lined: t(language, 'patternLined'), tlined: t(language, 'patternTLined'), grid: t(language, 'patternGrid'), dotted: t(language, 'patternDotted') }[cartPaperPattern]} />
+                                                    <CartRow label={cartBindingCaps.hasInnerCoverColor ? t(language, 'outerCoverLabel') : t(language, 'coverLabel')} value={<ColorDot color={cartCoverColor} />} />
+                                                    {cartBindingCaps.hasInnerCoverColor && <CartRow label={t(language, 'innerCoverLabel')} value={<ColorDot color={cartInnerCoverColor} />} />}
+                                                    {cartBindingCaps.hasStitchColor && <CartRow label={t(language, 'threadLabel')} value={<ColorDot color={cartStitchColor} />} />}
+                                                    {cartBindingCaps.hasElastic && cartHasElastic && <CartRow label={t(language, 'elasticLabel')} value={<ColorDot color={cartElasticColor} />} />}
+                                                    {cartBindingCaps.hasSpiralColor && <CartRow label={t(language, 'spiralLabel')} value={<ColorDot color={cartSpiralColor} />} />}
+                                                    {cartBindingCaps.hasCorners && <CartRow label={t(language, 'cornersLabel')} value={cartHasCorners ? t(language, 'orderYes') : t(language, 'orderNo')} />}
                                                 </>
                                             )}
                                         </div>
@@ -539,19 +565,28 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                                         <ClientDetailRow label={t(language, 'formatLabel')} value={order.configuration.productConfig.format} />
                                                                     )}
                                                                     {order.configuration?.productConfig?.bindingType && (
-                                                                        <ClientDetailRow label={t(language, 'bindingLabel')} value={order.configuration.productConfig.bindingType === 'hard' ? t(language, 'bindingHard') : t(language, 'bindingSpiral')} />
+                                                                        <ClientDetailRow label={t(language, 'bindingLabel')} value={getNotebookBindingLabel(order.configuration.productConfig.bindingType, language)} />
                                                                     )}
                                                                     {order.configuration?.productConfig?.paperPattern && (
                                                                         <ClientDetailRow label={t(language, 'patternLabel')} value={{ blank: t(language, 'patternBlank'), lined: t(language, 'patternLined'), tlined: t(language, 'patternTLined'), grid: t(language, 'patternGrid'), dotted: t(language, 'patternDotted') }[order.configuration.productConfig.paperPattern] || ''} />
                                                                     )}
                                                                     {order.configuration?.productConfig?.coverColor && (
-                                                                        <ClientDetailRow label={t(language, 'coverLabel')} value={<ClientColorDot color={order.configuration.productConfig.coverColor} />} />
+                                                                        <ClientDetailRow label={getNotebookBindingCapabilities(order.configuration?.productConfig?.bindingType).hasInnerCoverColor ? t(language, 'outerCoverLabel') : t(language, 'coverLabel')} value={<ClientColorDot color={order.configuration.productConfig.coverColor} />} />
                                                                     )}
-                                                                    {order.configuration?.productConfig?.hasElastic && order.configuration?.productConfig?.elasticColor && (
+                                                                    {getNotebookBindingCapabilities(order.configuration?.productConfig?.bindingType).hasInnerCoverColor && order.configuration?.productConfig?.innerCoverColor && (
+                                                                        <ClientDetailRow label={t(language, 'innerCoverLabel')} value={<ClientColorDot color={order.configuration.productConfig.innerCoverColor} />} />
+                                                                    )}
+                                                                    {getNotebookBindingCapabilities(order.configuration?.productConfig?.bindingType).hasStitchColor && order.configuration?.productConfig?.stitchColor && (
+                                                                        <ClientDetailRow label={t(language, 'threadLabel')} value={<ClientColorDot color={order.configuration.productConfig.stitchColor} />} />
+                                                                    )}
+                                                                    {getNotebookBindingCapabilities(order.configuration?.productConfig?.bindingType).hasElastic && order.configuration?.productConfig?.hasElastic && order.configuration?.productConfig?.elasticColor && (
                                                                         <ClientDetailRow label={t(language, 'elasticLabel')} value={<ClientColorDot color={order.configuration.productConfig.elasticColor} />} />
                                                                     )}
-                                                                    {order.configuration?.productConfig?.bindingType === 'spiral' && order.configuration?.productConfig?.spiralColor && (
+                                                                    {getNotebookBindingCapabilities(order.configuration?.productConfig?.bindingType).hasSpiralColor && order.configuration?.productConfig?.spiralColor && (
                                                                         <ClientDetailRow label={t(language, 'spiralLabel')} value={<ClientColorDot color={order.configuration.productConfig.spiralColor} />} />
+                                                                    )}
+                                                                    {getNotebookBindingCapabilities(order.configuration?.productConfig?.bindingType).hasCorners && order.configuration?.productConfig?.hasCorners !== undefined && (
+                                                                        <ClientDetailRow label={t(language, 'cornersLabel')} value={order.configuration.productConfig.hasCorners ? t(language, 'orderYes') : t(language, 'orderNo')} />
                                                                     )}
                                                                     {order.price > 0 && (
                                                                         <ClientDetailRow label={t(language, 'costLabel')} value={`${order.price} BYN`} />
@@ -666,8 +701,9 @@ const ClientOrder3DPreview = ({ configuration, productName, language = 'ru' }) =
     const cfg = configuration?.productConfig || configuration || {};
     const isNote = productName?.toLowerCase().includes('ежедневник') || productName?.toLowerCase().includes('блокнот') || cfg.type === 'notebook';
     const isThermos = productName?.toLowerCase().includes('термос') || cfg.activeProduct === 'thermos' || cfg.type === 'thermos';
+    const isPowerbank = productName?.toLowerCase().includes('повербанк') || productName?.toLowerCase().includes('power') || cfg.activeProduct === 'powerbank' || cfg.type === 'powerbank';
 
-    if (!isNote && !isThermos) {
+    if (!isNote && !isThermos && !isPowerbank) {
         return (
             <div className="w-full h-40 rounded-[14px] bg-white/[0.03] border border-white/8 flex items-center justify-center">
                 <span className="text-gray-600 text-xs font-bold uppercase tracking-widest">{t(language, 'noLayout')}</span>
@@ -682,9 +718,10 @@ const ClientOrder3DPreview = ({ configuration, productName, language = 'ru' }) =
                 <ambientLight intensity={0.6} />
                 <directionalLight position={[10, 10, 5]} intensity={1.5} />
                 <PresentationControls speed={1.5} global polar={[-0.1, Math.PI / 4]}>
-                    <Stage environment={null} intensity={0} contactShadow={false}>
+                    <Stage environment={null} intensity={0} shadows={false}>
                         {isNote && <Notebook config={cfg} />}
-                        {isThermos && <Thermos />}
+                        {isThermos && <Thermos config={cfg} />}
+                        {isPowerbank && <Powerbank config={cfg} />}
                     </Stage>
                 </PresentationControls>
             </Canvas>

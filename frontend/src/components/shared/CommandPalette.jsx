@@ -1,10 +1,20 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { Command } from 'cmdk';
-import { useConfigurator } from '../../store';
+import { THEME_SWITCHING_ENABLED, useConfigurator } from '../../store';
 import { t } from '../../i18n';
 
-export const CommandPalette = ({ navigate, screen, onClose, openAuth }) => {
-    const [open, setOpen] = useState(false);
+export const CommandPalette = ({ navigate, screen, onClose, openAuth, open: controlledOpen, onOpenChange }) => {
+    const isControlled = typeof controlledOpen === 'boolean';
+    const [internalOpen, setInternalOpen] = useState(false);
+    const open = isControlled ? controlledOpen : internalOpen;
+    const setOpen = useCallback((value) => {
+        if (isControlled) {
+            const nextOpen = typeof value === 'function' ? value(controlledOpen) : value;
+            onOpenChange?.(nextOpen);
+        } else {
+            setInternalOpen(value);
+        }
+    }, [controlledOpen, isControlled, onOpenChange]);
     const [query, setQuery] = useState('');
 
     const {
@@ -13,6 +23,8 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth }) => {
     } = useConfigurator();
 
     useEffect(() => {
+        if (isControlled) return undefined;
+
         const onKey = (e) => {
             const cmd = e.metaKey || e.ctrlKey;
             if (cmd && (e.key === 'k' || e.key === 'K')) {
@@ -25,13 +37,15 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth }) => {
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [open]);
+    }, [isControlled, open, setOpen]);
 
     useEffect(() => {
+        if (isControlled) return undefined;
+
         const openPalette = () => setOpen(true);
         window.addEventListener('spruzhuk:open-command-palette', openPalette);
         return () => window.removeEventListener('spruzhuk:open-command-palette', openPalette);
-    }, []);
+    }, [isControlled, setOpen]);
 
     useEffect(() => {
         if (!open) setQuery('');
@@ -73,12 +87,14 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth }) => {
         list.push({ group: cfg, id: 'cfg-notebook', label: t(language, 'notebook'), onSelect: () => goConfigurator('notebook') });
         list.push({ group: cfg, id: 'cfg-thermos', label: t(language, 'thermos'), onSelect: () => goConfigurator('thermos') });
         list.push({ group: cfg, id: 'cfg-powerbank', label: t(language, 'powerbank'), onSelect: () => goConfigurator('powerbank') });
-        list.push({
-            group: actions,
-            id: 'act-theme',
-            label: theme === 'dark' ? t(language, 'cmdLightTheme') : t(language, 'cmdDarkTheme'),
-            onSelect: () => { toggleTheme(); close(); },
-        });
+        if (THEME_SWITCHING_ENABLED) {
+            list.push({
+                group: actions,
+                id: 'act-theme',
+                label: theme === 'dark' ? t(language, 'cmdLightTheme') : t(language, 'cmdDarkTheme'),
+                onSelect: () => { toggleTheme(); close(); },
+            });
+        }
         if (screen === 'configurator') {
             list.push({
                 group: actions,

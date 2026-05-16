@@ -122,17 +122,18 @@ ul.files li { margin-bottom: 1mm; font-size: 9pt; }
     <tr><td class="k">Уголки</td><td class="v">{{ c.hasCorners | yn }}</td></tr>
     <tr><td class="k">Цвет уголков</td><td class="v">{% if c.cornerColor %}<span class="swatch" style="background:{{ c.cornerColor }}"></span>{{ c.cornerColor }}{% else %}—{% endif %}</td></tr>
     <tr><td class="k">Строчка</td><td class="v">{{ c.hasStitch | yn }}</td></tr>
-    <tr><td class="k">Цвет строчки</td><td class="v">{{ c.stitchColor | safe_dash }}</td></tr>
+    <tr><td class="k">Цвет строчки</td><td class="v">{% if c.hasStitch and c.stitchColor %}<span class="swatch" style="background:{{ c.stitchColor }}"></span>{{ c.stitchColor }}{% else %}—{% endif %}</td></tr>
     <tr><td class="k">Пружина (для «На пружине»)</td><td class="v">{{ (c.bindingType == 'spiral') | yn }}</td></tr>
     <tr><td class="k">Цвет пружины</td><td class="v">{% if c.spiralColor %}<span class="swatch" style="background:{{ c.spiralColor }}"></span>{{ c.spiralColor }}{% else %}—{% endif %}</td></tr>
     <tr><td class="k">Обложка — внешний слой, материал</td><td class="v">{% if c.coverColor %}<span class="swatch" style="background:{{ c.coverColor }}"></span>{{ c.coverColor }}{% else %}—{% endif %}</td></tr>
     <tr><td class="k">Обложка — внутренний слой</td><td class="v">{{ c.hasInnerCover | yn }}</td></tr>
+    <tr><td class="k">Цвет внутренней обложки</td><td class="v">{% if c.innerCoverColor %}<span class="swatch" style="background:{{ c.innerCoverColor }}"></span>{{ c.innerCoverColor }}{% else %}—{% endif %}</td></tr>
     <tr><td class="k">Внутренний материал</td><td class="v">{{ c.innerCoverMaterial | safe_dash }}</td></tr>
     <tr><td class="k">Картон переплётный (тв. обл.)</td><td class="v">{{ c.hasCardboard | yn }}</td></tr>
     <tr><td class="k">Толщина картона</td><td class="v">{{ c.cardboardThickness | safe_dash }}</td></tr>
     <tr><td class="k">Размер сторонок (картон), мм</td><td class="v">{{ c.cardboardSize | safe_dash }}</td></tr>
-    <tr><td class="k">Резинка вертикальная</td><td class="v">{{ c.hasElastic | yn }}</td></tr>
-    <tr><td class="k">Цвет резинки</td><td class="v">{% if c.elasticColor %}<span class="swatch" style="background:{{ c.elasticColor }}"></span>{{ c.elasticColor }}{% else %}—{% endif %}</td></tr>
+    <tr><td class="k">Резинка вертикальная</td><td class="v">{{ (c.bindingType == 'spiral' and c.hasElastic) | yn }}</td></tr>
+    <tr><td class="k">Цвет резинки</td><td class="v">{% if c.bindingType == 'spiral' and c.hasElastic and c.elasticColor %}<span class="swatch" style="background:{{ c.elasticColor }}"></span>{{ c.elasticColor }}{% else %}—{% endif %}</td></tr>
     <tr><td class="k">Резинка для ручки</td><td class="v">{{ c.hasPenElastic | yn }}</td></tr>
     <tr><td class="k">Цвет резинки для ручки</td><td class="v">{{ c.penElasticColor | safe_dash }}</td></tr>
     <tr><td class="k">Ляссе</td><td class="v">{{ c.hasLasse | yn }}</td></tr>

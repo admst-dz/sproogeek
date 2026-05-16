@@ -23,7 +23,7 @@ class ProductCreate(BaseModel):
     @field_validator("binding")
     @classmethod
     def validate_binding(cls, value):
-        allowed = {"hard", "spiral"}
+        allowed = {"hard", "soft", "spiral"}
         if any(item not in allowed for item in value):
             raise ValueError("Unsupported binding value")
         return value
@@ -59,6 +59,13 @@ class ProductCreate(BaseModel):
             if not isinstance(price, (int, float)) or price < 0:
                 raise ValueError("Wholesale tier pricePerUnit must be a positive number")
         return value
+
+    @model_validator(mode="after")
+    def strip_unsupported_elastic(self):
+        if "spiral" not in self.binding:
+            self.hasElastic = False
+            self.elasticColors = []
+        return self
 
 
 class ProductUpdate(ProductCreate):

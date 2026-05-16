@@ -13,16 +13,24 @@
     "binding": {
       "type": "array",
       "required": true,
-      "options": ["hard", "spiral"]
+      "options": ["hard", "soft", "spiral"]
     },
     "format": {
       "type": "string",
       "required": true,
-      "options": ["A5", "A4"]
+      "options": ["A5", "A6"]
     },
     "coverColor": {
       "type": "color",
       "required": true
+    },
+    "innerCoverColor": {
+      "type": "color",
+      "required": false
+    },
+    "stitchColor": {
+      "type": "color",
+      "required": false
     },
     "quantity": {
       "type": "integer",

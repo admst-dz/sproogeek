@@ -1,9 +1,9 @@
 """Build a printable unwrap PDF for a given product configuration.
 
 The PDF is a technical layout in millimeters: each page shows one face of the
-unwrapped product (e.g. cylindrical body, cap top, cover) with a rectangle
-indicating where each user logo is to be applied. Print shop staff use this to
-register the artwork on the printer/transfer station.
+unwrapped product (e.g. cylindrical body, cap top, cover) with the printable
+contour and user artwork placement. Print shop staff use this to register the
+artwork on the printer/transfer station.
 """
 from __future__ import annotations
 
@@ -43,6 +43,11 @@ class Face:
     height_mm: float
     targets: tuple[str, ...]
     note: str = ""
+    outline: str = "rect"
+    coordinate_space: str = "signed_unit"
+    scale_basis_mm: float | None = None
+    panel_width_mm: float | None = None
+    spine_width_mm: float = 0.0
 
 
 def _decal_image(logo: LogoPlacement) -> ImageReader | None:
@@ -56,6 +61,110 @@ def _decal_image(logo: LogoPlacement) -> ImageReader | None:
     return None
 
 
+def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
+    return max(low, min(high, value))
+
+
+def _signed_to_uv(value: float, half_range: float) -> float:
+    return _clamp(0.5 + value / (2.0 * max(half_range, 0.0001)))
+
+
+def _logo_xy_mm(face: Face, logo: LogoPlacement) -> tuple[float, float]:
+    x, y = logo.position
+
+    if face.coordinate_space == "thermos_body":
+        return (
+            _signed_to_uv(x, 0.35) * face.width_mm,
+            _signed_to_uv(y, 2.5) * face.height_mm,
+        )
+
+    if face.coordinate_space == "thermos_cap_top":
+        return (
+            _signed_to_uv(x, 0.35) * face.width_mm,
+            _signed_to_uv(y, 0.35) * face.height_mm,
+        )
+
+    if face.coordinate_space == "thermos_cap_side":
+        return (
+            _signed_to_uv(x, 0.35) * face.width_mm,
+            _signed_to_uv(y, 1.0) * face.height_mm,
+        )
+
+    if face.coordinate_space == "powerbank":
+        is_outer = (logo.target or logo.side or "").lower() in {"outer", "back", "inner"}
+        u = _signed_to_uv(-x if is_outer else x, 1.0)
+        return (u * face.width_mm, _signed_to_uv(y, 1.0) * face.height_mm)
+
+    if face.coordinate_space == "notebook_cover" and face.panel_width_mm:
+        side = (logo.side or logo.target or "front").lower()
+        panel_u = _signed_to_uv(x, 1.0)
+        y_mm = _signed_to_uv(y, 1.0) * face.height_mm
+        if side == "back":
+            return (panel_u * face.panel_width_mm, y_mm)
+        if side == "front":
+            return (face.panel_width_mm + face.spine_width_mm + panel_u * face.panel_width_mm, y_mm)
+        return (_signed_to_uv(x, 1.0) * face.width_mm, y_mm)
+
+    return (_signed_to_uv(x, 1.0) * face.width_mm, _signed_to_uv(y, 1.0) * face.height_mm)
+
+
+def _image_aspect(img: ImageReader | None) -> float:
+    if img is None:
+        return 1.0
+    try:
+        iw, ih = img.getSize()
+    except Exception:
+        return 1.0
+    if not iw or not ih:
+        return 1.0
+    return ih / iw
+
+
+def _decal_size_mm(face: Face, logo: LogoPlacement, img: ImageReader | None) -> tuple[float, float]:
+    basis = face.scale_basis_mm or min(face.width_mm, face.height_mm)
+    width_mm = max(4.0, logo.scale * basis)
+    height_mm = width_mm * _image_aspect(img)
+
+    max_w = face.width_mm * 0.98
+    max_h = face.height_mm * 0.98
+    fit = min(1.0, max_w / max(width_mm, 0.0001), max_h / max(height_mm, 0.0001))
+    return (width_mm * fit, height_mm * fit)
+
+
+def _path_for_face(c: canvas.Canvas, face: Face, ox: float, oy: float, drawn_w: float, drawn_h: float):
+    path = c.beginPath()
+    if face.outline == "circle":
+        path.circle(ox + drawn_w / 2, oy + drawn_h / 2, min(drawn_w, drawn_h) / 2)
+    else:
+        path.rect(ox, oy, drawn_w, drawn_h)
+    return path
+
+
+def _draw_face_guides(c: canvas.Canvas, face: Face, ox: float, oy: float, drawn_w: float, drawn_h: float) -> None:
+    c.setStrokeColor(TEXT)
+    c.setLineWidth(0.6)
+    if face.outline == "circle":
+        r = min(drawn_w, drawn_h) / 2
+        cx = ox + drawn_w / 2
+        cy = oy + drawn_h / 2
+        c.circle(cx, cy, r, fill=0, stroke=1)
+
+        c.setStrokeColor(SAFE_STROKE)
+        c.setDash(2, 3)
+        c.line(cx, cy - r, cx, cy + r)
+        c.line(cx - r, cy, cx + r, cy)
+        c.setDash()
+        return
+
+    c.rect(ox, oy, drawn_w, drawn_h, fill=0, stroke=1)
+
+    c.setStrokeColor(SAFE_STROKE)
+    c.setDash(2, 3)
+    c.line(ox + drawn_w / 2, oy, ox + drawn_w / 2, oy + drawn_h)
+    c.line(ox, oy + drawn_h / 2, ox + drawn_w, oy + drawn_h / 2)
+    c.setDash()
+
+
 def _draw_face(c: canvas.Canvas, face: Face, logos: List[LogoPlacement], order_id: str) -> None:
     pw, ph = PAGE
     c.setFillColor(white)
@@ -63,10 +172,10 @@ def _draw_face(c: canvas.Canvas, face: Face, logos: List[LogoPlacement], order_i
 
     avail_w = pw - 2 * MARGIN_MM * mm
     avail_h = ph - 2 * MARGIN_MM * mm - 30 * mm  # leave room for header
-    scale = min(avail_w / (face.width_mm * mm), avail_h / (face.height_mm * mm))
+    page_scale = min(1.0, avail_w / (face.width_mm * mm), avail_h / (face.height_mm * mm))
 
-    drawn_w = face.width_mm * mm * scale
-    drawn_h = face.height_mm * mm * scale
+    drawn_w = face.width_mm * mm * page_scale
+    drawn_h = face.height_mm * mm * page_scale
     ox = (pw - drawn_w) / 2
     oy = MARGIN_MM * mm
 
@@ -76,58 +185,44 @@ def _draw_face(c: canvas.Canvas, face: Face, logos: List[LogoPlacement], order_i
     c.drawString(MARGIN_MM * mm, ph - MARGIN_MM * mm, f"{face.title}")
     c.setFont("Helvetica", 9)
     c.drawString(MARGIN_MM * mm, ph - MARGIN_MM * mm - 14,
-                 f"order {order_id}  ·  {face.width_mm:.1f} × {face.height_mm:.1f} mm  ·  scale 1:{1/scale:.2f}")
+                 f"order {order_id}  ·  {face.width_mm:.1f} × {face.height_mm:.1f} mm  ·  scale 1:{1/page_scale:.2f}")
     if face.note:
         c.drawString(MARGIN_MM * mm, ph - MARGIN_MM * mm - 28, face.note)
 
-    # Cut contour
-    c.setStrokeColor(TEXT)
-    c.setLineWidth(0.6)
-    c.rect(ox, oy, drawn_w, drawn_h, fill=0, stroke=1)
+    # Draw artwork clipped to the physical printable contour. The contour and
+    # guide marks are redrawn after artwork so opaque decals cannot hide them.
+    c.saveState()
+    c.clipPath(_path_for_face(c, face, ox, oy, drawn_w, drawn_h), stroke=0)
 
-    # Cross-hairs at center
-    c.setStrokeColor(SAFE_STROKE)
-    c.setDash(2, 3)
-    c.line(ox + drawn_w / 2, oy, ox + drawn_w / 2, oy + drawn_h)
-    c.line(ox, oy + drawn_h / 2, ox + drawn_w, oy + drawn_h / 2)
-    c.setDash()
+    face_logos = [logo for logo in logos if logo.target in face.targets]
 
-    # Logos that belong to this face
-    for logo in logos:
-        if logo.target not in face.targets:
+    for logo in face_logos:
+        if logo.mode != "wrap":
             continue
-        # position is [0..1] across the face (origin: bottom-left)
-        u, v = logo.position
-        # configurator stores position as [-1..1] for some products, normalize
-        if u < 0 or v < 0 or u > 1 or v > 1:
-            u = (u + 1.0) / 2.0
-            v = (v + 1.0) / 2.0
-        u = max(0.0, min(1.0, u))
-        v = max(0.0, min(1.0, v))
+        img = _decal_image(logo)
+        if img is not None:
+            c.drawImage(img, ox, oy, drawn_w, drawn_h, preserveAspectRatio=False, mask='auto')
 
-        # logo.scale is fraction of face width (configurator convention: ~0.12..1.5)
-        scale_frac = max(0.05, min(1.0, logo.scale / 1.5 if logo.scale > 1.0 else logo.scale))
-        zone_w = face.width_mm * scale_frac * mm * scale
-        zone_h = zone_w  # square placement marker; final art may be non-square
+    for logo in face_logos:
+        if logo.mode == "wrap":
+            continue
+        img = _decal_image(logo)
+        x_mm, y_mm = _logo_xy_mm(face, logo)
+        zone_w_mm, zone_h_mm = _decal_size_mm(face, logo, img)
+        zone_w = zone_w_mm * mm * page_scale
+        zone_h = zone_h_mm * mm * page_scale
 
-        cx = ox + u * drawn_w
-        cy = oy + v * drawn_h
+        cx = ox + x_mm * mm * page_scale
+        cy = oy + y_mm * mm * page_scale
 
         c.saveState()
         c.translate(cx, cy)
         if logo.rotation:
             c.rotate(math.degrees(logo.rotation))
 
-        img = _decal_image(logo)
         if img is not None:
-            try:
-                iw, ih = img.getSize()
-                aspect = ih / iw if iw else 1.0
-                zone_h = zone_w * aspect
-            except Exception:
-                pass
             c.drawImage(img, -zone_w / 2, -zone_h / 2, zone_w, zone_h,
-                        preserveAspectRatio=True, mask='auto')
+                        preserveAspectRatio=False, mask='auto')
 
         # placement frame
         c.setStrokeColor(ZONE_STROKE)
@@ -145,6 +240,21 @@ def _draw_face(c: canvas.Canvas, face: Face, logos: List[LogoPlacement], order_i
                      f"{label}  {logo.scale:.2f}× ⟳{math.degrees(logo.rotation):.0f}°")
         c.restoreState()
 
+    c.restoreState()
+
+    for logo in face_logos:
+        if logo.mode != "wrap":
+            continue
+        c.setStrokeColor(ZONE_STROKE)
+        c.setLineWidth(0.8)
+        c.rect(ox, oy, drawn_w, drawn_h, fill=0, stroke=1)
+        c.setFillColor(ZONE_STROKE)
+        c.setFont("Helvetica-Bold", 7)
+        label = (logo.filename or logo.id or "wrap")[:24]
+        c.drawString(ox + 4, max(2 * mm, oy - 10), f"{label}  full wrap")
+
+    _draw_face_guides(c, face, ox, oy, drawn_w, drawn_h)
+
     c.showPage()
 
 
@@ -158,6 +268,8 @@ def _thermos_faces(d: ThermosDimensions) -> list[Face]:
             height_mm=d.body_height_mm,
             targets=("body",),
             note=f"Wrap around cylinder ⌀{d.body_diameter_mm:.1f} mm",
+            coordinate_space="thermos_body",
+            scale_basis_mm=d.body_diameter_mm,
         ),
         Face(
             title=f"Thermos · CAP TOP",
@@ -165,6 +277,9 @@ def _thermos_faces(d: ThermosDimensions) -> list[Face]:
             height_mm=d.cap_diameter_mm,
             targets=("capTop", "cap_top"),
             note="Flat disc, top of cap",
+            outline="circle",
+            coordinate_space="thermos_cap_top",
+            scale_basis_mm=d.cap_diameter_mm,
         ),
         Face(
             title=f"Thermos · CAP SIDE (unwrap)",
@@ -172,6 +287,8 @@ def _thermos_faces(d: ThermosDimensions) -> list[Face]:
             height_mm=d.cap_side_height_mm,
             targets=("capSide", "cap_side"),
             note=f"Wrap around cap ⌀{d.cap_diameter_mm:.1f} mm",
+            coordinate_space="thermos_cap_side",
+            scale_basis_mm=d.cap_diameter_mm,
         ),
     ]
 
@@ -179,16 +296,21 @@ def _thermos_faces(d: ThermosDimensions) -> list[Face]:
 def _powerbank_faces(d: PowerbankDimensions) -> list[Face]:
     return [
         Face(
-            title=f"Powerbank · FRONT",
+            title=f"Powerbank · OUTER SIDE",
             width_mm=d.width_mm,
             height_mm=d.height_mm,
-            targets=("front", "outer"),
+            targets=("outer", "back", "inner"),
+            coordinate_space="powerbank",
+            scale_basis_mm=min(d.width_mm, d.height_mm) * 0.7,
         ),
         Face(
-            title=f"Powerbank · BACK",
+            title=f"Powerbank · CHARGING SIDE",
             width_mm=d.width_mm,
             height_mm=d.height_mm,
-            targets=("back", "inner"),
+            targets=("charging", "front"),
+            note="Side with charging details",
+            coordinate_space="powerbank",
+            scale_basis_mm=min(d.width_mm, d.height_mm) * 0.7,
         ),
     ]
 
@@ -202,6 +324,10 @@ def _notebook_faces(d: NotebookDimensions) -> list[Face]:
             height_mm=d.height_mm,
             targets=("front", "back", "cover"),
             note=f"Spine width {d.spine_thickness_mm:.1f} mm. Front lies on the right half.",
+            coordinate_space="notebook_cover",
+            scale_basis_mm=d.width_mm * 0.5,
+            panel_width_mm=d.width_mm,
+            spine_width_mm=d.spine_thickness_mm,
         ),
     ]
 

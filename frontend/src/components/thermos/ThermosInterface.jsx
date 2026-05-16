@@ -2,14 +2,13 @@ import { useState } from 'react';
 import { useConfigurator, captureRender } from '../../store';
 import { t } from '../../i18n';
 import {
-    ColorSwatches,
+    ColorDropdown,
     ConstructorDock,
     DockGrid,
-    DockTitleColumn,
     FileUploadChip,
     FloatingLogoSettings,
     LogoList,
-    MiniSegment,
+    MiniDropdown,
     MiniToggle,
     RotationScrub,
     SettingGroup,
@@ -19,13 +18,13 @@ import {
 } from '../configurator/ConstructorDock';
 
 const palette = [
-    { bg: '#e65405' },
-    { bg: '#003087' },
-    { bg: '#115740' },
-    { bg: '#5E366E' },
-    { bg: '#BA0C2F' },
-    { bg: '#716D6A' },
-    { bg: '#1B365D' },
+    { bg: '#e65405', name: 'Оранжевый' },
+    { bg: '#003087', name: 'Синий' },
+    { bg: '#115740', name: 'Зелёный' },
+    { bg: '#5E366E', name: 'Фиолетовый' },
+    { bg: '#BA0C2F', name: 'Красный' },
+    { bg: '#716D6A', name: 'Серый' },
+    { bg: '#1B365D', name: 'Тёмно-синий' },
 ];
 
 export const ThermosInterface = ({ onFinish }) => {
@@ -63,14 +62,13 @@ export const ThermosInterface = ({ onFinish }) => {
     };
 
     return (
-        <ConstructorDock title={t(language, 'thermosTitle')} onSave={handleAddToCart} saveLabel={t(language, 'placeOrder')} desktopTitleColumn>
+        <ConstructorDock title={t(language, 'thermosTitle')} onSave={handleAddToCart} saveLabel={t(language, 'placeOrder')}>
             <DockGrid
-                cols="md:grid-cols-[0.78fr_0.9fr_1.08fr_1.24fr_0.85fr]"
-                leading={<DockTitleColumn title={t(language, 'thermosTitle')} />}
+                cols="md:grid-cols-2"
             >
                 <SettingGroup title={t(language, 'thermosBodyPart')}>
                     <SettingRow label={t(language, 'bodyColor')}>
-                        <ColorSwatches colors={palette} currentColor={thermosBodyColor} onSelect={(c) => setColor('thermosBody', c)} />
+                        <ColorDropdown colors={palette} currentColor={thermosBodyColor} onSelect={(c) => setColor('thermosBody', c)} />
                     </SettingRow>
                     <SettingRow label={t(language, 'thermosCap')}>
                         <MiniToggle checked={thermosCapVisible} onChange={toggleThermosCap} />
@@ -79,7 +77,7 @@ export const ThermosInterface = ({ onFinish }) => {
 
                 <SettingGroup title={t(language, 'logoLabel')}>
                     <SettingRow label={t(language, 'applicationSide')}>
-                        <MiniSegment
+                        <MiniDropdown
                             value={logoArea}
                             onChange={setLogoArea}
                             options={[
@@ -90,7 +88,7 @@ export const ThermosInterface = ({ onFinish }) => {
                     </SettingRow>
                     {logoArea === 'cap' && (
                         <SettingRow label={t(language, 'thermosCapPart')}>
-                            <MiniSegment
+                            <MiniDropdown
                                 value={capLogoTarget}
                                 onChange={setCapLogoTarget}
                                 options={[
@@ -148,7 +146,7 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, activeLogoTarget, addLogo, se
             <LogoList logos={visibleLogos} selectedLogoId={selectedLogoId} selectLogo={selectLogo} removeLogo={removeLogo} />
             {selected && (
                 <>
-                    <div className="mt-3 space-y-3 md:hidden">
+                    <div className="mt-3 space-y-3 xl:hidden">
                         {selected.mode === 'wrap' && (
                             <div className="rounded-[8px] border border-white/10 bg-white/8 px-3 py-2 text-xs font-bold text-white/60">
                                 {t(language, 'aiWrapApplied')}

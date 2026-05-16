@@ -78,6 +78,7 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState(new Set());
     const [updating, setUpdating] = useState(null);
+    const [stageError, setStageError] = useState(null);
     const [techcardBusy, setTechcardBusy] = useState(null);
     const [commentDraft, setCommentDraft] = useState({});
     const [quoteDraft, setQuoteDraft] = useState({});
@@ -133,10 +134,14 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
     const setStage = async (orderId, newStatus) => {
         const comment = commentDraft[orderId] || '';
         setUpdating(orderId);
+        setStageError(null);
         try {
             await manufacturerApi.updateStatus(orderId, newStatus, comment || null);
             setCommentDraft(prev => { const next = { ...prev }; delete next[orderId]; return next; });
             await reload();
+        } catch (err) {
+            const msg = err?.response?.data?.detail || 'Ошибка обновления статуса';
+            setStageError({ orderId, msg });
         } finally {
             setUpdating(null);
         }
@@ -210,12 +215,16 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
             {/* SIDEBAR */}
             <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-white/5 bg-white/[0.02] backdrop-blur-xl z-20">
                 <div className="p-6 border-b border-white/5">
-                    <div className="flex items-center gap-2 mb-3">
+                    <button
+                        type="button"
+                        onClick={() => window.location.reload()}
+                        className="flex items-center gap-2 mb-3 hover:opacity-75 active:scale-95 transition-all"
+                    >
                         <div className="w-8 h-8 bg-white/10 border border-white/10 rounded-[10px] flex items-center justify-center">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-400"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                         </div>
                         <span className="font-bold text-sm tracking-wide">Spruzhuk</span>
-                    </div>
+                    </button>
                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{t(language, 'manufDashTitle')}</p>
                     <p className="text-xs text-gray-400 mt-0.5 truncate">{getUserSecondaryLabel(currentUser)}</p>
                 </div>
@@ -253,10 +262,14 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
 
             {/* MOBILE HEADER */}
             <div className="md:hidden fixed top-0 left-0 right-0 z-30 px-4 py-3 bg-[#0B0F19]/95 backdrop-blur-xl border-b border-white/5 flex items-center gap-3">
-                <div className="flex items-center gap-2">
+                <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="flex items-center gap-2 hover:opacity-75 active:scale-95 transition-all"
+                >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-400"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                     <span className="font-bold text-sm tracking-wide">Spruzhuk</span>
-                </div>
+                </button>
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">{t(language, 'manufDashTitle')}</span>
                 <span className="text-xs text-gray-500 truncate ml-auto">{getUserSecondaryLabel(currentUser)}</span>
             </div>
@@ -371,7 +384,9 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
                             const isTcBusy = techcardBusy === orderId;
                             const currentStageIdx = STAGE_INDEX[order.status] ?? 0;
                             const isQuoteStage = order.status === 'awaiting_quotes' || order.status === 'quotes_ready';
+                            const isSelectedManufacturer = order.selected_manufacturer_id === currentUser?.id;
                             const myQuote = (order.manufacturer_quotes || []).find(q => q.manufacturer_id === currentUser?.id);
+                            const PRODUCTION_ONLY_STAGES = PRODUCTION_STAGES.filter(s => !['awaiting_quotes', 'quotes_ready'].includes(s.key));
                             return (
                                 <div key={orderId} className={i !== orders.length - 1 ? 'border-b border-white/5' : ''}>
                                     {/* Summary row */}
@@ -453,14 +468,14 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
                                                                 className="w-full mt-2 bg-black/20 border border-white/10 rounded-[10px] px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-white/30 resize-none"
                                                             />
                                                         </div>
-                                                    ) : (
-                                                        <>
-                                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{t(language, 'updateStage')}</p>
+                                                    ) : isSelectedManufacturer ? (
+                                                        <div className="rounded-[12px] border border-indigo-500/20 bg-indigo-500/[0.08] p-4 space-y-3">
+                                                            <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-300">{t(language, 'updateStage')}</p>
                                                             <div className="flex flex-wrap gap-2">
-                                                                {PRODUCTION_STAGES.filter(stage => !['awaiting_quotes', 'quotes_ready'].includes(stage.key)).map((stage, idx) => {
-                                                                    const productionIdx = Math.max(0, idx);
+                                                                {PRODUCTION_ONLY_STAGES.map((stage) => {
                                                                     const isCurrent = stage.key === order.status;
-                                                                    const isPast = productionIdx < Math.max(0, currentStageIdx - 2);
+                                                                    const stageIdx = STAGE_INDEX[stage.key];
+                                                                    const isPast = stageIdx < currentStageIdx;
                                                                     return (
                                                                         <button
                                                                             key={stage.key}
@@ -468,10 +483,10 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
                                                                             onClick={(e) => { e.stopPropagation(); setStage(orderId, stage.key); }}
                                                                             className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all
                                                                                 ${isCurrent
-                                                                                    ? `${stage.color} cursor-default opacity-100 ring-1 ring-white/20`
+                                                                                    ? `${stage.color} cursor-default ring-1 ring-white/20`
                                                                                     : isPast
                                                                                         ? 'bg-white/5 text-gray-600 border-white/5 hover:bg-white/10 hover:text-gray-400'
-                                                                                        : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10 hover:text-white'
+                                                                                        : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/15 hover:text-white'
                                                                                 } ${isUpdating ? 'opacity-40 cursor-not-allowed' : ''}`}
                                                                         >
                                                                             {stage.icon} {t(language, stage.textKey)}{isCurrent && ' ✓'}
@@ -481,12 +496,24 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
                                                             </div>
                                                             <textarea
                                                                 value={commentDraft[orderId] || ''}
+                                                                onClick={e => e.stopPropagation()}
                                                                 onChange={(e) => setCommentDraft(prev => ({ ...prev, [orderId]: e.target.value }))}
                                                                 placeholder={t(language, 'stageCommentPlaceholder')}
                                                                 rows={2}
-                                                                className="w-full mt-1 bg-white/5 border border-white/10 rounded-[10px] px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-white/30 resize-none"
+                                                                className="w-full bg-black/20 border border-white/10 rounded-[10px] px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/40 resize-none"
                                                             />
-                                                        </>
+                                                            {stageError?.orderId === orderId && (
+                                                                <p className="text-[10px] text-red-400 font-bold">{stageError.msg}</p>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="rounded-[12px] border border-white/8 bg-white/[0.03] p-4 flex items-center gap-3">
+                                                            <span className="text-xl shrink-0">⏳</span>
+                                                            <div>
+                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{t(language, 'quoteAlreadySent')}</p>
+                                                                <p className="text-[11px] text-gray-600 mt-0.5">{myQuote ? `${myQuote.price} ${myQuote.currency || 'BYN'} · ${myQuote.production_days} ${t(language, 'quoteDaysShort')}` : '—'}</p>
+                                                            </div>
+                                                        </div>
                                                     )}
                                                 </div>
 

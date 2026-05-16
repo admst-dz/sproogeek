@@ -1,23 +1,12 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 export const ConstructorDock = ({ title, tabs = [], activeTab, onTabChange, onSave, saveLabel, desktopTitleColumn = false, children }) => (
-    <div className="pointer-events-auto w-full h-full md:h-auto md:w-[min(1120px,calc(100vw-3rem))] lg:w-[min(1180px,calc(100vw-4rem))] md:max-h-[64vh] flex flex-col items-center gap-4 font-zen text-white">
-        <button
-            type="button"
-            onClick={onSave}
-            className="hidden md:inline-flex self-end mr-4 lg:mr-5 min-w-[118px] justify-center rounded-full bg-[#fff9ec] px-7 py-2 text-[14px] font-black text-[#1b1b1b] shadow-lg transition hover:bg-white active:scale-95"
-        >
-            {saveLabel}
-        </button>
-
-        <section className="w-full h-full md:h-auto md:max-h-[calc(64vh-54px)] min-h-0 flex flex-col rounded-t-[24px] md:rounded-[8px] border border-white/35 bg-[#4b393c]/84 shadow-2xl backdrop-blur-xl overflow-hidden">
-            <div className={`${desktopTitleColumn && tabs.length === 0 ? 'md:hidden ' : ''}flex items-center justify-between gap-3 border-b border-white/20 px-4 py-3 md:pl-4 md:pr-7 md:py-4 lg:pl-5 lg:pr-8`}>
-                <div className={`${desktopTitleColumn ? 'md:hidden ' : ''}min-w-0`}>
-                    <p className="text-[10px] md:text-[11px] font-black uppercase tracking-[0.24em] text-white/45">Конструктор</p>
-                    <h2 className="truncate text-lg md:text-[22px] font-black leading-tight">{title}</h2>
-                </div>
-                {tabs.length > 0 && (
+    <div className="pointer-events-auto w-full h-full md:h-auto md:w-[min(1120px,calc(100vw-3rem))] lg:h-full lg:w-[min(400px,calc(100vw-2.5rem))] md:max-h-[64vh] lg:max-h-none flex flex-col items-center lg:items-stretch gap-4 lg:gap-3 font-zen text-white">
+        <section className="w-full h-full md:h-auto lg:h-full md:max-h-[calc(64vh-54px)] lg:max-h-none min-h-0 flex flex-col rounded-t-[24px] md:rounded-[8px] lg:rounded-[12px] border border-white/35 bg-[#4b393c]/84 shadow-2xl backdrop-blur-xl overflow-hidden">
+            {tabs.length > 0 && (
+                <div className="flex items-center justify-between gap-3 border-b border-white/20 px-4 py-3 md:pl-4 md:pr-7 md:py-4 lg:pl-5 lg:pr-8">
+                    <div className="min-w-0" />
                     <div className="flex shrink-0 gap-1 rounded-full border border-white/15 bg-white/10 p-1">
                         {tabs.map(tab => (
                             <button
@@ -32,10 +21,10 @@ export const ConstructorDock = ({ title, tabs = [], activeTab, onTabChange, onSa
                             </button>
                         ))}
                     </div>
-                )}
-            </div>
+                </div>
+            )}
 
-            <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar px-4 py-3 md:px-7 md:py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar px-4 py-3 md:px-7 md:py-5 lg:px-4 lg:py-4">
                 {children}
             </div>
 
@@ -49,28 +38,33 @@ export const ConstructorDock = ({ title, tabs = [], activeTab, onTabChange, onSa
                 </button>
             </div>
         </section>
+
+        <button
+            type="button"
+            onClick={onSave}
+            className="hidden md:inline-flex self-end mr-4 lg:mr-0 lg:w-full min-w-[118px] justify-center rounded-full bg-[#fff9ec] px-7 py-2 text-[14px] font-black text-[#1b1b1b] shadow-lg transition hover:bg-white active:scale-95"
+        >
+            {saveLabel}
+        </button>
     </div>
 );
 
-export const DockGrid = ({ children, cols = 'md:grid-cols-4', leading = null }) => (
-    <div className={`grid grid-cols-1 sm:grid-cols-2 ${cols} gap-y-4 md:gap-y-0 md:divide-x md:divide-white/25 [&>*]:min-w-0`}>
+export const DockGrid = ({ children, cols = 'md:grid-cols-2', leading = null }) => (
+    <div className={`grid grid-cols-1 sm:grid-cols-2 ${cols} gap-y-4 md:gap-y-0 md:divide-x md:divide-white/25 lg:grid-cols-1 lg:gap-y-4 lg:divide-x-0 lg:[&>*+*]:border-t lg:[&>*+*]:border-white/15 lg:[&>*+*]:pt-4 [&>*]:min-w-0`}>
         {leading}
         {children}
     </div>
 );
 
 export const DockTitleColumn = ({ title }) => (
-    <div className="hidden md:flex min-w-0 flex-col justify-start px-0 py-0 pr-5 lg:pr-6">
-        <p className="text-[11px] font-black uppercase tracking-[0.24em] text-white/45">Конструктор</p>
-        <h2 className="mt-1 truncate text-[22px] font-black leading-tight text-white">{title}</h2>
-    </div>
+    <div className="hidden md:flex min-w-0 flex-col justify-start px-0 py-0 pr-5 lg:pr-6" />
 );
 
 export const FloatingLogoSettings = ({ title, subtitle, children }) => {
     if (typeof document === 'undefined') return null;
 
     return createPortal(
-        <aside className="pointer-events-auto hidden md:block fixed right-5 lg:right-8 top-1/2 z-[90] w-[320px] max-w-[calc(100vw-2.5rem)] max-h-[min(560px,calc(100vh-8rem))] -translate-y-1/2 overflow-y-auto rounded-[12px] border border-white/30 bg-[#3f3438]/94 px-5 py-4 font-zen text-white shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-2xl custom-scrollbar">
+        <aside className="pointer-events-auto hidden xl:block fixed left-4 top-[4.75rem] z-[90] w-[320px] max-w-[calc(100vw-1.5rem)] max-h-[min(560px,calc(100vh-6rem))] overflow-y-auto rounded-[12px] border border-white/30 bg-[#3f3438]/94 px-5 py-4 font-zen text-white shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-2xl custom-scrollbar">
             <div className="mb-4 border-b border-white/12 pb-3">
                 <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/42">{title}</p>
                 {subtitle && <h3 className="mt-1 truncate text-[18px] font-black leading-tight">{subtitle}</h3>}
@@ -81,17 +75,17 @@ export const FloatingLogoSettings = ({ title, subtitle, children }) => {
     );
 };
 
-export const SettingGroup = ({ title, children }) => (
-    <div className="space-y-3 px-0 py-2 md:px-5 md:py-0 lg:px-6 first:md:pl-0 last:md:pr-0">
-        {title && <p className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.2em] text-white/42">{title}</p>}
-        <div className="space-y-3">{children}</div>
+export const SettingGroup = ({ title, children, compact = false }) => (
+    <div className={`${compact ? 'space-y-1.5 px-0 py-1 md:px-4 md:py-0 lg:px-0 lg:py-0' : 'space-y-3 px-0 py-2 md:px-5 md:py-0 lg:px-0 lg:py-0'} first:md:pl-0 last:md:pr-0`}>
+        {title && <p className={`${compact ? 'text-[9px] md:text-[10px]' : 'text-[10px] md:text-[12px]'} font-black uppercase tracking-[0.2em] text-white/42`}>{title}</p>}
+        <div className={compact ? 'space-y-1.5' : 'space-y-3'}>{children}</div>
     </div>
 );
 
-export const SettingRow = ({ label, children }) => (
-    <div className="flex min-w-0 flex-col items-start gap-2 text-[13px] md:text-[15px] lg:text-[16px] leading-tight">
-        <span className="min-w-0 font-bold text-white/92">{label}</span>
-        <div className="w-full min-w-0">{children}</div>
+export const SettingRow = ({ label, children, inline = false }) => (
+    <div className={`min-w-0 leading-tight ${inline ? 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-[11px] md:text-[12px]' : 'flex flex-col items-start gap-2 text-[13px] md:text-[15px] lg:text-[16px]'}`}>
+        <span className={`font-bold ${inline ? 'min-w-0 break-words text-white/70' : 'min-w-0 break-words text-white/92'}`}>{label}</span>
+        <div className={inline ? 'min-w-0 max-w-full justify-self-end' : 'w-full min-w-0'}>{children}</div>
     </div>
 );
 
@@ -122,6 +116,114 @@ export const MiniSegment = ({ options, value, onChange }) => (
         ))}
     </div>
 );
+
+const DropdownPortal = ({ btnRef, open, onClose, children, itemCount = 4 }) => {
+    if (!open) return null;
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return null;
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+    const gap = 4;
+    const viewportPadding = 12;
+    const estimatedPanelHeight = Math.min(Math.max(itemCount * 34, 44), 260);
+    const spaceBelow = viewportHeight - r.bottom - viewportPadding;
+    const spaceAbove = r.top - viewportPadding;
+    const openUp = spaceBelow < estimatedPanelHeight && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(44, Math.min(estimatedPanelHeight, openUp ? spaceAbove - gap : spaceBelow - gap));
+    const panelStyle = {
+        position: 'fixed',
+        left: Math.min(r.left, viewportWidth - Math.max(r.width, 100) - viewportPadding),
+        width: Math.max(r.width, 100),
+        maxHeight,
+        zIndex: 9999,
+        ...(openUp ? { bottom: viewportHeight - r.top + gap } : { top: r.bottom + gap }),
+    };
+    return createPortal(
+        <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={onClose} />
+            <div style={panelStyle} className="rounded-[8px] border border-white/20 bg-[#3a2e31] shadow-2xl overflow-y-auto font-zen custom-scrollbar">
+                {children}
+            </div>
+        </>,
+        document.body
+    );
+};
+
+export const MiniDropdown = ({ options, value, onChange }) => {
+    const [open, setOpen] = useState(false);
+    const btnRef = useRef(null);
+    const current = options.find(o => o.value === value);
+    return (
+        <div className="w-full">
+            <button
+                ref={btnRef}
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                className="w-full flex items-center justify-between gap-2 rounded-[8px] border border-white/20 bg-white/8 px-2.5 py-1.5 text-[10px] md:text-[12px] font-black uppercase tracking-wider text-white transition hover:bg-white/14"
+            >
+                <span className="truncate">{current?.label ?? value}</span>
+                <svg width="10" height="6" viewBox="0 0 10 6" className={`shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} fill="none">
+                    <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            </button>
+            <DropdownPortal btnRef={btnRef} open={open} onClose={() => setOpen(false)} itemCount={options.length}>
+                {options.map(opt => (
+                    <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => { onChange(opt.value); setOpen(false); }}
+                        className={`w-full px-3 py-2 text-left text-[10px] md:text-[12px] font-black uppercase tracking-wider transition ${opt.value === value ? 'bg-[#fff9ec] text-[#191919]' : 'text-white/80 hover:bg-white/12'}`}
+                    >
+                        {opt.label}
+                    </button>
+                ))}
+            </DropdownPortal>
+        </div>
+    );
+};
+
+export const ColorDropdown = ({ colors, currentColor, onSelect }) => {
+    const [open, setOpen] = useState(false);
+    const btnRef = useRef(null);
+    const current = colors.find(c => (c.bg ?? c) === currentColor);
+    const label = current?.name ?? currentColor;
+    return (
+        <div className="w-full">
+            <button
+                ref={btnRef}
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                className="w-full flex items-center justify-between gap-2 rounded-[8px] border border-white/20 bg-white/8 px-2.5 py-1.5 text-[10px] md:text-[12px] font-black uppercase tracking-wider text-white transition hover:bg-white/14"
+            >
+                <div className="flex items-center gap-2 min-w-0">
+                    <span className="h-[13px] w-[13px] shrink-0 rounded-full border border-white/30" style={{ backgroundColor: currentColor }} />
+                    <span className="truncate">{label}</span>
+                </div>
+                <svg width="10" height="6" viewBox="0 0 10 6" className={`shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} fill="none">
+                    <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            </button>
+            <DropdownPortal btnRef={btnRef} open={open} onClose={() => setOpen(false)} itemCount={colors.length}>
+                {colors.map(color => {
+                    const val = color.bg ?? color;
+                    const name = color.name ?? val;
+                    return (
+                        <button
+                            key={val}
+                            type="button"
+                            onClick={() => { onSelect(val); setOpen(false); }}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-[10px] md:text-[12px] font-black uppercase tracking-wider transition ${val === currentColor ? 'bg-white/20 text-white' : 'text-white/80 hover:bg-white/12'}`}
+                        >
+                            <span className="h-[14px] w-[14px] shrink-0 rounded-full border border-white/25" style={{ backgroundColor: val }} />
+                            <span className="truncate">{name}</span>
+                            {val === currentColor && <span className="ml-auto text-[10px] text-[#fff9ec]">✓</span>}
+                        </button>
+                    );
+                })}
+            </DropdownPortal>
+        </div>
+    );
+};
 
 export const ColorSwatches = ({ colors, currentColor, onSelect }) => (
     <div className="flex w-full max-w-full flex-wrap justify-start gap-2">

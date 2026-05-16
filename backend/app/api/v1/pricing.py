@@ -122,7 +122,7 @@ async def quote(req: PricingRequest):
     ))
 
     extras_per_unit = 0.0
-    if req.has_elastic:
+    if req.has_elastic and req.binding_type == "spiral":
         extras_per_unit += ELASTIC_PRICE
         breakdown.append(PricingLine(
             label="Резинка", qty=req.quantity, unit_price=ELASTIC_PRICE,

@@ -30,15 +30,58 @@ function OverlayMaterial({ color, opacity = 1, polygonOffsetFactor = DETAIL_POLY
     );
 }
 
+function logoSizeFromTexture(map, scale) {
+    const imageWidth = map?.image?.width ?? map?.image?.naturalWidth ?? 1;
+    const imageHeight = map?.image?.height ?? map?.image?.naturalHeight ?? 1;
+    const aspect = imageWidth > 0 && imageHeight > 0 ? imageWidth / imageHeight : 1;
+
+    if (aspect >= 1) {
+        return { width: scale, height: scale / aspect };
+    }
+
+    return { width: scale * aspect, height: scale };
+}
+
+function clampedLogoCenter({
+    position,
+    rotation,
+    logoWidth,
+    logoHeight,
+    faceWidth,
+    faceHeight,
+}) {
+    const px = THREE.MathUtils.clamp(position?.[0] ?? 0, -1, 1);
+    const py = THREE.MathUtils.clamp(position?.[1] ?? 0, -1, 1);
+    const cos = Math.abs(Math.cos(rotation));
+    const sin = Math.abs(Math.sin(rotation));
+    const projectedHalfWidth = (logoWidth * cos + logoHeight * sin) / 2;
+    const projectedHalfHeight = (logoWidth * sin + logoHeight * cos) / 2;
+    const edgeInset = Math.min(faceWidth, faceHeight) * 0.035;
+    const maxOffsetX = Math.max(0, faceWidth / 2 - projectedHalfWidth - edgeInset);
+    const maxOffsetY = Math.max(0, faceHeight / 2 - projectedHalfHeight - edgeInset);
+
+    return {
+        x: px * maxOffsetX,
+        y: py * maxOffsetY,
+    };
+}
+
 function LogoPlane({ texture, position, frontZ, backZ, centerX, centerY, width, height, side = 'outer', rotation = 0, scale = 0.6 }) {
     const map = useLogoTexture(texture);
     const isCharging = side === 'charging';
     const z = isCharging ? frontZ + LOGO_SURFACE_OFFSET : backZ - LOGO_SURFACE_OFFSET;
     const rotY = isCharging ? 0 : Math.PI;
-    const px = THREE.MathUtils.clamp(position?.[0] ?? 0, -1, 1);
-    const py = THREE.MathUtils.clamp(position?.[1] ?? 0, -1, 1);
-    const worldX = centerX + (isCharging ? px : -px) * width * 0.38;
-    const worldY = centerY + py * height * 0.38;
+    const logoSize = logoSizeFromTexture(map, scale);
+    const logoCenter = clampedLogoCenter({
+        position,
+        rotation,
+        logoWidth: logoSize.width,
+        logoHeight: logoSize.height,
+        faceWidth: width,
+        faceHeight: height,
+    });
+    const worldX = centerX + (isCharging ? logoCenter.x : -logoCenter.x);
+    const worldY = centerY + logoCenter.y;
 
     return (
         <mesh
@@ -46,7 +89,7 @@ function LogoPlane({ texture, position, frontZ, backZ, centerX, centerY, width, 
             rotation={[0, rotY, rotation]}
             renderOrder={30}
         >
-            <planeGeometry args={[scale, scale]} />
+            <planeGeometry args={[logoSize.width, logoSize.height]} />
             <meshStandardMaterial
                 map={map}
                 transparent
@@ -124,8 +167,9 @@ function PowerbankFaceDetails({ bbox, frontZ, bodyColor }) {
     );
 }
 
-export function Powerbank(props) {
-    const { powerbankBodyColor, powerbankLogos } = useConfigurator();
+export function Powerbank({ config: configProp, ...props }) {
+    const store = useConfigurator();
+    const { powerbankBodyColor, powerbankLogos } = configProp || store;
     const { nodes, materials } = useGLTF(powerbankModelUrl);
     const matRef = useRef();
 

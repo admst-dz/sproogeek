@@ -1,28 +1,20 @@
-import { useState, useEffect, useRef } from 'react'
-import { Canvas } from '@react-three/fiber'
-import { Experience } from './components/configurator/Experience'
-import { Interface, ZoomControls } from './components/configurator/Interface'
-import { Home } from './components/home/Home'
-import { Order } from './components/order/Order'
-import { DealerDashboard } from './components/dashboard/DealerDashboard'
-import { ManufacturerDashboard } from './components/dashboard/ManufacturerDashboard'
-import { AuthModal } from './components/auth/AuthModal'
-import { ClientDashboard } from './components/dashboard/ClientDashboard'
-import { ALL_PRODUCT_DEFAULTS, useConfigurator } from './store'
+import { lazy, Suspense, useState, useEffect, useRef } from 'react'
+import { ALL_PRODUCT_DEFAULTS, THEME_SWITCHING_ENABLED, getNotebookBindingCapabilities, useConfigurator } from './store'
 import { t } from './i18n'
-import { restoreSession } from './api'
-import { ThermosInterface } from './components/thermos/ThermosInterface'
-import { PowerbankInterface } from './components/powerbank/PowerbankInterface'
 import { CookieBanner } from './components/shared/CookieBanner'
-import { SceneLoadingOverlay } from './components/shared/VibeLoader'
-import { AdminAuth } from './components/auth/AdminAuth'
-import { AdminDashboard } from './components/admin/AdminDashboard'
-import { SceneHints } from './components/shared/SceneHints'
-import { ConfirmModal } from './components/shared/ConfirmModal'
-import { UndoRedoControls } from './components/shared/UndoRedoControls'
-import { useUndoRedoHotkeys } from './hooks/useTemporalConfigurator'
-import { CommandPalette } from './components/shared/CommandPalette'
-import { CookiePolicy } from './components/shared/CookiePolicy'
+
+const Home = lazy(() => import('./components/home/Home').then((module) => ({ default: module.Home })));
+const Order = lazy(() => import('./components/order/Order').then((module) => ({ default: module.Order })));
+const DealerDashboard = lazy(() => import('./components/dashboard/DealerDashboard').then((module) => ({ default: module.DealerDashboard })));
+const ManufacturerDashboard = lazy(() => import('./components/dashboard/ManufacturerDashboard').then((module) => ({ default: module.ManufacturerDashboard })));
+const AuthModal = lazy(() => import('./components/auth/AuthModal').then((module) => ({ default: module.AuthModal })));
+const ClientDashboard = lazy(() => import('./components/dashboard/ClientDashboard').then((module) => ({ default: module.ClientDashboard })));
+const AdminAuth = lazy(() => import('./components/auth/AdminAuth').then((module) => ({ default: module.AdminAuth })));
+const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard').then((module) => ({ default: module.AdminDashboard })));
+const CookiePolicy = lazy(() => import('./components/shared/CookiePolicy').then((module) => ({ default: module.CookiePolicy })));
+const ConfiguratorScreen = lazy(() => import('./components/configurator/ConfiguratorScreen').then((module) => ({ default: module.ConfiguratorScreen })));
+const RenderModeView = lazy(() => import('./components/configurator/RenderModeView').then((module) => ({ default: module.RenderModeView })));
+const CommandPalette = lazy(() => import('./components/shared/CommandPalette').then((module) => ({ default: module.CommandPalette })));
 
 const SCREEN_TO_PATH = {
     home: '/',
@@ -153,13 +145,25 @@ function pickConfiguratorDraft(state) {
     return draft;
 }
 
+function hasMeaningfulConfiguratorDraft(state) {
+    return [
+        state?.logos,
+        state?.thermosLogos,
+        state?.powerbankLogos,
+    ].some((items) => Array.isArray(items) && items.length > 0);
+}
+
 function readConfiguratorDraft() {
     if (typeof window === 'undefined') return null;
     try {
         const raw = window.localStorage.getItem(CONFIGURATOR_DRAFT_KEY);
         if (!raw) return null;
         const parsed = JSON.parse(raw);
-        return parsed?.state ? parsed : null;
+        if (!parsed?.state || !hasMeaningfulConfiguratorDraft(parsed.state)) {
+            window.localStorage.removeItem(CONFIGURATOR_DRAFT_KEY);
+            return null;
+        }
+        return parsed;
     } catch {
         return null;
     }
@@ -167,6 +171,10 @@ function readConfiguratorDraft() {
 
 function writeConfiguratorDraft(state) {
     if (typeof window === 'undefined') return null;
+    if (!hasMeaningfulConfiguratorDraft(state)) {
+        clearConfiguratorDraft();
+        return null;
+    }
     const draft = {
         version: 1,
         updatedAt: Date.now(),
@@ -182,42 +190,206 @@ function clearConfiguratorDraft() {
     }
 }
 
-function RenderModeView({ configBase64 }) {
-    const { applyRenderConfig } = useConfigurator();
-
-    useEffect(() => {
-        if (!configBase64) return;
-        try {
-            const config = JSON.parse(decodeURIComponent(escape(atob(configBase64))));
-            applyRenderConfig(config);
-        } catch (e) {
-            console.error("Failed to parse render config", e);
-        }
-    }, [configBase64, applyRenderConfig]);
-
-    return (
-        <div className="w-[1024px] h-[1024px] bg-[#E5E5E5] flex items-center justify-center">
-            <Canvas
-                shadows
-                dpr={[1, 2]}
-                camera={{ position: [0, 0, 4.5], fov: 45 }}
-                gl={{ preserveDrawingBuffer: true, antialias: true, alpha: false, powerPreference: 'high-performance' }}
-            >
-                <Experience />
-            </Canvas>
-        </div>
-    );
-}
-
 function App() {
     const urlParams = new URLSearchParams(window.location.search);
     const isRenderMode = urlParams.get('render_mode') === 'true';
 
     if (isRenderMode) {
-        return <RenderModeView configBase64={urlParams.get('config')} />;
+        return (
+            <Suspense fallback={<RouteLoader />}>
+                <RenderModeView configBase64={urlParams.get('config')} />
+            </Suspense>
+        );
     }
 
     return <MainApp />;
+}
+
+function RouteLoader() {
+    return (
+        <div className="app-bg fixed inset-0" aria-hidden="true" />
+    );
+}
+
+function RouteSuspense({ children, fallback = <RouteLoader /> }) {
+    return <Suspense fallback={fallback}>{children}</Suspense>;
+}
+
+function HomeFallbackCard({ title, actionLabel, tone, onClick }) {
+    const toneClass = {
+        blue: 'bg-blue-500/10 dark:bg-blue-400/15',
+        slate: 'bg-slate-500/10 dark:bg-slate-400/15',
+        emerald: 'bg-emerald-500/10 dark:bg-emerald-400/15',
+    }[tone] || 'bg-gray-500/10 dark:bg-white/10';
+
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="group relative flex flex-col items-center p-5 md:p-6 rounded-[20px] md:rounded-[24px] bg-white border border-gray-200 shadow-xl dark:bg-white/[0.03] dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none transition-colors duration-500 overflow-hidden text-center"
+        >
+            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 ${toneClass} blur-[60px] transition-colors duration-500`} />
+            <div className="h-40 sm:h-48 lg:h-56 w-full relative z-10 flex items-center justify-center">
+                <div className="w-28 h-28 rounded-full bg-white/55 border border-gray-200/80 dark:bg-white/8 dark:border-white/10" />
+            </div>
+            <div className="relative z-10 mt-2">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white transition-colors">{title}</h3>
+                <span className="inline-flex mt-5 px-5 py-2 rounded-full bg-gray-100 text-gray-600 border border-gray-200 dark:bg-white/10 dark:text-gray-300 dark:border-white/5 text-xs font-bold">
+                    {actionLabel}
+                </span>
+            </div>
+        </button>
+    );
+}
+
+function HomeRouteFallback({ onStart, onAuth, user, logout, openCommandPalette }) {
+    const {
+        language,
+        setLanguage,
+        setProduct,
+        setFormat,
+        setBindingType,
+        setHasElastic,
+    } = useConfigurator();
+
+    const cycleLanguage = () => {
+        if (language === 'ru') setLanguage('en');
+        else if (language === 'en') setLanguage('by');
+        else setLanguage('ru');
+    };
+
+    const handleSelect = (productType, config = {}) => {
+        setProduct(productType);
+        setFormat(config.format || 'A5');
+        const nextBindingType = config.bindingType || 'hard';
+        const nextBindingCaps = getNotebookBindingCapabilities(nextBindingType);
+        setBindingType(nextBindingType);
+        setHasElastic(nextBindingCaps.hasElastic && (config.hasElastic !== undefined ? config.hasElastic : true));
+        onStart();
+    };
+
+    return (
+        <div className="app-bg h-full w-full flex flex-col font-sans transition-colors duration-500 text-gray-900 dark:text-white overflow-y-auto overflow-x-hidden selection:bg-blue-500/30">
+            <header className="w-full px-4 sm:px-6 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-3 z-50 shrink-0">
+                <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="flex items-center gap-3 bg-white border border-gray-200 dark:bg-white/5 dark:border-white/10 px-4 py-2 rounded-full backdrop-blur-md shadow-sm dark:shadow-none transition-colors hover:bg-gray-50 dark:hover:bg-white/10 active:scale-95"
+                >
+                    <img src="/SprooGeek.svg" alt="Spruzhuk logo" className="w-4 h-4 object-contain" />
+                    <span className="font-bold text-sm tracking-wide">Spruzhuk</span>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={openCommandPalette}
+                    className="hidden md:flex items-center gap-3 bg-white border border-gray-200 dark:bg-white/5 dark:border-white/10 px-4 py-2 rounded-full backdrop-blur-md w-96 max-w-full text-sm text-gray-400 shadow-sm dark:shadow-none transition-colors hover:bg-gray-50 dark:hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/40 text-left"
+                    aria-label={t(language, 'search')}
+                >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <span className="flex-1">{t(language, 'search')}</span>
+                    <span className="bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-widest">⌘K</span>
+                </button>
+
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <button
+                        type="button"
+                        onClick={openCommandPalette}
+                        className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 text-gray-600 dark:bg-white/5 dark:border-white/10 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors rounded-full backdrop-blur-md shadow-sm dark:shadow-none focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                        aria-label={t(language, 'search')}
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </button>
+                    <button onClick={cycleLanguage} className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 text-gray-600 dark:bg-white/5 dark:border-white/10 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors rounded-full backdrop-blur-md text-xs font-bold uppercase">
+                        {language}
+                    </button>
+                    {user ? (
+                        <button onClick={logout} className="bg-white border border-gray-200 text-red-500 dark:bg-white/5 dark:border-white/10 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors px-4 sm:px-5 py-2 rounded-full backdrop-blur-md text-sm font-bold shadow-sm dark:shadow-none">
+                            {t(language, 'logout')}
+                        </button>
+                    ) : (
+                        <button onClick={onAuth} className="flex items-center gap-2 bg-white border border-gray-200 text-gray-800 dark:bg-white/5 dark:border-white/10 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors px-4 sm:px-5 py-2 rounded-full backdrop-blur-md text-sm font-bold shadow-sm dark:shadow-none">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                            {t(language, 'login')}
+                        </button>
+                    )}
+                </div>
+            </header>
+
+            <main className="flex-1 flex flex-col items-center pt-6 sm:pt-12 pb-16 sm:pb-24 px-4 z-10">
+                <h1 className="text-[clamp(2.35rem,11vw,4.5rem)] md:text-7xl font-bold text-center leading-[1.05] tracking-tight mb-4 sm:mb-6 text-gray-900 dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-b dark:from-white dark:to-gray-400 drop-shadow-sm dark:drop-shadow-2xl transition-colors">
+                    {t(language, 'title1')}<br />{t(language, 'title2')}
+                </h1>
+                <p className="text-gray-500 dark:text-gray-400 text-sm md:text-base text-center max-w-lg mb-8 sm:mb-12 lg:mb-16 font-medium leading-relaxed transition-colors">
+                    {t(language, 'subtitle')}
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full max-w-5xl">
+                    <HomeFallbackCard
+                        title={t(language, 'notebook')}
+                        actionLabel={t(language, 'openBtn')}
+                        tone="blue"
+                        onClick={() => handleSelect('notebook', { format: 'A5', bindingType: 'hard', hasElastic: false })}
+                    />
+                    <HomeFallbackCard
+                        title={t(language, 'thermos')}
+                        actionLabel={t(language, 'openBtn')}
+                        tone="slate"
+                        onClick={() => handleSelect('thermos')}
+                    />
+                    <HomeFallbackCard
+                        title={t(language, 'powerbank')}
+                        actionLabel={t(language, 'openBtn')}
+                        tone="emerald"
+                        onClick={() => handleSelect('powerbank')}
+                    />
+                </div>
+            </main>
+        </div>
+    );
+}
+
+function CommandPaletteGate(props) {
+    const [loaded, setLoaded] = useState(false);
+    const [open, setOpen] = useState(false);
+
+    useEffect(() => {
+        const openPalette = () => {
+            setLoaded(true);
+            setOpen(true);
+        };
+        const onKey = (event) => {
+            if (event.key === 'Escape') {
+                setOpen((value) => {
+                    if (!value) return value;
+                    event.preventDefault();
+                    return false;
+                });
+                return;
+            }
+
+            const cmd = event.metaKey || event.ctrlKey;
+            if (!cmd || (event.key !== 'k' && event.key !== 'K')) return;
+            event.preventDefault();
+            setLoaded(true);
+            setOpen((value) => !value);
+        };
+
+        window.addEventListener('spruzhuk:open-command-palette', openPalette);
+        window.addEventListener('keydown', onKey);
+        return () => {
+            window.removeEventListener('spruzhuk:open-command-palette', openPalette);
+            window.removeEventListener('keydown', onKey);
+        };
+    }, []);
+
+    if (!loaded) return null;
+
+    return (
+        <Suspense fallback={null}>
+            <CommandPalette {...props} open={open} onOpenChange={setOpen} />
+        </Suspense>
+    );
 }
 
 function MainApp() {
@@ -232,7 +404,6 @@ function MainApp() {
     const [pendingSuccessToast, setPendingSuccessToast] = useState(false);
     const [configuratorDraft, setConfiguratorDraft] = useState(() => readConfiguratorDraft());
 
-    const configuratorCanvasRef = useRef(null);
     const skipNextDraftSaveRef = useRef(false);
     const lastMetrikaUrlRef = useRef(typeof window !== 'undefined' ? window.location.href : '');
 
@@ -246,17 +417,11 @@ function MainApp() {
         userRole,
         logout,
         theme,
-        zoomLevel,
-        setZoom,
         cartItem,
         cartRestoredFromCookie,
         clearCart,
-        resetConfigurator,
         language,
     } = useConfigurator();
-
-    const isConfiguratorScreen = screen === 'configurator';
-    useUndoRedoHotkeys(isConfiguratorScreen);
 
     const guardedNavigate = (target) => {
         setScreen(target);
@@ -294,6 +459,11 @@ function MainApp() {
     };
 
     useEffect(() => {
+        if (!THEME_SWITCHING_ENABLED) {
+            document.documentElement.classList.add('dark');
+            if (theme !== 'dark') useConfigurator.setState({ theme: 'dark' });
+            return;
+        }
         if (theme === 'dark') document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
     }, [theme]);
@@ -373,7 +543,7 @@ function MainApp() {
             targetScreen = 'dealer';
         } else if (userRole === 'manufacturer') {
             targetScreen = 'manufacturer';
-        } else if (userRole === 'client') {
+        } else if (userRole === 'client' && screen !== 'configurator') {
             targetScreen = 'client_dashboard';
         } else if (!userRole && ['dealer', 'manufacturer', 'client_dashboard', 'admin_dashboard'].includes(screen)) {
             targetScreen = 'home';
@@ -386,14 +556,19 @@ function MainApp() {
 
     // --- ЛОГИКА: ВОССТАНОВЛЕНИЕ СЕССИИ ПО JWT ---
     useEffect(() => {
+        let cancelled = false;
         setAuthLoading(true);
-        restoreSession().then((user) => {
+        import('./api').then(({ restoreSession }) => restoreSession()).then((user) => {
+            if (cancelled) return;
             if (user) {
                 setCurrentUser(user);
                 setUserRole(user.role);
                 if (user.sub_role) setClientSubRole(user.sub_role);
             }
-        }).finally(() => setAuthLoading(false));
+        }).finally(() => {
+            if (!cancelled) setAuthLoading(false);
+        });
+        return () => { cancelled = true; };
     }, [setCurrentUser, setUserRole, setClientSubRole, setAuthLoading]);
 
     const handleContinueOrder = () => {
@@ -405,11 +580,15 @@ function MainApp() {
         }
     };
 
+    const openCommandPalette = () => {
+        window.dispatchEvent(new Event('spruzhuk:open-command-palette'));
+    };
+
     return (
         <>
             <CookieBanner />
 
-            <CommandPalette
+            <CommandPaletteGate
                 navigate={guardedNavigate}
                 screen={screen}
                 openAuth={() => setShowAuth(true)}
@@ -417,14 +596,16 @@ function MainApp() {
 
             {/* --- МОДАЛЬНОЕ ОКНО АВТОРИЗАЦИИ --- */}
             {showAuth && (
-                <AuthModal
-                    onClose={() => setShowAuth(false)}
-                    onRoleCreated={(user, role, subRole) => {
-                        setCurrentUser(user);
-                        setUserRole(role);
-                        if (subRole) setClientSubRole(subRole);
-                    }}
-                />
+                <Suspense fallback={null}>
+                    <AuthModal
+                        onClose={() => setShowAuth(false)}
+                        onRoleCreated={(user, role, subRole) => {
+                            setCurrentUser(user);
+                            setUserRole(role);
+                            if (subRole) setClientSubRole(subRole);
+                        }}
+                    />
+                </Suspense>
             )}
 
             {/* --- БАННЕР: НЕЗАВЕРШЁННЫЙ ЗАКАЗ --- */}
@@ -507,151 +688,116 @@ function MainApp() {
 
             {/* --- ЭКРАН: ГЛАВНАЯ СТРАНИЦА --- */}
             {screen === 'home' && (
-                <Home
-                    onStart={() => {
-                        setClientTab(null);
-                        setScreen('configurator');
-                    }}
-                    onAuth={() => setShowAuth(true)}
-                    user={currentUser}
-                    logout={logout}
-                />
+                <RouteSuspense
+                    fallback={(
+                        <HomeRouteFallback
+                            onStart={() => {
+                                setClientTab(null);
+                                setScreen('configurator');
+                            }}
+                            onAuth={() => setShowAuth(true)}
+                            user={currentUser}
+                            logout={logout}
+                            openCommandPalette={openCommandPalette}
+                        />
+                    )}
+                >
+                    <Home
+                        onStart={() => {
+                            setClientTab(null);
+                            setScreen('configurator');
+                        }}
+                        onAuth={() => setShowAuth(true)}
+                        user={currentUser}
+                        logout={logout}
+                    />
+                </RouteSuspense>
             )}
 
 
             {/* --- ЭКРАН: ПОЛИТИКА COOKIE --- */}
             {screen === 'cookie_policy' && (
-                <CookiePolicy onBack={() => setScreen('home')} />
+                <RouteSuspense>
+                    <CookiePolicy onBack={() => setScreen('home')} />
+                </RouteSuspense>
             )}
 
 
             {/* --- ЭКРАН: КОРЗИНА ГОСТЯ --- */}
             {/* Доступно только для незарегистрированных пользователей */}
             {screen === 'order' && (
-                <Order
-                    onBack={() => setScreen('configurator')}
-                    onSuccess={() => {
-                        setPendingSuccessToast(true);
-                        setShowAuth(true);
-                    }}
-                />
+                <RouteSuspense>
+                    <Order
+                        onBack={() => setScreen('configurator')}
+                        onSuccess={() => {
+                            setPendingSuccessToast(true);
+                            setShowAuth(true);
+                        }}
+                    />
+                </RouteSuspense>
             )}
 
 
             {/* --- ЭКРАН: КАБИНЕТ ДИЛЕРА --- */}
             {screen === 'dealer' && (
-                <DealerDashboard
-                    onBack={() => setScreen('home')}
-                    initialTab={dealerTab}
-                    onTabChange={setDealerTab}
-                />
+                <RouteSuspense>
+                    <DealerDashboard
+                        onBack={() => setScreen('home')}
+                        initialTab={dealerTab}
+                        onTabChange={setDealerTab}
+                    />
+                </RouteSuspense>
             )}
 
 
             {/* --- ЭКРАН: КАБИНЕТ ПРОИЗВОДСТВА --- */}
             {screen === 'manufacturer' && (
-                <ManufacturerDashboard
-                    onBack={() => setScreen('home')}
-                    initialTab={manufacturerTab}
-                    onTabChange={setManufacturerTab}
-                />
+                <RouteSuspense>
+                    <ManufacturerDashboard
+                        onBack={() => setScreen('home')}
+                        initialTab={manufacturerTab}
+                        onTabChange={setManufacturerTab}
+                    />
+                </RouteSuspense>
             )}
 
 
             {/* --- ЭКРАН: УМНЫЙ ДАШБОРД КЛИЕНТА (ПЛ, ПКЛ, КЛ) --- */}
             {screen === 'client_dashboard' && (
-                <ClientDashboard
-                    onBack={() => setScreen('home')}
-                    onEdit={() => setScreen('configurator')}
-                    showSuccessToast={pendingSuccessToast}
-                    onSuccessToastShown={() => setPendingSuccessToast(false)}
-                    initialTab={clientTab}
-                    onTabChange={setClientTab}
-                />
+                <RouteSuspense>
+                    <ClientDashboard
+                        onBack={() => setScreen('home')}
+                        onEdit={() => setScreen('configurator')}
+                        showSuccessToast={pendingSuccessToast}
+                        onSuccessToastShown={() => setPendingSuccessToast(false)}
+                        initialTab={clientTab}
+                        onTabChange={setClientTab}
+                    />
+                </RouteSuspense>
             )}
 
 
             {/* --- ЭКРАН: 3D КОНСТРУКТОР --- */}
             {screen === 'configurator' && (
-                <div className="app-bg fixed inset-0 w-full h-[100dvh] overflow-hidden font-sans flex flex-col md:block transition-colors duration-300">
-
-                    <button
-                        onClick={() => guardedNavigate(currentUser ? (userRole === 'dealer' ? 'dealer' : 'client_dashboard') : 'home')}
-                        className="absolute top-3 left-3 md:top-8 md:left-9 z-50 max-w-[42vw] md:max-w-none truncate rounded-full border border-white/18 bg-[#1b2c3c]/72 px-4 py-2 text-xs font-bold text-white shadow-[0_14px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl transition-all hover:bg-[#24384b]/86 hover:border-white/28 active:scale-95 md:px-5 md:text-sm font-zen"
-                    >
-                        {currentUser ? t(language, 'backToCabinet') : t(language, 'backToMenu')}
-                    </button>
-
-                    <ConfiguratorToolbar
-                        onReset={() => resetConfigurator(activeProduct)}
-                        productLabel={t(language, activeProduct) || activeProduct}
-                        language={language}
+                <RouteSuspense>
+                    <ConfiguratorScreen
+                        currentUser={currentUser}
+                        userRole={userRole}
+                        logout={logout}
+                        onNavigate={guardedNavigate}
+                        onFinish={completeConfiguratorFlow}
+                        onAuth={() => setShowAuth(true)}
                     />
-
-                    {activeProduct === 'calendar' ? (
-                        <div className="app-bg w-full h-full flex flex-col items-center justify-center font-zen select-none transition-colors duration-300">
-                            <h1 className="text-4xl md:text-8xl font-black tracking-[0.1em] uppercase text-center px-4 text-[#cfcfcf] dark:text-white/10"
-                                style={{ textShadow: '2px 2px 0px rgba(255,255,255,0.5), -1px -1px 0px rgba(0,0,0,0.1)' }}
-                            >
-                                {t(language, 'inDevHeading')}
-                            </h1>
-                            <p className="mt-8 font-bold uppercase tracking-[0.2em] text-xs md:text-sm text-center text-black/60 dark:text-white/30">
-                                {t(language, 'calendarComingSoon')}
-                            </p>
-                        </div>
-                    ) : (
-                        <>
-                            <div ref={configuratorCanvasRef} className="app-bg relative w-full h-[40svh] min-h-[270px] max-h-[46svh] shrink-0 md:absolute md:inset-0 md:w-full md:h-full md:max-h-none md:bg-transparent dark:md:bg-transparent">
-                                <div className="absolute bottom-3 right-3 z-10 md:hidden">
-                                    <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
-                                </div>
-                                <Canvas
-                                    shadows
-                                    dpr={[1, 2]} // Адаптация под ретину (Safari/iPhone)
-                                    camera={{ position: [0, 0, 4.5], fov: 45 }}
-                                    gl={{
-                                        antialias: true,
-                                        preserveDrawingBuffer: true,
-                                        alpha: true, // прозрачный canvas — палитра-градиент подложки видна
-                                        powerPreference: 'high-performance',
-                                        logarithmicDepthBuffer: true // Важно для устранения z-fighting в Safari
-                                    }}
-                                >
-                                    <Experience />
-                                </Canvas>
-                                <SceneLoadingOverlay label={t(language, 'sceneLoading')} />
-                                <SceneHints containerRef={configuratorCanvasRef} />
-                            </div>
-
-                            <div className="relative flex-1 min-h-0 w-full z-20 pointer-events-none md:absolute md:inset-x-0 md:bottom-5 md:top-auto md:h-auto md:px-6 md:flex md:justify-center">
-                                {activeProduct === 'thermos' ? (
-                                    <ThermosInterface
-                                        onFinish={completeConfiguratorFlow}
-                                    />
-                                ) : activeProduct === 'powerbank' ? (
-                                    <PowerbankInterface
-                                        onFinish={completeConfiguratorFlow}
-                                    />
-                                ) : (
-                                    <Interface
-                                        onFinish={completeConfiguratorFlow}
-                                        onAuth={() => setShowAuth(true)}
-                                        user={currentUser}
-                                        logout={logout}
-                                    />
-                                )}
-                            </div>
-                        </>
-                    )}
-
-                </div>
+                </RouteSuspense>
             )}
 
             {screen === 'admin_auth' && (
-                <AdminAuth onSuccess={(user) => {
-                    setCurrentUser(user);
-                    setUserRole(user.role);
-                }} />
+                <RouteSuspense>
+                    <AdminAuth onSuccess={(user) => {
+                        setCurrentUser(user);
+                        setUserRole(user.role);
+                    }} />
+                </RouteSuspense>
             )}
 
             {screen === 'admin_stub' && (
@@ -661,47 +807,15 @@ function MainApp() {
             )}
 
             {screen === 'admin_dashboard' && (
-                <AdminDashboard onLogout={() => {
-                    logout();
-                    setScreen('home');
-                }} />
+                <RouteSuspense>
+                    <AdminDashboard onLogout={() => {
+                        logout();
+                        setScreen('home');
+                    }} />
+                </RouteSuspense>
             )}
         </>
     )
 }
 
 export default App
-
-function ConfiguratorToolbar({ onReset, productLabel, language = 'ru' }) {
-    const [confirmReset, setConfirmReset] = useState(false);
-    return (
-        <>
-            <div className="absolute top-3 right-3 md:top-8 md:right-9 z-50 flex items-center gap-2">
-                <UndoRedoControls />
-                <button
-                    onClick={() => setConfirmReset(true)}
-                    title={t(language, 'resetConfigTitle')}
-                    className="h-[34px] w-[34px] flex items-center justify-center bg-[#fff9ec] backdrop-blur-md rounded-full border border-black/10 shadow-xl text-[#1a1a1a] hover:bg-white active:scale-95 transition-all"
-                >
-                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 6h18" />
-                        <path d="M8 6V4h8v2" />
-                        <path d="M19 6l-1 14H6L5 6" />
-                        <path d="M10 11v5" />
-                        <path d="M14 11v5" />
-                    </svg>
-                </button>
-            </div>
-            <ConfirmModal
-                open={confirmReset}
-                title={`${t(language, 'resetBtn')} «${productLabel}»?`}
-                message={t(language, 'resetConfirmMsg')}
-                confirmLabel={t(language, 'resetBtn')}
-                cancelLabel={t(language, 'keepBtn')}
-                danger
-                onConfirm={() => { onReset(); setConfirmReset(false); }}
-                onCancel={() => setConfirmReset(false)}
-            />
-        </>
-    );
-}

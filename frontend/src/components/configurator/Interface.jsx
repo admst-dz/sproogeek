@@ -1,17 +1,16 @@
 import { useState } from 'react';
-import { useConfigurator, captureRender } from "../../store";
+import { useConfigurator, captureRender, getNotebookBindingCapabilities } from "../../store";
 import { t } from '../../i18n';
 import { BlockPDFPreview } from './BlockPDFPreview';
 import { BlockBuilder } from './BlockBuilder';
 import {
-    ColorSwatches,
+    ColorDropdown,
     ConstructorDock,
     DockGrid,
-    DockTitleColumn,
     FileUploadChip,
     FloatingLogoSettings,
     LogoList,
-    MiniSegment,
+    MiniDropdown,
     MiniToggle,
     RotationScrub,
     SettingGroup,
@@ -48,7 +47,7 @@ export const Interface = ({ onFinish }) => {
     const {
         format, setFormat,
         bindingType, setBindingType,
-        setColor, coverColor, elasticColor, spiralColor,
+        setColor, coverColor, innerCoverColor, stitchColor, elasticColor, spiralColor,
         hasElastic, setHasElastic,
         hasCorners, toggleCorners,
         setNotebookOpen,
@@ -73,18 +72,25 @@ export const Interface = ({ onFinish }) => {
         );
     }
 
+    const bindingCaps = getNotebookBindingCapabilities(bindingType);
+
     const handleAddToCart = () => {
         const snapshot = captureRender();
         if (snapshot) setRenderSnapshot(snapshot);
         const bindingLabel = bindingType === 'hard' ? t(language, 'bindingHard') : bindingType === 'spiral' ? t(language, 'bindingSpiral') : t(language, 'bindingSoft');
-        const orderHasElastic = bindingType !== 'hard' && hasElastic;
+        const orderHasElastic = bindingCaps.hasElastic && hasElastic;
+        const orderHasCorners = bindingCaps.hasCorners && hasCorners;
+        const orderSpiralColor = bindingCaps.hasSpiralColor ? spiralColor : null;
+        const orderInnerCoverColor = bindingCaps.hasInnerCoverColor ? innerCoverColor : null;
+        const orderStitchColor = bindingCaps.hasStitchColor ? stitchColor : null;
         const newItem = {
             productName: `${t(language, 'notebook')} ${format}`,
             design: `${t(language, 'bindingFormatLabel')} ${bindingLabel}, ${t(language, 'patternLabel')}: ${paperPattern}`,
             priceBYN: 1500,
             type: 'notebook',
-            config: { format, coverColor, hasElastic: orderHasElastic, elasticColor, paperPattern, bindingType, spiralColor, hasCorners, blockPages, paperType },
-            format, coverColor, hasElastic: orderHasElastic, elasticColor, paperPattern, bindingType, spiralColor, hasCorners, blockPages, paperType,
+            activeProduct: 'notebook',
+            config: { format, coverColor, innerCoverColor: orderInnerCoverColor, hasInnerCover: bindingCaps.hasInnerCoverColor, hasStitch: bindingCaps.hasStitch, stitchColor: orderStitchColor, hasElastic: orderHasElastic, elasticColor: orderHasElastic ? elasticColor : null, paperPattern, bindingType, spiralColor: orderSpiralColor, hasCorners: orderHasCorners, blockPages, paperType, logos },
+            format, coverColor, innerCoverColor: orderInnerCoverColor, hasInnerCover: bindingCaps.hasInnerCoverColor, hasStitch: bindingCaps.hasStitch, stitchColor: orderStitchColor, hasElastic: orderHasElastic, elasticColor: orderHasElastic ? elasticColor : null, paperPattern, bindingType, spiralColor: orderSpiralColor, hasCorners: orderHasCorners, blockPages, paperType, logos,
             status: 'draft',
             rendersGenerated: 0,
             quantity,
@@ -97,31 +103,38 @@ export const Interface = ({ onFinish }) => {
     return (
         <ConstructorDock
             title={t(language, 'notebook')}
-            tabs={[
-                { id: 'cover', label: t(language, 'tabCover') },
-                { id: 'block', label: t(language, 'tabBlock') },
-            ]}
-            activeTab={tab}
-            onTabChange={(next) => { setTab(next); setNotebookOpen(next === 'block'); }}
             onSave={handleAddToCart}
             saveLabel={t(language, 'placeOrder')}
-            desktopTitleColumn
         >
+            <div className="flex justify-center mb-3 md:mb-4">
+                <div className="flex gap-1 rounded-full border border-white/15 bg-white/10 p-1">
+                    {[
+                        { id: 'cover', label: t(language, 'tabCover') },
+                        { id: 'block', label: t(language, 'tabBlock') },
+                    ].map(({ id, label }) => (
+                        <button
+                            key={id}
+                            type="button"
+                            onClick={() => { setTab(id); setNotebookOpen(id === 'block'); }}
+                            className={`rounded-full px-4 py-1.5 md:px-6 md:py-2 text-[11px] md:text-[12px] font-black uppercase tracking-wider transition ${
+                                tab === id ? 'bg-[#fff9ec] text-[#1b1b1b]' : 'text-white/60 hover:text-white'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            </div>
             {tab === 'cover' && (
                 <DockGrid
-                    cols="md:grid-cols-[0.78fr_1fr_1fr_1.12fr_0.85fr]"
-                    leading={<DockTitleColumn title={t(language, 'notebook')} />}
+                    cols="md:grid-cols-2"
                 >
-                    <SettingGroup title={t(language, 'formatLabel')}>
+                    <SettingGroup title={t(language, 'formatLabel')} compact>
                         <SettingRow label={t(language, 'formatLabel')}>
-                            <MiniSegment
-                                value={format}
-                                onChange={setFormat}
-                                options={['A5', 'A6'].map(value => ({ value, label: value }))}
-                            />
+                            <FormatGlassTable value={format} onChange={setFormat} />
                         </SettingRow>
-                        <SettingRow label={t(language, 'bindingTypeLabel')}>
-                            <MiniSegment
+                        <SettingRow label={t(language, 'bindingTypeLabel')} inline>
+                            <MiniDropdown
                                 value={bindingType}
                                 onChange={setBindingType}
                                 options={[
@@ -131,32 +144,42 @@ export const Interface = ({ onFinish }) => {
                                 ]}
                             />
                         </SettingRow>
-                        {(bindingType === 'hard' || bindingType === 'soft') && (
-                            <SettingRow label={t(language, 'cornersLabel')}>
+                        {bindingCaps.hasCorners && (
+                            <SettingRow label={t(language, 'cornersLabel')} inline>
                                 <MiniToggle checked={hasCorners} onChange={toggleCorners} />
                             </SettingRow>
                         )}
                     </SettingGroup>
 
-                    <SettingGroup title={t(language, 'coverColorLabel')}>
-                        <SettingRow label={t(language, 'coverColorLabel')}>
-                            <ColorSwatches colors={palette} currentColor={coverColor} onSelect={(c) => setColor('cover', c)} />
+                    <SettingGroup title={bindingCaps.hasInnerCoverColor ? t(language, 'coverColorsLabel') : t(language, 'coverColorLabel')} compact>
+                        <SettingRow label={bindingCaps.hasInnerCoverColor ? t(language, 'outerCoverColorLabel') : t(language, 'coverColorLabel')}>
+                            <ColorDropdown colors={palette} currentColor={coverColor} onSelect={(c) => setColor('cover', c)} />
                         </SettingRow>
-                        {bindingType !== 'hard' && (
+                        {bindingCaps.hasInnerCoverColor && (
+                            <SettingRow label={t(language, 'innerCoverColorLabel')}>
+                                <ColorDropdown colors={palette} currentColor={innerCoverColor} onSelect={(c) => setColor('innerCover', c)} />
+                            </SettingRow>
+                        )}
+                        {bindingCaps.hasStitchColor && (
+                            <SettingRow label={t(language, 'threadColorLabel')}>
+                                <ColorDropdown colors={palette} currentColor={stitchColor} onSelect={(c) => setColor('stitch', c)} />
+                            </SettingRow>
+                        )}
+                        {bindingCaps.hasElastic && (
                             <>
-                                <SettingRow label={t(language, 'elasticLabel')}>
+                                <SettingRow label={t(language, 'elasticLabel')} inline>
                                     <MiniToggle checked={hasElastic} onChange={setHasElastic} />
                                 </SettingRow>
                                 {hasElastic && (
                                     <SettingRow label={t(language, 'elasticColorLabel')}>
-                                        <ColorSwatches colors={palette} currentColor={elasticColor} onSelect={(c) => setColor('elastic', c)} />
+                                        <ColorDropdown colors={palette} currentColor={elasticColor} onSelect={(c) => setColor('elastic', c)} />
                                     </SettingRow>
                                 )}
                             </>
                         )}
-                        {bindingType === 'spiral' && (
+                        {bindingCaps.hasSpiralColor && (
                             <SettingRow label={t(language, 'spiralColorLabel')}>
-                                <ColorSwatches colors={palette} currentColor={spiralColor} onSelect={(c) => setColor('spiral', c)} />
+                                <ColorDropdown colors={palette} currentColor={spiralColor} onSelect={(c) => setColor('spiral', c)} />
                             </SettingRow>
                         )}
                     </SettingGroup>
@@ -173,17 +196,18 @@ export const Interface = ({ onFinish }) => {
                         setLogoScale={setLogoScale}
                         setLogoSide={setLogoSide}
                         language={language}
+                        compact
                     />
 
-                    <SettingGroup title={t(language, 'placeOrder')}>
-                        <SettingRow label={t(language, 'quantityLabel')}>
+                    <SettingGroup title={t(language, 'placeOrder')} compact>
+                        <SettingRow label={t(language, 'quantityLabel')} inline>
                             <div className="flex items-center gap-1">
                                 <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="h-6 w-6 rounded-full bg-white/10 font-black">−</button>
                                 <span className="w-7 text-center text-sm font-black">{quantity}</span>
                                 <button onClick={() => setQuantity(q => q + 1)} className="h-6 w-6 rounded-full bg-white/10 font-black">+</button>
                             </div>
                         </SettingRow>
-                        <SettingRow label={t(language, 'sampleLabel')}>
+                        <SettingRow label={t(language, 'sampleLabel')} inline>
                             <MiniToggle checked={isSample} onChange={setIsSample} />
                         </SettingRow>
                         <p className="text-[10px] leading-tight text-white/35">{t(language, 'sampleDesc')}</p>
@@ -193,10 +217,9 @@ export const Interface = ({ onFinish }) => {
 
             {tab === 'block' && (
                 <DockGrid
-                    cols="md:grid-cols-[0.78fr_4.05fr]"
-                    leading={<DockTitleColumn title={t(language, 'notebook')} />}
+                    cols="md:grid-cols-1"
                 >
-                    <div className="min-w-0 space-y-3 md:pl-5 lg:pl-6">
+                    <div className="min-w-0 space-y-3 md:-mx-2 lg:-mx-1">
                         <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-5 gap-2">
                             {PATTERN_IDS.map((id) => (
                                 <button
@@ -226,7 +249,32 @@ export const Interface = ({ onFinish }) => {
 }
 
 // --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
-const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide, language }) => {
+const FormatGlassTable = ({ value, onChange }) => (
+    <div className="grid w-full grid-cols-2 overflow-hidden rounded-[9px] border border-white/25 bg-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.18)] backdrop-blur-md">
+        {[
+            { value: 'A5', size: '148 x 210' },
+            { value: 'A6', size: '105 x 148' },
+        ].map(option => {
+            const selected = value === option.value;
+            return (
+                <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => onChange(option.value)}
+                    className={`min-h-[52px] border-white/15 px-3 py-2 text-left transition first:border-r ${
+                        selected ? 'bg-[#fff9ec] text-[#191919] shadow-inner' : 'bg-white/6 text-white hover:bg-white/14'
+                    }`}
+                    aria-pressed={selected}
+                >
+                    <span className="block text-[16px] font-black leading-none tracking-wider">{option.value}</span>
+                    <span className={`mt-1 block text-[9px] font-black uppercase tracking-[0.16em] ${selected ? 'text-black/48' : 'text-white/42'}`}>{option.size}</span>
+                </button>
+            );
+        })}
+    </div>
+);
+
+const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide, language, compact = false }) => {
     const selected = logos.find(l => l.id === selectedLogoId) || null;
     const [uploadSide, setUploadSide] = useState('front');
     const activeSide = selected?.side ?? uploadSide;
@@ -237,12 +285,12 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
     };
 
     return (
-        <SettingGroup title={t(language, 'embossing')}>
-            <SettingRow label={t(language, 'embossing')}>
+        <SettingGroup title={t(language, 'embossing')} compact={compact}>
+            <SettingRow label={t(language, 'embossing')} inline={compact}>
                 <FileUploadChip label={t(language, 'addLogo')} onFile={(file) => addLogo(file, activeSide)} />
             </SettingRow>
-            <SettingRow label={t(language, 'applicationSide') || t(language, 'sideFront')}>
-                <MiniSegment
+            <SettingRow label={t(language, 'applicationSide') || t(language, 'sideFront')} inline={compact}>
+                <MiniDropdown
                     value={activeSide}
                     onChange={selectSide}
                     options={[
@@ -260,7 +308,7 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
             />
             {selected && (
                 <>
-                    <div className="mt-3 space-y-3 md:hidden">
+                    <div className="mt-3 space-y-3 xl:hidden">
                         <TransformPad label={t(language, 'position')} value={selected.position} onChange={setLogoPosition} onReset={resetLogoTransform} />
                         <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setLogoRotation} />
                         <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.2} max={1.5} step={0.05} onChange={setLogoScale} />
