@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 export const ConfirmModal = ({
     open,
@@ -22,13 +23,13 @@ export const ConfirmModal = ({
 
     if (!open) return null;
 
-    return (
+    return createPortal(
         <div
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in p-4"
             onClick={onCancel}
         >
             <div
-                className="w-full max-w-sm bg-white dark:bg-[#1A2642] border border-black/10 dark:border-white/15 rounded-[20px] p-6 shadow-2xl"
+                className="w-full max-w-[420px] bg-white dark:bg-[#1A2642] border border-black/10 dark:border-white/15 rounded-[20px] p-5 sm:p-6 shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
@@ -37,7 +38,7 @@ export const ConfirmModal = ({
                 {message && (
                     <p className="text-sm text-black/70 dark:text-white/70 mb-6 leading-relaxed">{message}</p>
                 )}
-                <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <button
                         onClick={onCancel}
                         className="min-w-0 py-3 px-3 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-black dark:text-white text-sm font-bold rounded-[12px] hover:bg-black/10 dark:hover:bg-white/10 active:scale-[0.98] transition-all"
@@ -57,6 +58,7 @@ export const ConfirmModal = ({
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };

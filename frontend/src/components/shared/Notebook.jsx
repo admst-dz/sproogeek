@@ -13,6 +13,11 @@ import seamInMaskUrl from '../../assets/Mask_seam_in.png?url'
 
 const LOGO_SURFACE_OFFSET = 0.01;
 const LOGO_POLYGON_OFFSET = -24;
+const SPIRAL_REFERENCE_FRAME = {
+    centerX: 0.08690843123513758,
+    centerY: 1.0145961622650757,
+    height: 2.1338905657777962,
+};
 
 function LogoPlane({ texture, x, y, z, side = 'front', rotation = 0, scale = 0.6 }) {
     const map = useLogoTexture(texture);
@@ -53,6 +58,24 @@ function bboxSize(bbox) {
 function bboxArea(bbox) {
     const size = bboxSize(bbox);
     return size.x * size.y;
+}
+
+function getNormalizedNotebookTransform(bbox, rotationX = 0) {
+    const displayBox = bbox.clone();
+    if (rotationX) {
+        displayBox.applyMatrix4(new THREE.Matrix4().makeRotationX(rotationX));
+    }
+    const size = bboxSize(displayBox);
+    const center = displayBox.getCenter(new THREE.Vector3());
+    const scale = SPIRAL_REFERENCE_FRAME.height / Math.max(size.y, 0.001);
+    return {
+        position: [
+            SPIRAL_REFERENCE_FRAME.centerX - center.x * scale,
+            SPIRAL_REFERENCE_FRAME.centerY - center.y * scale,
+            0,
+        ],
+        scale,
+    };
 }
 
 function getSafeLogoOffset(position = 0, axisSize = 1, logoSize = 0.6) {
@@ -332,6 +355,15 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos }) {
         classifyMeshEntries(meshEntries)
     ), [meshEntries]);
 
+    const sceneBbox = useMemo(() => {
+        const box = new THREE.Box3();
+        meshEntries.forEach(e => box.union(e.bbox));
+        return box;
+    }, [meshEntries]);
+    const normalizedTransform = useMemo(() => (
+        getNormalizedNotebookTransform(sceneBbox, -Math.PI / 2)
+    ), [sceneBbox]);
+
     const mat = materials ? Object.values(materials)[0] : null;
     const normalMap = mat?.normalMap ?? null;
 
@@ -346,57 +378,59 @@ function HardCoverGLBModel({ coverColor, hasCorners, logos }) {
     });
 
     return (
-        <group rotation={[-Math.PI / 2, 0, 0]}>
-            {coverEntry && coverGeometry && (
-                <mesh geometry={coverGeometry} castShadow receiveShadow>
-                    <meshStandardMaterial
-                        key="hard-cover-color-material"
-                        ref={coverMatRef}
-                        color={coverColor}
-                        roughness={0.5}
-                        metalness={0.05}
-                    />
-                </mesh>
-            )}
-            {coverEntry && logos.map(logo => {
-                const surface = getHardCoverLogoSurfaceProps(logo, coverEntry.bbox);
-                return (
-                    <HardCoverLogoPlane
-                        key={logo.id}
-                        texture={logo.texture}
-                        x={surface.x}
-                        y={surface.y}
-                        z={surface.z}
-                        side={surface.side}
-                        rotation={logo.rotation ?? 0}
-                        scale={logo.scale ?? 0.6}
-                    />
-                );
-            })}
+        <group position={normalizedTransform.position} scale={normalizedTransform.scale}>
+            <group rotation={[-Math.PI / 2, 0, 0]}>
+                {coverEntry && coverGeometry && (
+                    <mesh geometry={coverGeometry} castShadow receiveShadow>
+                        <meshStandardMaterial
+                            key="hard-cover-color-material"
+                            ref={coverMatRef}
+                            color={coverColor}
+                            roughness={0.5}
+                            metalness={0.05}
+                        />
+                    </mesh>
+                )}
+                {coverEntry && logos.map(logo => {
+                    const surface = getHardCoverLogoSurfaceProps(logo, coverEntry.bbox);
+                    return (
+                        <HardCoverLogoPlane
+                            key={logo.id}
+                            texture={logo.texture}
+                            x={surface.x}
+                            y={surface.y}
+                            z={surface.z}
+                            side={surface.side}
+                            rotation={logo.rotation ?? 0}
+                            scale={logo.scale ?? 0.6}
+                        />
+                    );
+                })}
 
-            {blockGeometry && (
-                <mesh geometry={blockGeometry} castShadow receiveShadow>
-                    <meshStandardMaterial
-                        key="hard-page-block-material"
-                        color="#f7f5ef"
-                        roughness={0.95}
-                        metalness={0}
-                    />
-                </mesh>
-            )}
+                {blockGeometry && (
+                    <mesh geometry={blockGeometry} castShadow receiveShadow>
+                        <meshStandardMaterial
+                            key="hard-page-block-material"
+                            color="#f7f5ef"
+                            roughness={0.95}
+                            metalness={0}
+                        />
+                    </mesh>
+                )}
 
-            {hasCorners && cornerEntries.map(e => (
-                <mesh key={e.name} geometry={e.geo} castShadow receiveShadow>
-                    <meshStandardMaterial
-                        key={`hard-corner-material-${e.name}`}
-                        map={mat?.map}
-                        normalMap={normalMap}
-                        roughnessMap={mat?.roughnessMap}
-                        roughness={mat?.roughness ?? 0.35}
-                        metalness={mat?.metalness ?? 0.65}
-                    />
-                </mesh>
-            ))}
+                {hasCorners && cornerEntries.map(e => (
+                    <mesh key={e.name} geometry={e.geo} castShadow receiveShadow>
+                        <meshStandardMaterial
+                            key={`hard-corner-material-${e.name}`}
+                            map={mat?.map}
+                            normalMap={normalMap}
+                            roughnessMap={mat?.roughnessMap}
+                            roughness={mat?.roughness ?? 0.35}
+                            metalness={mat?.metalness ?? 0.65}
+                        />
+                    </mesh>
+                ))}
+            </group>
         </group>
     );
 }
@@ -628,6 +662,9 @@ function SoftCoverModel({ coverColor, hasCorners, logos }) {
         meshEntries.forEach(e => box.union(e.bbox));
         return box;
     }, [meshEntries]);
+    const normalizedTransform = useMemo(() => (
+        getNormalizedNotebookTransform(sceneBbox)
+    ), [sceneBbox]);
 
     const cornerEntries = useMemo(() => {
         const sceneSize = bboxSize(sceneBbox);
@@ -647,7 +684,7 @@ function SoftCoverModel({ coverColor, hasCorners, logos }) {
     });
 
     return (
-        <group>
+        <group position={normalizedTransform.position} scale={normalizedTransform.scale}>
             {/* Обложка — только цветная часть */}
             {coverEntry && coverGeometry && (
                 <mesh geometry={coverGeometry} castShadow receiveShadow>
