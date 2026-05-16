@@ -2,7 +2,7 @@ import uuid
 from typing import List, Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from fastapi_pagination import Page, Params
 from fastapi_pagination.ext.sqlalchemy import paginate
@@ -246,6 +246,7 @@ async def get_admin_orders(
 @router.patch("/orders/{order_id}", response_model=OrderResponse)
 async def update_admin_order(
     order_id: str,
+    request: Request,
     payload: OrderAdminUpdate,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_admin_user),
@@ -254,6 +255,8 @@ async def update_admin_order(
     order = await crud_order.update_admin_fields(db, order_id, data)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    from app.services.order_service import OrderService
+    OrderService.notify_bitrix_updated(request, order.id, comment="Изменено администратором")
 
     event_logger.log(
         "ORDER_ADMIN_UPDATED",
