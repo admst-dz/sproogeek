@@ -13,6 +13,11 @@ const MIN_ZOOM = 0.35
 const MAX_ZOOM = 2.5
 const clampZoom = (value) => Math.min(Math.max(value, MIN_ZOOM), MAX_ZOOM)
 
+// Полный 360° по вертикали — без endpoint-стопперов. По горизонтали OrbitControls
+// без minAzimuth/maxAzimuth и так крутятся неограниченно.
+const FULL_POLAR_MIN = 0
+const FULL_POLAR_MAX = Math.PI
+
 const ORBIT_VIEW_CONFIG = {
     thermos: {
         desktop: {
@@ -21,8 +26,8 @@ const ORBIT_VIEW_CONFIG = {
             maxDistance: 22,
             target: [0, -0.48, 0],
             defaultDirection: [0, 0.03, 1],
-            minPolarAngle: Math.PI * 0.16,
-            maxPolarAngle: Math.PI * 0.86,
+            minPolarAngle: FULL_POLAR_MIN,
+            maxPolarAngle: FULL_POLAR_MAX,
             rotateSpeed: 0.72,
             zoomSpeed: 0.78,
         },
@@ -32,8 +37,8 @@ const ORBIT_VIEW_CONFIG = {
             maxDistance: 25,
             target: [0, -0.34, 0],
             defaultDirection: [0, 0.03, 1],
-            minPolarAngle: Math.PI * 0.18,
-            maxPolarAngle: Math.PI * 0.84,
+            minPolarAngle: FULL_POLAR_MIN,
+            maxPolarAngle: FULL_POLAR_MAX,
             rotateSpeed: 0.92,
             zoomSpeed: 0.82,
         },
@@ -45,8 +50,8 @@ const ORBIT_VIEW_CONFIG = {
             maxDistance: 16,
             target: [0, 0, 0],
             defaultDirection: [0, 0.06, 1],
-            minPolarAngle: Math.PI * 0.18,
-            maxPolarAngle: Math.PI * 0.84,
+            minPolarAngle: FULL_POLAR_MIN,
+            maxPolarAngle: FULL_POLAR_MAX,
             rotateSpeed: 0.76,
             zoomSpeed: 0.8,
         },
@@ -56,8 +61,8 @@ const ORBIT_VIEW_CONFIG = {
             maxDistance: 18,
             target: [0, 0, 0],
             defaultDirection: [0, 0.05, 1],
-            minPolarAngle: Math.PI * 0.2,
-            maxPolarAngle: Math.PI * 0.82,
+            minPolarAngle: FULL_POLAR_MIN,
+            maxPolarAngle: FULL_POLAR_MAX,
             rotateSpeed: 0.95,
             zoomSpeed: 0.84,
         },
@@ -279,8 +284,9 @@ export const Experience = () => {
                 <PresentationControls
                     speed={isMobile ? 10.0 : 1.8}
                     global
-                    azimuth={[-Math.PI, Math.PI]}
-                    polar={[-0.1, Math.PI / 4]}
+                    snap={false}
+                    azimuth={[-Infinity, Infinity]}
+                    polar={[-Math.PI / 2, Math.PI / 2]}
                 >
                     <Stage environment={null} intensity={0} shadows={false} adjustCamera={false}>
                         {activeProduct === 'notebook' && <Notebook position={[0, notebookPositionY, 0]} />}
