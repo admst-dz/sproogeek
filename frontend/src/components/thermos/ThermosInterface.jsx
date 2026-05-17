@@ -56,6 +56,7 @@ export const ThermosInterface = ({ onFinish }) => {
             thermosLogos,
             status: 'draft',
             rendersGenerated: 0,
+            renderUrl: snapshot || null,
         };
         addToCart(newItem);
         onFinish();

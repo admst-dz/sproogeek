@@ -96,6 +96,7 @@ export const Interface = ({ onFinish }) => {
             rendersGenerated: 0,
             quantity,
             isSample,
+            renderUrl: snapshot || null,
         };
         addToCart(newItem);
         onFinish();

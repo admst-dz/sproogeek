@@ -125,34 +125,11 @@ const getNotebookBindingLabel = (bindingType, language) => ({
 
 export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToastShown, initialTab, onTabChange }) => {
     const {
-        currentUser, logout, cartItem, clearCart,
-        activeProduct, coverColor, innerCoverColor, stitchColor, elasticColor,
-        paperPattern, bindingType, spiralColor, format,
-        thermosBodyColor, language,
+        currentUser, logout, cartItems, clearCart, removeFromCart, updateCartItem, startEditingCartItem,
+        language,
     } = useConfigurator();
-    const savedThermosColor = cartItem?.thermosBodyColor || cartItem?.thermosCapColor || thermosBodyColor;
-    const cartProductConfig = cartItem?.activeProduct === 'thermos'
-        ? {
-            ...cartItem,
-            thermosBodyColor: savedThermosColor,
-            thermosCapColor: savedThermosColor,
-            design: `${t(language, 'thermosBodyPart')}: ${savedThermosColor}, ${t(language, 'thermosCapPart')}: ${savedThermosColor}`,
-        }
-        : cartItem;
-    const cartProductType = cartProductConfig?.activeProduct || cartProductConfig?.type || activeProduct;
-    const cartThermosColor = cartProductConfig?.thermosBodyColor || cartProductConfig?.thermosCapColor || thermosBodyColor;
-    const cartBindingType = cartProductConfig?.bindingType || bindingType;
-    const cartBindingCaps = getNotebookBindingCapabilities(cartBindingType);
-    const cartFormat = cartProductConfig?.format || format;
-    const cartPaperPattern = cartProductConfig?.paperPattern || paperPattern;
-    const cartCoverColor = cartProductConfig?.coverColor || coverColor;
-    const cartInnerCoverColor = cartProductConfig?.innerCoverColor || innerCoverColor || cartCoverColor;
-    const cartStitchColor = cartProductConfig?.stitchColor || stitchColor;
-    const cartHasElastic = !!cartProductConfig?.hasElastic;
-    const cartElasticColor = cartProductConfig?.elasticColor || elasticColor;
-    const cartSpiralColor = cartProductConfig?.spiralColor || spiralColor;
-    const cartHasCorners = cartProductConfig?.hasCorners ?? false;
-    const [activeTab, setActiveTab] = useState(initialTab ?? (cartItem ? 'cart' : 'orders'));
+    const hasCartItems = cartItems.length > 0;
+    const [activeTab, setActiveTab] = useState(initialTab ?? (hasCartItems ? 'cart' : 'orders'));
 
     useEffect(() => {
         if (initialTab) setActiveTab(initialTab);
@@ -171,11 +148,12 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
     const [expandedOrders, setExpandedOrders] = useState(new Set());
     const [orderSuccess, setOrderSuccess] = useState(false);
     const [clientType, setClientType] = useState('phys');
-    const [quantity, setQuantity] = useState(cartItem?.quantity || 1);
-    const [isSample, setIsSample] = useState(cartItem?.isSample || false);
+    const [isSample, setIsSample] = useState(false);
     const [formData, setFormData] = useState({ name: '', phone: '', address: '', inn: '', contactPerson: '', comment: '' });
     const [formError, setFormError] = useState('');
     const [submitting, setSubmitting] = useState(false);
+
+    const totalQuantity = cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
 
     useEffect(() => {
         if (currentUser?.display_name) {
@@ -183,12 +161,6 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
         }
     }, [currentUser]);
 
-    useEffect(() => {
-        if (cartItem) {
-            if (cartItem.quantity) setQuantity(cartItem.quantity);
-            if (cartItem.isSample !== undefined) setIsSample(cartItem.isSample);
-        }
-    }, [cartItem]);
 
     useEffect(() => {
         if (showSuccessToast) {
@@ -222,6 +194,10 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
     };
 
     const handleApprove = async () => {
+        if (!hasCartItems) {
+            setFormError(t(language, 'cartEmpty'));
+            return;
+        }
         if (!formData.name || !formData.phone) {
             setFormError(t(language, 'fillNamePhone'));
             return;
@@ -229,17 +205,33 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
         setFormError('');
         setSubmitting(true);
         try {
+            const cartPayload = cartItems.map((item) => ({
+                id: item.id,
+                productName: item.productName,
+                quantity: item.quantity || 1,
+                design: item.design || '',
+                renderUrl: item.renderUrl || null,
+                config: item,
+            }));
+            const headItem = cartItems[0];
+            const productName = cartItems.length > 1
+                ? `${headItem.productName} +${cartItems.length - 1}`
+                : headItem.productName;
             const id = await createOrderInDB({
                 user_id: currentUser?.id || null,
                 user_email: currentUser?.email || '',
-                product_name: cartItem.productName,
+                product_name: productName,
                 configuration: {
-                    productConfig: cartProductConfig,
+                    // productConfig — для обратной совместимости со старым UI
+                    // деталей заказа: показывает первый дизайн. cart — полная
+                    // мульти-айтемная корзина для производства и техкарты.
+                    productConfig: headItem,
+                    cart: cartPayload,
                     clientType,
                     contact: { ...formData },
                     isSample,
                 },
-                quantity,
+                quantity: totalQuantity,
                 total_price: null,
                 currency: 'BYN',
                 is_guest: false,
@@ -247,8 +239,8 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
 
             const newOrder = {
                 id,
-                product: cartItem.productName,
-                design: cartProductConfig.design || '',
+                product: productName,
+                design: headItem.design || '',
                 price: 0,
                 status: 'new',
                 stageHistory: [{
@@ -257,9 +249,10 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                     updated_at: new Date().toISOString(),
                 }],
                 date: new Date().toLocaleDateString('ru-RU'),
-                quantity,
+                quantity: totalQuantity,
                 configuration: {
-                    productConfig: cartProductConfig,
+                    productConfig: headItem,
+                    cart: cartPayload,
                     clientType,
                     contact: { ...formData },
                     isSample,
@@ -319,7 +312,11 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                 <div className="max-w-6xl mx-auto flex gap-5 sm:gap-8 mt-1 touch-scroll-x">
                     <TabBtn active={activeTab === 'catalog'} onClick={() => changeTab('catalog')}>{t(language, 'tabCatalog')}</TabBtn>
                     <TabBtn active={activeTab === 'cart'} onClick={() => changeTab('cart')}>
-                        {t(language, 'tabCart')} {cartItem && <span className="ml-1 w-1.5 h-1.5 bg-emerald-400 rounded-full inline-block shadow-[0_0_6px_rgba(52,211,153,0.8)]"></span>}
+                        {t(language, 'tabCart')} {hasCartItems && (
+                            <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-[10px] font-bold text-[#0B0F19] align-middle">
+                                {cartItems.length}
+                            </span>
+                        )}
                     </TabBtn>
                     <TabBtn active={activeTab === 'orders'} onClick={() => changeTab('orders')}>{t(language, 'tabOrders')}</TabBtn>
                 </div>
@@ -338,72 +335,50 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                 {/* CART TAB */}
                 {activeTab === 'cart' && (
                     <div>
-                        {!cartItem ? (
+                        {!hasCartItems ? (
                             <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[20px] md:rounded-[24px] p-8 sm:p-12 md:p-16 flex flex-col items-center gap-4 text-center">
                                 <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10 text-2xl">🛒</div>
                                 <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">{t(language, 'cartEmpty')}</p>
+                                <button
+                                    onClick={() => changeTab('catalog')}
+                                    className="mt-2 px-5 py-2.5 rounded-[12px] bg-white text-black text-xs font-bold uppercase tracking-widest hover:bg-gray-100 active:scale-95 transition"
+                                >
+                                    {t(language, 'tabCatalog')}
+                                </button>
                             </div>
                         ) : (
                             <div className="flex flex-col lg:flex-row gap-8">
 
-                                {/* ЛЕВАЯ — модель + параметры */}
+                                {/* ЛЕВАЯ — список айтемов корзины */}
                                 <div className="w-full lg:w-2/5 flex flex-col gap-4">
-                                    <div className="bg-white/[0.03] border border-white/10 rounded-[24px] overflow-hidden">
-                                        {/* 3D Canvas */}
-                                        <div className="relative bg-[#0A0E1A]" style={{ height: 280 }}>
-                                            <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true }}>
-                                                <Environment preset="city" />
-                                                <ambientLight intensity={0.6} />
-                                                <directionalLight position={[10, 10, 5]} intensity={1.5} />
-                                                <directionalLight position={[-10, 5, 2]} intensity={0.5} />
-                                                <PresentationControls speed={1.5} global polar={[-0.1, Math.PI / 4]}>
-                                                    <Stage environment={null} intensity={0} shadows={false}>
-                                                        {cartProductType === 'notebook' && <Notebook config={cartProductConfig} />}
-                                                        {cartProductType === 'thermos' && <Thermos config={cartProductConfig} />}
-                                                        {cartProductType === 'powerbank' && <Powerbank config={cartProductConfig} />}
-                                                    </Stage>
-                                                </PresentationControls>
-                                            </Canvas>
-                                            <SceneLoadingOverlay compact label="3D" />
-                                            <div className="absolute top-3 left-3 text-white/30 text-[10px] font-bold tracking-wider pointer-events-none uppercase">{t(language, 'dragRotate')}</div>
-                                        </div>
-
-                                        {/* Параметры */}
-                                        <div className="p-5 space-y-2 border-t border-white/5">
-                                            <CartRow label={t(language, 'productLabel')} value={cartItem.productName} />
-                                            {cartProductType === 'thermos' ? (
-                                                <>
-                                                    <CartRow label={t(language, 'bodyLabel')} value={<ColorDot color={cartThermosColor} />} />
-                                                    <CartRow label={t(language, 'capLabel')} value={<ColorDot color={cartThermosColor} />} />
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <CartRow label={t(language, 'formatLabel')} value={cartFormat} />
-                                                    <CartRow label={t(language, 'bindingLabel')} value={getNotebookBindingLabel(cartBindingType, language)} />
-                                                    <CartRow label={t(language, 'patternLabel')} value={{ blank: t(language, 'patternBlank'), lined: t(language, 'patternLined'), tlined: t(language, 'patternTLined'), grid: t(language, 'patternGrid'), dotted: t(language, 'patternDotted') }[cartPaperPattern]} />
-                                                    <CartRow label={cartBindingCaps.hasInnerCoverColor ? t(language, 'outerCoverLabel') : t(language, 'coverLabel')} value={<ColorDot color={cartCoverColor} />} />
-                                                    {cartBindingCaps.hasInnerCoverColor && <CartRow label={t(language, 'innerCoverLabel')} value={<ColorDot color={cartInnerCoverColor} />} />}
-                                                    {cartBindingCaps.hasStitchColor && <CartRow label={t(language, 'threadLabel')} value={<ColorDot color={cartStitchColor} />} />}
-                                                    {cartBindingCaps.hasElastic && cartHasElastic && <CartRow label={t(language, 'elasticLabel')} value={<ColorDot color={cartElasticColor} />} />}
-                                                    {cartBindingCaps.hasSpiralColor && <CartRow label={t(language, 'spiralLabel')} value={<ColorDot color={cartSpiralColor} />} />}
-                                                    {cartBindingCaps.hasCorners && <CartRow label={t(language, 'cornersLabel')} value={cartHasCorners ? t(language, 'orderYes') : t(language, 'orderNo')} />}
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
+                                    {cartItems.map((item) => (
+                                        <CartItemCard
+                                            key={item.id}
+                                            item={item}
+                                            language={language}
+                                            onEdit={() => { startEditingCartItem(item.id); onEdit?.(); }}
+                                            onRemove={() => removeFromCart(item.id)}
+                                            onQuantityChange={(q) => updateCartItem(item.id, { quantity: q })}
+                                        />
+                                    ))}
 
                                     <button
-                                        onClick={onEdit}
-                                        className="w-full py-3 rounded-[14px] border border-white/10 text-gray-400 font-bold uppercase tracking-widest text-xs hover:border-white/30 hover:text-white transition-all"
+                                        onClick={() => changeTab('catalog')}
+                                        className="w-full py-3 rounded-[14px] border border-dashed border-white/15 text-gray-400 font-bold uppercase tracking-widest text-xs hover:border-white/40 hover:text-white transition-all"
                                     >
-                                        {t(language, 'editInEditor')}
+                                        + {t(language, 'tabCatalog')}
                                     </button>
                                 </div>
 
                                 {/* ПРАВАЯ — контактные данные */}
                                 <div className="w-full lg:w-3/5 flex flex-col gap-4">
                                     <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[20px] md:rounded-[24px] p-4 sm:p-6 md:p-8 flex flex-col gap-6">
-                                        <h3 className="font-bold text-lg uppercase tracking-widest text-white">{t(language, 'contactsTitle')}</h3>
+                                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                            <h3 className="font-bold text-lg uppercase tracking-widest text-white">{t(language, 'contactsTitle')}</h3>
+                                            <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400">
+                                                {cartItems.length} {t(language, 'pcsUnit')} · {totalQuantity} {t(language, 'quantityLabel').toLowerCase()}
+                                            </span>
+                                        </div>
 
                                         {/* Физ/Юр переключатель */}
                                         <div className="bg-white/5 p-1.5 rounded-[14px] flex border border-white/8 min-w-0">
@@ -422,7 +397,6 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                                 <CartInput name="name" label={t(language, 'fullNameRequired')} placeholder={t(language, 'placeholderFullName')} value={formData.name} onChange={handleInputChange} />
                                                 <CartInput name="phone" label={t(language, 'phoneRequired')} placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} />
                                                 <CartInput name="email" label={t(language, 'emailLabel')} placeholder="mail@..." type="email" value={formData.email} onChange={handleInputChange} />
-                                                <CartInput name="address" label={t(language, 'orderAddress')} placeholder={t(language, 'placeholderCityStreet')} value={formData.address} onChange={handleInputChange} />
                                                 <div className="md:col-span-2">
                                                     <CartInput name="address" label={t(language, 'orderAddress')} placeholder={t(language, 'placeholderCityStreet')} value={formData.address} onChange={handleInputChange} />
                                                 </div>
@@ -437,29 +411,17 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                             </div>
                                         </div>
 
-                                        {/* Тираж и тиражный образец */}
-                                        <div className="flex flex-col sm:flex-row gap-4 sm:items-end sm:justify-between pt-2 border-t border-white/8">
-                                            <div className="flex flex-col gap-1.5">
-                                                <span className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">{t(language, 'quantityLabel')}</span>
-                                                <div className="flex items-center gap-2 bg-white/5 rounded-[12px] p-1.5 border border-white/10 w-max">
-                                                    <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-9 h-9 flex items-center justify-center bg-white/10 rounded-[9px] text-white font-bold text-lg hover:bg-white/20 active:scale-95 transition">−</button>
-                                                    <span className="w-12 text-center font-black text-white text-xl select-none">{quantity}</span>
-                                                    <button onClick={() => setQuantity(q => q + 1)} className="w-9 h-9 flex items-center justify-center bg-white/10 rounded-[9px] text-white font-bold text-lg hover:bg-white/20 active:scale-95 transition">+</button>
+                                        {clientType === 'jur' && (
+                                            <label className="flex items-center gap-3 cursor-pointer select-none bg-blue-500/8 border border-blue-500/20 hover:border-blue-500/40 px-4 py-3 rounded-[12px] transition-all pt-2" onClick={() => setIsSample(s => !s)}>
+                                                <div className={`w-5 h-5 rounded-[6px] border flex items-center justify-center transition-all shrink-0 ${isSample ? 'bg-white border-white' : 'bg-white/5 border-white/20'}`}>
+                                                    {isSample && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#0B0F19" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                                                 </div>
-                                            </div>
-
-                                            {clientType === 'jur' && (
-                                                <label className="flex items-center gap-3 cursor-pointer select-none bg-blue-500/8 border border-blue-500/20 hover:border-blue-500/40 px-4 py-3 rounded-[12px] transition-all" onClick={() => setIsSample(s => !s)}>
-                                                    <div className={`w-5 h-5 rounded-[6px] border flex items-center justify-center transition-all shrink-0 ${isSample ? 'bg-white border-white' : 'bg-white/5 border-white/20'}`}>
-                                                        {isSample && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#0B0F19" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                                                    </div>
-                                                    <div className="flex flex-col">
-                                                        <span className="text-sm font-bold text-blue-300 uppercase tracking-wide">{t(language, 'sampleLabel')}</span>
-                                                        <span className="text-[10px] text-blue-500">{t(language, 'sampleDesc')}</span>
-                                                    </div>
-                                                </label>
-                                            )}
-                                        </div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-bold text-blue-300 uppercase tracking-wide">{t(language, 'sampleLabel')}</span>
+                                                    <span className="text-[10px] text-blue-500">{t(language, 'sampleDesc')}</span>
+                                                </div>
+                                            </label>
+                                        )}
 
                                         {formError && (
                                             <p className="text-red-400 text-xs font-bold bg-red-500/10 border border-red-500/20 px-4 py-3 rounded-[10px]">
@@ -658,6 +620,55 @@ const CartRow = ({ label, value }) => (
         <span className="font-bold text-white text-sm text-right min-w-0 break-words">{value}</span>
     </div>
 );
+
+const CartItemCard = ({ item, language, onEdit, onRemove, onQuantityChange }) => {
+    const productType = item.activeProduct || item.type;
+    const bodyColor = item.thermosBodyColor || item.powerbankBodyColor || item.coverColor;
+
+    return (
+        <div className="bg-white/[0.03] border border-white/10 rounded-[20px] overflow-hidden">
+            <div className="relative" style={{ height: 180 }}>
+                {item.renderUrl ? (
+                    <img src={item.renderUrl} alt={item.productName} className="absolute inset-0 w-full h-full object-contain bg-[#0A0E1A]" />
+                ) : (
+                    <div className="absolute inset-0 flex items-center justify-center bg-[#0A0E1A]">
+                        <div className="w-14 h-14 rounded-full border border-white/15" style={{ backgroundColor: bodyColor || '#1a1a1a' }} />
+                    </div>
+                )}
+                <button
+                    onClick={onRemove}
+                    aria-label={t(language, 'cartDeleteBtn')}
+                    className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-red-500/30 border border-white/15 hover:border-red-500/40 rounded-full text-white/70 hover:text-red-300 transition"
+                >
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                        <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div className="p-4 flex flex-col gap-3 border-t border-white/5">
+                <div className="flex flex-col gap-1 min-w-0">
+                    <p className="font-bold text-sm text-white truncate">{item.productName}</p>
+                    {item.design && (
+                        <p className="text-[11px] text-gray-500 truncate">{item.design}</p>
+                    )}
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1 bg-white/5 rounded-[10px] p-1 border border-white/10">
+                        <button onClick={() => onQuantityChange(Math.max(1, (item.quantity || 1) - 1))} className="w-7 h-7 flex items-center justify-center bg-white/10 rounded-[7px] text-white font-bold text-sm hover:bg-white/20 active:scale-95 transition">−</button>
+                        <span className="w-8 text-center font-bold text-white text-sm select-none">{item.quantity || 1}</span>
+                        <button onClick={() => onQuantityChange((item.quantity || 1) + 1)} className="w-7 h-7 flex items-center justify-center bg-white/10 rounded-[7px] text-white font-bold text-sm hover:bg-white/20 active:scale-95 transition">+</button>
+                    </div>
+                    <button
+                        onClick={onEdit}
+                        className="px-3 py-2 rounded-[10px] border border-white/10 text-gray-400 font-bold uppercase tracking-widest text-[10px] hover:border-white/30 hover:text-white transition"
+                    >
+                        {t(language, 'editInEditor')}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const ColorDot = ({ color }) => (
     <div className="flex items-center gap-2">
