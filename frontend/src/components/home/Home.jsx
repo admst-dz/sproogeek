@@ -408,7 +408,7 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
         // h-full + overflow-y-auto делают саму главную скроллящимся контейнером.
         // Глобально html/body имеют overflow:hidden (нужно конструктору с 3D-канвасом),
         // поэтому скролл вешаем здесь, а не на body.
-        <div className="app-bg h-full w-full flex flex-col font-sans transition-colors duration-500 text-gray-900 dark:text-white overflow-y-auto overflow-x-hidden selection:bg-blue-500/30">
+        <div className="home-route app-bg h-full w-full flex flex-col font-sans transition-colors duration-500 text-gray-900 dark:text-white overflow-y-auto overflow-x-hidden selection:bg-blue-500/30">
 
             <header className="w-full px-4 sm:px-6 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-3 z-50 shrink-0">
                 <button
