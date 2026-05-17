@@ -8,7 +8,7 @@ import {
     FileUploadChip,
     FloatingLogoSettings,
     LogoList,
-    MiniDropdown,
+    MiniSegment,
     MiniToggle,
     RotationScrub,
     SettingGroup,
@@ -77,7 +77,7 @@ export const ThermosInterface = ({ onFinish }) => {
 
                 <SettingGroup title={t(language, 'logoLabel')}>
                     <SettingRow label={t(language, 'applicationSide')}>
-                        <MiniDropdown
+                        <MiniSegment
                             value={logoArea}
                             onChange={setLogoArea}
                             options={[
@@ -88,7 +88,7 @@ export const ThermosInterface = ({ onFinish }) => {
                     </SettingRow>
                     {logoArea === 'cap' && (
                         <SettingRow label={t(language, 'thermosCapPart')}>
-                            <MiniDropdown
+                            <MiniSegment
                                 value={capLogoTarget}
                                 onChange={setCapLogoTarget}
                                 options={[
