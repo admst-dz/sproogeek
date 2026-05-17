@@ -5,7 +5,7 @@ import { useConfigurator } from '../../store'
 import { useGLTF } from '@react-three/drei'
 import termosModelUrl from '../../assets/termos3.glb?url'
 import * as THREE from 'three'
-import { useLogoTexture } from '../../utils/threeTextures'
+import { useLogoTexture, logoSizeFromTexture } from '../../utils/threeTextures'
 
 const THERMOS_NECK_RATIO = 0.1;
 const CAP_SIDE_DISTANCE = 2.75;
@@ -109,16 +109,17 @@ function LogoPlane({ logo, texture, position, rotation = 0, scale = 0.6, bodyRad
     const wrapHeight = Math.max(0.1, printTopY - printBottomY);
     const wrapWidth = Math.max(0.1, bodyRadius * Math.PI * 2 * 0.995);
     const posY = isWrap ? printBottomY + wrapHeight / 2 : Math.min(cylinderTop, position[1] + bodyCenterY);
+    const logoSize = logoSizeFromTexture(map, scale);
     const geometry = useMemo(() => createCurvedLogoGeometry({
         radius: bodyRadius,
         centerTheta: isWrap ? (rotation ?? 0) : theta,
         centerY: posY,
-        width: isWrap ? wrapWidth : scale,
-        height: isWrap ? wrapHeight : scale,
+        width: isWrap ? wrapWidth : logoSize.width,
+        height: isWrap ? wrapHeight : logoSize.height,
         rotation: isWrap ? 0 : rotation,
         segmentsX: isWrap ? 128 : 36,
         segmentsY: isWrap ? 48 : 14,
-    }), [bodyRadius, isWrap, theta, posY, scale, rotation, wrapWidth, wrapHeight]);
+    }), [bodyRadius, isWrap, theta, posY, logoSize.width, logoSize.height, rotation, wrapWidth, wrapHeight]);
 
     return (
         <mesh geometry={geometry} renderOrder={isWrap ? 18 : 20}>
@@ -133,14 +134,15 @@ function CapLogoPlane({ texture, target = 'capTop', position, rotation = 0, scal
     const capCenterY = (capMaxY + capMinY) / 2;
     const sideTheta = (position[0] / 0.35) * Math.PI;
     const sideY = capCenterY + position[1] * capHeight * 0.35;
+    const logoSize = logoSizeFromTexture(map, scale);
     const sideGeometry = useMemo(() => createCurvedLogoGeometry({
         radius: capRadius,
         centerTheta: sideTheta,
         centerY: sideY,
-        width: scale,
-        height: scale,
+        width: logoSize.width,
+        height: logoSize.height,
         rotation,
-    }), [capRadius, sideTheta, sideY, scale, rotation]);
+    }), [capRadius, sideTheta, sideY, logoSize.width, logoSize.height, rotation]);
 
     if (target === 'capSide') {
         return (
@@ -159,7 +161,7 @@ function CapLogoPlane({ texture, target = 'capTop', position, rotation = 0, scal
             rotation={[-Math.PI / 2, 0, 0]}
         >
             <mesh rotation={[0, 0, rotation]} renderOrder={22}>
-                <planeGeometry args={[scale, scale]} />
+                <planeGeometry args={[logoSize.width, logoSize.height]} />
                 <LogoMaterial map={map} />
             </mesh>
         </group>
