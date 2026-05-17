@@ -4,7 +4,7 @@ import { easing } from 'maath'
 import { getNotebookBindingCapabilities, useConfigurator } from '../../store'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
-import { useLogoTexture, useMaskTexture } from '../../utils/threeTextures'
+import { useLogoTexture, useMaskTexture, logoSizeFromTexture } from '../../utils/threeTextures'
 import tverdiyPerepletUrl from '../../assets/tverdiy_pereplet.glb?url'
 import naPruzhineUrl from '../../assets/na_pruzhine.glb?url'
 import tonkiyPerepletUrl from '../../assets/tonkiy_pereplet.glb?url'
@@ -22,13 +22,14 @@ const SPIRAL_REFERENCE_FRAME = {
 function LogoPlane({ texture, x, y, z, side = 'front', rotation = 0, scale = 0.6 }) {
     const map = useLogoTexture(texture);
     const isBack = side === 'back';
+    const logoSize = logoSizeFromTexture(map, scale);
     return (
         <mesh
             position={[x, y, z]}
             rotation={[0, isBack ? Math.PI : 0, isBack ? -rotation : rotation]}
             renderOrder={40}
         >
-            <planeGeometry args={[scale, scale]} />
+            <planeGeometry args={[logoSize.width, logoSize.height]} />
             <meshStandardMaterial
                 map={map}
                 transparent
@@ -118,13 +119,14 @@ function getHardCoverLogoSurfaceProps(logo, bbox) {
 function HardCoverLogoPlane({ texture, x, y, z, side = 'front', rotation = 0, scale = 0.6 }) {
     const map = useLogoTexture(texture);
     const isBack = side === 'back';
+    const logoSize = logoSizeFromTexture(map, scale);
     return (
         <group
             position={[x, y, z]}
             rotation={[isBack ? -Math.PI / 2 : Math.PI / 2, 0, 0]}
         >
             <mesh rotation={[0, 0, isBack ? -rotation : rotation]} renderOrder={40}>
-                <planeGeometry args={[scale, scale]} />
+                <planeGeometry args={[logoSize.width, logoSize.height]} />
                 <meshStandardMaterial
                     map={map}
                     transparent

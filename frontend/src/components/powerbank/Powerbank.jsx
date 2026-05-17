@@ -5,7 +5,7 @@ import { useConfigurator } from '../../store'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import powerbankModelUrl from '../../assets/poverbank.glb?url'
-import { useLogoTexture } from '../../utils/threeTextures'
+import { useLogoTexture, logoSizeFromTexture } from '../../utils/threeTextures'
 
 const DETAIL_SURFACE_OFFSET = 0.004;
 const LOGO_SURFACE_OFFSET = 0.008;
@@ -28,18 +28,6 @@ function OverlayMaterial({ color, opacity = 1, polygonOffsetFactor = DETAIL_POLY
             metalness={0.02}
         />
     );
-}
-
-function logoSizeFromTexture(map, scale) {
-    const imageWidth = map?.image?.width ?? map?.image?.naturalWidth ?? 1;
-    const imageHeight = map?.image?.height ?? map?.image?.naturalHeight ?? 1;
-    const aspect = imageWidth > 0 && imageHeight > 0 ? imageWidth / imageHeight : 1;
-
-    if (aspect >= 1) {
-        return { width: scale, height: scale / aspect };
-    }
-
-    return { width: scale * aspect, height: scale };
 }
 
 function clampedLogoCenter({

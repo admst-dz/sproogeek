@@ -52,3 +52,18 @@ export function useMaskTexture(src) {
 
     return texture;
 }
+
+// scale задаёт БОЛЬШУЮ сторону логотипа. Меньшая считается из реального
+// аспекта картинки, чтобы прямоугольные PNG/SVG не растягивались в квадрат.
+export function logoSizeFromTexture(map, scale) {
+    const imageWidth = map?.image?.width ?? map?.image?.naturalWidth ?? 1;
+    const imageHeight = map?.image?.height ?? map?.image?.naturalHeight ?? 1;
+    if (!imageWidth || !imageHeight) {
+        return { width: scale, height: scale };
+    }
+    const aspect = imageWidth / imageHeight;
+    if (aspect >= 1) {
+        return { width: scale, height: scale / aspect };
+    }
+    return { width: scale * aspect, height: scale };
+}
