@@ -1,8 +1,46 @@
 @import url('https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+Antique:wght@400;500;700;900&display=swap');
 
+/* Lack Regular — положи файл шрифта в frontend/public/fonts/Lack-Regular.woff2
+   (поддерживается также .woff). До тех пор fallback на Zen Kaku Gothic Antique,
+   но более тонким весом, см. правила ниже. */
+@font-face {
+  font-family: 'Lack';
+  src: url('/fonts/Lack-Regular.woff2') format('woff2'),
+       url('/fonts/Lack-Regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* === Глобальная типографика ===========================================
+   По всему конструктору, кабинету и админке — Lack Regular. На главной
+   (.home-route) остаётся Zen Kaku Gothic Antique, как до правок.
+   Параллельно гасим утилитарные тяжёлые веса (Tailwind font-black/bold)
+   чтобы буквы не сливались — Lack рассчитан на регулярное начертание. */
+html, body {
+  font-family: 'Lack', 'Zen Kaku Gothic Antique', system-ui, sans-serif;
+  font-weight: 400;
+}
+
+body :where(.font-black, .font-extrabold, .font-bold, .font-semibold) {
+  font-weight: 500;
+}
+body :where(.font-medium) {
+  font-weight: 450;
+}
+
+.home-route, .home-route * {
+  font-family: 'Zen Kaku Gothic Antique', sans-serif;
+}
+.home-route :where(.font-black) { font-weight: 900; }
+.home-route :where(.font-extrabold) { font-weight: 800; }
+.home-route :where(.font-bold) { font-weight: 700; }
+.home-route :where(.font-semibold) { font-weight: 600; }
+.home-route :where(.font-medium) { font-weight: 500; }
 
 html, body, #root {
   width: 100%;
@@ -86,14 +124,13 @@ html.dark, html.dark body, html.dark #root {
 
 /* === ВАШИ НОВЫЕ СТИЛИ === */
 
-/* 1. Шрифт и Текстовые эффекты */
+/* 1. Шрифт и Текстовые эффекты — теперь Lack Regular. На главной .font-zen
+   и так не используется, но .home-route правило переопределит при необходимости. */
 .font-zen {
-  font-family: 'Zen Kaku Gothic Antique', sans-serif;
+  font-family: 'Lack', 'Zen Kaku Gothic Antique', sans-serif;
   color: #FFFFFF;
-  /* Обводка (Stroke) */
-  -webkit-text-stroke: 0.5px #FFFFFF;
-  /* Тень (Shadow) 25% opacity */
-  text-shadow: 0px 4px 10px rgba(0, 0, 0, 0.25);
+  /* Обводка и тень снимаем — с Lack regular они дают грязный жирный вид. */
+  text-shadow: 0px 2px 6px rgba(0, 0, 0, 0.18);
 }
 
 /* 2. Стеклянная панель конструктора (всегда тёмная — внутри много text-white,
@@ -152,7 +189,7 @@ html.dark, html.dark body, html.dark #root {
   align-items: center;
   gap: 18px;
   color: white;
-  font-family: 'Zen Kaku Gothic Antique', sans-serif;
+  font-family: 'Lack', 'Zen Kaku Gothic Antique', sans-serif;
 }
 
 .vibe-loader--compact {
