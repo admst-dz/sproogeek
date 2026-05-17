@@ -410,7 +410,7 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
         // поэтому скролл вешаем здесь, а не на body.
         <div className="home-route app-bg h-full w-full flex flex-col font-sans transition-colors duration-500 text-gray-900 dark:text-white overflow-y-auto overflow-x-hidden selection:bg-blue-500/30">
 
-            <header className="w-full px-4 sm:px-6 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-3 z-50 shrink-0">
+            <header className="relative w-full px-4 sm:px-6 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-3 z-50 shrink-0">
                 <button
                     type="button"
                     onClick={() => window.location.reload()}
@@ -420,10 +420,12 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
                     <span className="font-bold text-sm tracking-wide">Sproogeek 3D</span>
                 </button>
 
+                {/* Поисковое окно — абсолютным центрированием, чтобы не зависеть
+                    от ширины левого/правого блоков и стоять строго посередине вьюпорта. */}
                 <button
                     type="button"
                     onClick={openCommandPalette}
-                    className="hidden md:flex items-center gap-3 bg-white border border-gray-200 dark:bg-white/5 dark:border-white/10 px-4 py-2 rounded-full backdrop-blur-md w-96 max-w-full text-sm text-gray-400 shadow-sm dark:shadow-none transition-colors hover:bg-gray-50 dark:hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/40 text-left"
+                    className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-3 bg-white border border-gray-200 dark:bg-white/5 dark:border-white/10 px-4 py-2 rounded-full backdrop-blur-md w-96 max-w-[min(28rem,calc(100vw-28rem))] text-sm text-gray-400 shadow-sm dark:shadow-none transition-colors hover:bg-gray-50 dark:hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/40 text-left"
                     aria-label={t(language, 'search')}
                 >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
