@@ -311,12 +311,12 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
                     <div className="mt-3 space-y-3 xl:hidden">
                         <TransformPad label={t(language, 'position')} value={selected.position} onChange={setLogoPosition} onReset={resetLogoTransform} />
                         <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setLogoRotation} />
-                        <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.2} max={1.5} step={0.05} onChange={setLogoScale} />
+                        <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.2} max={4.0} step={0.05} onChange={setLogoScale} />
                     </div>
                     <FloatingLogoSettings title={t(language, 'logoLabel')} subtitle={selected.filename}>
                     <TransformPad label={t(language, 'position')} value={selected.position} onChange={setLogoPosition} onReset={resetLogoTransform} />
                     <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setLogoRotation} />
-                    <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.2} max={1.5} step={0.05} onChange={setLogoScale} />
+                    <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.2} max={4.0} step={0.05} onChange={setLogoScale} />
                     </FloatingLogoSettings>
                 </>
             )}

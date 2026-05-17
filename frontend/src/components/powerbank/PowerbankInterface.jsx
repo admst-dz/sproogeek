@@ -119,7 +119,7 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
                         </p>
                         <TransformPad label={t(language, 'position')} value={selected.position} onChange={setLogoPosition} onReset={resetLogoTransform} aspect="aspect-[3/4]" />
                         <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setLogoRotation} />
-                        <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.1} max={1.2} step={0.02} onChange={setLogoScale} />
+                        <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.2} max={4.0} step={0.05} onChange={setLogoScale} />
                     </div>
                     <FloatingLogoSettings title={t(language, 'logoLabel')} subtitle={selected.filename}>
                     <SettingRow label={t(language, 'applicationSide')}>
@@ -137,7 +137,7 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
                     </p>
                     <TransformPad label={t(language, 'position')} value={selected.position} onChange={setLogoPosition} onReset={resetLogoTransform} aspect="aspect-[3/4]" />
                     <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setLogoRotation} />
-                    <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.1} max={1.2} step={0.02} onChange={setLogoScale} />
+                    <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.2} max={4.0} step={0.05} onChange={setLogoScale} />
                     </FloatingLogoSettings>
                 </>
             )}
