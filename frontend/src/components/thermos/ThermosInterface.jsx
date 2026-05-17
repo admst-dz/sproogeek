@@ -159,7 +159,7 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, activeLogoTarget, addLogo, se
                             <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setLogoRotation} />
                         )}
                         {selected.mode !== 'wrap' && (
-                            <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.12} max={activeLogoTarget === 'body' ? 1.5 : 0.9} step={0.03} onChange={setLogoScale} />
+                            <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.2} max={4.0} step={0.05} onChange={setLogoScale} />
                         )}
                     </div>
                     <FloatingLogoSettings title={t(language, 'logoLabel')} subtitle={selected.filename}>
@@ -175,7 +175,7 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, activeLogoTarget, addLogo, se
                         <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setLogoRotation} />
                     )}
                     {selected.mode !== 'wrap' && (
-                        <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.12} max={activeLogoTarget === 'body' ? 1.5 : 0.9} step={0.03} onChange={setLogoScale} />
+                        <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.2} max={4.0} step={0.05} onChange={setLogoScale} />
                     )}
                     </FloatingLogoSettings>
                 </>

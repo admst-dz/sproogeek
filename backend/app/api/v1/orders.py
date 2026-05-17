@@ -199,7 +199,7 @@ async def create_order(
     req_id = request_id(request)
     config_for_3d = order.configuration.get("productConfig", {})
 
-    new_order = await OrderService.create_new_order(db, order, current_user.id)
+    new_order = await OrderService.create_new_order(db, order, current_user.id, request=request)
 
     event_logger.log(
         "ORDER_CREATED",
@@ -281,6 +281,7 @@ async def update_order_status(
         raise HTTPException(status_code=403, detail="Access denied")
 
     order = await crud_order.update_status(db, order_id, status_data.status, status_data.comment)
+    OrderService.notify_bitrix_updated(request, order.id, comment=status_data.comment)
     event_logger.log(
         "ORDER_STATUS_CHANGED",
         "Staff user changed order status",

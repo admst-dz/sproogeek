@@ -79,6 +79,25 @@ class Settings(BaseSettings):
     redis_url: str = Field("redis://redis:6379/0", alias="REDIS_URL")
     cache_default_ttl: int = Field(300, alias="CACHE_DEFAULT_TTL")
 
+    # ─── Bitrix24 CRM ─────────────────────────────────────────────────────
+    # Подробности — backend/app/services/bitrix/inst.txt
+    bitrix_webhook_url: str = Field("", alias="BITRIX_WEBHOOK_URL")
+    bitrix_portal_host: str = Field("", alias="BITRIX_PORTAL_HOST")
+    bitrix_timeout_seconds: float = Field(15.0, alias="BITRIX_TIMEOUT_SECONDS")
+    bitrix_deal_category_id: int = Field(0, alias="BITRIX_DEAL_CATEGORY_ID")
+    bitrix_assigned_by_id: int = Field(0, alias="BITRIX_ASSIGNED_BY_ID")
+    bitrix_source_id: str = Field("WEB", alias="BITRIX_SOURCE_ID")
+    bitrix_incoming_token: str = Field("", alias="BITRIX_INCOMING_TOKEN")
+    bitrix_stage_map: str = Field("", alias="BITRIX_STAGE_MAP")
+    bitrix_reverse_stage_map: str = Field("", alias="BITRIX_REVERSE_STAGE_MAP")
+    bitrix_uf_order_id: str = Field("", alias="BITRIX_UF_ORDER_ID")
+    bitrix_uf_order_url: str = Field("", alias="BITRIX_UF_ORDER_URL")
+    bitrix_uf_quantity: str = Field("", alias="BITRIX_UF_QUANTITY")
+    bitrix_uf_product_name: str = Field("", alias="BITRIX_UF_PRODUCT_NAME")
+    public_admin_order_url_template: str = Field(
+        "", alias="PUBLIC_ADMIN_ORDER_URL_TEMPLATE"
+    )
+
     # ─── Email (отправка отзывов с главной) ───────────────────────────────
     smtp_host: str = Field("", alias="SMTP_HOST")
     smtp_port: int = Field(587, alias="SMTP_PORT")

@@ -1,0 +1,345 @@
+================================================================================
+ИНТЕГРАЦИЯ SPRUZHYK ↔ BITRIX24 CRM — ИНСТРУКЦИЯ ПО НАСТРОЙКЕ
+================================================================================
+
+Назначение
+----------
+Каждый заказ, созданный на сайте Spruzhyk, дублируется в Bitrix24 как «Сделка»
+(Deal) с привязкой к контакту (Contact). Дилеры и производственники получают
+рабочее место в Bitrix параллельно с админкой сайта: смена этапа сделки в
+Bitrix → меняется статус заказа на сайте (опционально, по outgoing webhook),
+изменения на сайте → автоматически отражаются в сделке.
+
+Поток данных (упрощённо):
+
+    [сайт]  POST /api/v1/orders         ─┐
+                                          ├──► OrderService.create_new_order
+                                          │         │
+                                          │         └─► asyncio.create_task →
+                                          │                BitrixSyncService.push_order_created
+                                          │                       │
+                                          │                       ├─► crm.contact.list/add
+                                          │                       └─► crm.deal.add
+                                          │                                │
+                                          │   deal_id сохраняется в Order.configuration.bitrix
+                                          ▼
+                                       PostgreSQL
+
+    [Bitrix]   менеджер двигает сделку  ──► outgoing webhook  ──►  POST /api/v1/bitrix/webhook
+                                                                          │
+                                                                          ▼
+                                                              crud_order.update_status
+
+================================================================================
+0. ПРЕДВАРИТЕЛЬНЫЕ ТРЕБОВАНИЯ
+================================================================================
+
+* Активный портал Bitrix24 (cloud либо self-hosted), URL вида
+  https://<portal>.bitrix24.ru или https://<домен>.
+* Учётка администратора портала (нужны права на создание входящих/исходящих
+  webhook'ов и на создание пользовательских полей в сделке).
+* Сетевая доступность: сервер Spruzhyk должен ходить на портал Bitrix
+  по 443/tcp; портал Bitrix должен ходить на наш бэкенд по 443/tcp
+  (для outgoing webhook). Если бэкенд за корпоративным фаерволом — открыть
+  ingress с IP-диапазонов Bitrix (см. документацию портала, раздел
+  «Bitrix24 IP addresses»). Cloud-портал ходит с динамических IP — в этом
+  случае ограничиваем только токеном.
+
+================================================================================
+1. СОЗДАНИЕ ВХОДЯЩЕГО WEBHOOK В BITRIX (сайт → Bitrix)
+================================================================================
+
+Идём в портал Bitrix24 → «Разработчикам» (Developer resources) → «Другое»
+(Other) → «Входящий вебхук» (Inbound webhook).
+
+1.1 Нажать «Добавить вебхук» (Add webhook).
+1.2 Назначить права доступа (Access permissions). Минимально нужно:
+       - CRM (crm)                    — да
+       - Пользователи (user)          — да (для маппинга ASSIGNED_BY_ID)
+       - Чтение профиля (profile)     — да
+    Без разрешения CRM API «crm.deal.add» вернёт error: "ACCESS_DENIED".
+1.3 Сохранить. Bitrix покажет URL вида:
+
+       https://example.bitrix24.ru/rest/123/abcdef0123456789/
+
+    Это и есть BITRIX_WEBHOOK_URL. Слеш на конце ОБЯЗАТЕЛЕН — клиент его
+    добавит сам, но проверяйте при копировании.
+
+1.4 Сохранить URL в секреты (Vault, GitHub Actions, .env). НЕ коммитить.
+
+================================================================================
+2. ОПЦИОНАЛЬНО: OUTGOING WEBHOOK В BITRIX (Bitrix → сайт)
+================================================================================
+
+Если хотите, чтобы изменение этапа сделки в Bitrix автоматически меняло
+статус заказа на сайте — добавьте исходящий webhook.
+
+2.1 Портал Bitrix24 → «Разработчикам» → «Другое» → «Исходящий вебхук»
+    (Outbound webhook).
+2.2 События (Events): отметить
+       - ONCRMDEALUPDATE   — изменение сделки
+       - ONCRMDEALADD      — добавление сделки (на случай создания вручную)
+2.3 Обработчик (Handler URL):
+
+       https://<api.spruzhyk.com>/api/v1/bitrix/webhook?token=<BITRIX_INCOMING_TOKEN>
+
+       Где <BITRIX_INCOMING_TOKEN> — длинная случайная строка (32+ символа).
+       Сгенерировать:  `openssl rand -hex 32`
+       Положить в .env как BITRIX_INCOMING_TOKEN.
+
+2.4 Сохранить. Bitrix также покажет «Код приложения» (application_token) —
+    его НЕ обязательно использовать; основная защита — секрет в URL.
+    Дополнительно можно проверять auth[application_token] в form-данных
+    (см. app/services/bitrix/webhook.py::verify).
+
+================================================================================
+3. СОЗДАНИЕ ВОРОНКИ ПРОДАЖ (Pipeline) В BITRIX
+================================================================================
+
+CRM → Сделки (Deals) → значок шестерёнки → «Настройки воронок и стадий».
+
+3.1 Если используете дефолтную воронку — пропустите. Сделки попадут в неё
+    автоматически.
+
+3.2 Если создаёте отдельную воронку «Spruzhyk Online»:
+       - Создать воронку, запомнить её CATEGORY_ID (видно в URL: ...category_id=2).
+       - Положить в .env:  BITRIX_DEAL_CATEGORY_ID=2
+       - В воронке создать стадии (минимальный набор):
+
+              Код               Название
+              ─────────────────────────────────────
+              NEW               Новый заказ
+              PREPARATION       В обработке
+              EXECUTING         В производстве
+              FINAL_INVOICE     Отгрузка
+              WON               Выполнен
+              LOSE              Отменён
+
+       - Технические коды стадий («Stage ID») создаются автоматически
+         в формате  C<category_id>:<CODE>  (например, C2:NEW).
+         Их можно посмотреть через REST-метод crm.dealcategory.stage.list
+         (cURL пример внизу файла, раздел 9).
+
+3.3 Если коды стадий отличаются от дефолтных — задать маппинг в ENV:
+
+       BITRIX_STAGE_MAP=new=C2:NEW,in_progress=C2:PREPARATION,production=C2:EXECUTING,shipped=C2:FINAL_INVOICE,completed=C2:WON,cancelled=C2:LOSE,rejected=C2:LOSE
+
+    Обратный маппинг (для outgoing webhook):
+
+       BITRIX_REVERSE_STAGE_MAP=NEW=new,PREPARATION=in_progress,EXECUTING=production,FINAL_INVOICE=shipped,WON=completed,LOSE=cancelled
+
+================================================================================
+4. ПОЛЬЗОВАТЕЛЬСКИЕ ПОЛЯ СДЕЛКИ (User Fields, UF_CRM_*)
+================================================================================
+
+Чтобы не терять данные сайта в Bitrix, заводим пользовательские поля у
+сущности «Сделка»:
+
+CRM → Сделки → значок шестерёнки → «Пользовательские поля» (User fields).
+
+Поле                  Тип        Назначение                          ENV
+─────────────────────────────────────────────────────────────────────────────────
+UF_CRM_SPRUZHYK_ID    Строка    UUID заказа на сайте                 BITRIX_UF_ORDER_ID
+UF_CRM_SPRUZHYK_URL   Строка    Ссылка на админку заказа             BITRIX_UF_ORDER_URL
+UF_CRM_SPRUZHYK_QTY   Число     Количество в заказе                  BITRIX_UF_QUANTITY
+UF_CRM_SPRUZHYK_NAME  Строка    Название товара                      BITRIX_UF_PRODUCT_NAME
+
+После создания поля Bitrix покажет его технический ID (поле «Имя поля»),
+обычно вида UF_CRM_1700000000000. Этот ID кладём в .env:
+
+       BITRIX_UF_ORDER_ID=UF_CRM_1700000000000
+       BITRIX_UF_ORDER_URL=UF_CRM_1700000000001
+       BITRIX_UF_QUANTITY=UF_CRM_1700000000002
+       BITRIX_UF_PRODUCT_NAME=UF_CRM_1700000000003
+
+Если поле не задано в ENV — оно просто не отправляется (интеграция деградирует
+gracefully, без ошибки).
+
+Для UF_CRM_SPRUZHYK_URL также нужен публичный URL-шаблон админки:
+
+       PUBLIC_ADMIN_ORDER_URL_TEMPLATE=https://spruzhyk.com/admin/orders/{order_id}
+
+================================================================================
+5. ОТВЕТСТВЕННЫЙ ЗА СДЕЛКУ (ASSIGNED_BY_ID)
+================================================================================
+
+5.1 В Bitrix зайти под аккаунтом дилера/админа, скопировать его ID:
+    «Сотрудники» (Employees) → открыть карточку → ID виден в URL
+    (https://example.bitrix24.ru/company/personal/user/17/).
+
+5.2 Положить в .env:  BITRIX_ASSIGNED_BY_ID=17
+
+    Это будет «дефолтный ответственный» для всех новых сделок. В будущем
+    маршрутизация по дилерам/производителям должна делаться в
+    app/services/bitrix/mappers.py::deal_fields на основе
+    order.selected_manufacturer_id → таблица соответствия users.id ↔
+    bitrix_user_id.
+
+================================================================================
+6. ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ (.env)
+================================================================================
+
+Полный список (минимум — первые две строки):
+
+    BITRIX_WEBHOOK_URL=https://example.bitrix24.ru/rest/123/abcdef0123456789/
+    BITRIX_PORTAL_HOST=example.bitrix24.ru
+
+    # Опционально:
+    BITRIX_TIMEOUT_SECONDS=15
+    BITRIX_DEAL_CATEGORY_ID=0            # 0 = дефолтная воронка
+    BITRIX_ASSIGNED_BY_ID=1              # ID ответственного по умолчанию
+    BITRIX_SOURCE_ID=WEB
+
+    # Outgoing webhook (Bitrix → сайт):
+    BITRIX_INCOMING_TOKEN=<openssl rand -hex 32>
+
+    # Кастомные маппинги стадий (если воронка не дефолтная):
+    BITRIX_STAGE_MAP=
+    BITRIX_REVERSE_STAGE_MAP=
+
+    # Пользовательские поля сделки:
+    BITRIX_UF_ORDER_ID=
+    BITRIX_UF_ORDER_URL=
+    BITRIX_UF_QUANTITY=
+    BITRIX_UF_PRODUCT_NAME=
+
+    PUBLIC_ADMIN_ORDER_URL_TEMPLATE=https://spruzhyk.com/admin/orders/{order_id}
+
+После правки .env: пересобрать backend-контейнер и перезапустить —
+конфиг кешируется через @lru_cache.
+
+    docker compose up -d --build backend
+
+================================================================================
+7. БАЗА ДАННЫХ
+================================================================================
+
+Связка «заказ → сделка Bitrix» хранится в Order.configuration['bitrix']
+(JSONB), миграции не требуются. Пример:
+
+    {
+      "bitrix": {
+        "deal_id": 4242,
+        "contact_id": 333,
+        "portal": "example.bitrix24.ru"
+      }
+    }
+
+Если в будущем понадобится ссылочная целостность или быстрый поиск по
+deal_id — заменить на таблицу bitrix_order_links(order_id PK, deal_id,
+contact_id, portal, synced_at) + alembic-миграция. План:
+
+    1. Создать модель app/models/bitrix.py.
+    2. alembic revision --autogenerate -m "bitrix link table"
+    3. Переписать BitrixSyncService._store_link и find_order_by_deal на
+       новую таблицу.
+    4. Бэкфилл: одноразовый скрипт, который читает
+       configuration.bitrix.deal_id и заливает в новую таблицу.
+
+================================================================================
+8. ПРОВЕРКА (smoke test)
+================================================================================
+
+8.1 Bitrix REST доступен (выполняется на сервере, где задан BITRIX_WEBHOOK_URL):
+
+       curl -s "${BITRIX_WEBHOOK_URL}profile" | jq
+
+    Ожидаем JSON без поля error.
+
+8.2 Создаём тестовый заказ через сайт (любой пользователь). Через
+    1–3 секунды в Bitrix → Сделки появляется новая сделка с заголовком
+    «Spruzhyk #XXXXXXXX — …».
+
+8.3 В логах backend:
+
+       docker compose logs -f backend | grep BITRIX
+
+    должны быть события BITRIX_DEAL_CREATED / BITRIX_DEAL_UPDATED.
+    Если видим BITRIX_DEAL_CREATE_FAILED — смотреть details.error.
+
+8.4 Outgoing webhook: в Bitrix двигаем сделку в стадию «Выполнен» (WON).
+    В логах backend появляется BITRIX_STATUS_PULLED, у заказа на сайте
+    статус меняется на "completed".
+
+8.5 Ручная пересинхронизация (если в момент создания Bitrix лежал):
+
+       curl -X POST https://api.spruzhyk.com/api/v1/bitrix/resync/<order_id> \
+            -H "Authorization: Bearer <admin_jwt>"
+
+================================================================================
+9. ШПАРГАЛКА: ПОЛЕЗНЫЕ REST-МЕТОДЫ BITRIX24
+================================================================================
+
+Все методы дёргаются POST'ом по адресу:
+    ${BITRIX_WEBHOOK_URL}<method>
+
+Самые полезные при настройке/диагностике:
+
+* profile                              — кто я (проверка доступности)
+* user.get?ID=17                       — карточка пользователя по ID
+* crm.dealcategory.list                — список воронок и их CATEGORY_ID
+* crm.dealcategory.stage.list?id=2     — стадии воронки 2 (узнать STAGE_ID)
+* crm.deal.fields                      — все поля сделки, включая UF_*
+* crm.deal.get?id=4242                 — получить сделку
+* crm.deal.list?filter[CATEGORY_ID]=2  — список сделок воронки
+* crm.contact.fields                   — поля контакта
+* crm.timeline.comment.add             — добавить комментарий в таймлайн
+
+Пример (получить все UF-поля сделки):
+
+       curl -s "${BITRIX_WEBHOOK_URL}crm.deal.fields" \
+           | jq 'to_entries | map(select(.key | startswith("UF_")))'
+
+================================================================================
+10. БЕЗОПАСНОСТЬ
+================================================================================
+
+* BITRIX_WEBHOOK_URL == секретный ключ. Утечка == полный доступ к CRM
+  на правах создавшего его пользователя. Хранить только в secrets-store.
+* Ротация: пересоздать webhook в Bitrix (старый автоматически отзывается),
+  обновить ENV, перезапустить контейнер.
+* /api/v1/bitrix/webhook принимает запросы без JWT, защита — токен в
+  query/form-данных. Не вешать на этот эндпоинт rate-limit ниже 60/min,
+  иначе при массовых правках Bitrix начнёт ретраить (по умолчанию
+  10 попыток с экспонентой).
+* В логах НЕ светить полный BITRIX_WEBHOOK_URL — клиент это и не делает,
+  но при добавлении кастомных логов следите за этим.
+
+================================================================================
+11. ИЗВЕСТНЫЕ ОГРАНИЧЕНИЯ И TODO
+================================================================================
+
+* Маршрутизация по ответственным сотрудникам Bitrix статичная
+  (BITRIX_ASSIGNED_BY_ID на все сделки). При расширении до реальной
+  команды дилеров — завести таблицу users ↔ bitrix_user_id и брать
+  ASSIGNED_BY_ID из User.bitrix_user_id (поле в модели User добавить).
+* Push при изменении заказа подключён в:
+       - app/api/v1/orders.py::update_order_status
+       - app/api/v1/admin.py::update_admin_order
+  При желании синхронизировать также события:
+       - manufacturer.choose_quote
+       - dealer.confirm_for_production
+       - approval_signed_by_client
+  — вызывать OrderService.notify_bitrix_updated(request, order_id, comment=...)
+  после соответствующего commit'а. Альтернатива — подписать BitrixSyncService
+  на existing event_hub (app/services/event_hub.py), там уже публикуется
+  "order.updated" / "order.status_changed".
+* Файлы (рендеры, PDF согласования) не заливаются в Bitrix. При
+  необходимости — crm.deal.attachment.add c base64-содержимым; имеет смысл
+  выносить в отдельную фоновую очередь (Kafka topic "bitrix.attachments"),
+  чтобы не блокировать основной поток заказа.
+* Retry-политика: 3 попытки с экспонентой 1s/2s/4s (sync.py::_run_with_retries).
+  При систематических 5xx от Bitrix имеет смысл переключиться на стойкую
+  очередь (Kafka + consumer-воркер) — сейчас событие теряется, если процесс
+  падает между create_task и его завершением.
+
+================================================================================
+12. ОТКЛЮЧЕНИЕ ИНТЕГРАЦИИ
+================================================================================
+
+Достаточно очистить BITRIX_WEBHOOK_URL в .env и перезапустить backend.
+* OrderService увидит, что app.state.bitrix_sync is None, и пропустит
+  всю синхронизацию без падений.
+* Эндпоинт /api/v1/bitrix/webhook будет возвращать 503.
+* Существующие связки в Order.configuration.bitrix не трогаются — при
+  повторном включении интеграция продолжит работать с теми же deal_id.
