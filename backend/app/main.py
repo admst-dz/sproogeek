@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 import sentry_sdk
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, ORJSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi_pagination import add_pagination
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -72,7 +72,14 @@ if settings.sentry_dsn:
 
 limiter = Limiter(key_func=slowapi_key)
 
-app = FastAPI(title=settings.app_title, version=settings.app_version, lifespan=lifespan)
+app = FastAPI(
+    title=settings.app_title,
+    version=settings.app_version,
+    lifespan=lifespan,
+    # orjson: ~3× быстрее stdlib json + корректно сериализует datetime/UUID
+    # без custom encoder'ов. Применяется ко всем JSON-ответам по умолчанию.
+    default_response_class=ORJSONResponse,
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -105,9 +112,9 @@ class LimitUploadSize(BaseHTTPMiddleware):
             try:
                 size = int(content_length) if content_length else 0
             except ValueError:
-                return JSONResponse(status_code=400, content={"detail": "Invalid content length"})
+                return ORJSONResponse(status_code=400, content={"detail": "Invalid content length"})
             if size > self._max_bytes:
-                return JSONResponse(status_code=413, content={"detail": "Payload too large"})
+                return ORJSONResponse(status_code=413, content={"detail": "Payload too large"})
         return await call_next(request)
 
 
@@ -140,7 +147,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         request_id=getattr(request.state, "request_id", ""),
         details={"error_type": type(exc).__name__},
     )
-    return JSONResponse(status_code=500, content={"detail": "Internal server error."})
+    return ORJSONResponse(status_code=500, content={"detail": "Internal server error."})
 
 
 @app.get("/api/health", tags=["DevOps"])

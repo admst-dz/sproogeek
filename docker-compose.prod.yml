@@ -120,6 +120,8 @@ services:
       UNWRAP_TIMEOUT_SECONDS: ${UNWRAP_TIMEOUT_SECONDS:-60}
       BLOCK_BUILDER_URL: ${BLOCK_BUILDER_URL:-http://block_builder:8000}
       BLOCK_BUILDER_TIMEOUT_SECONDS: ${BLOCK_BUILDER_TIMEOUT_SECONDS:-60}
+      GLB_UNWRAPPER_URL: ${GLB_UNWRAPPER_URL:-http://glb_unwrapper:8000}
+      GLB_UNWRAPPER_TIMEOUT_SECONDS: ${GLB_UNWRAPPER_TIMEOUT_SECONDS:-60}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
       S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-}
       S3_REGION: ${S3_REGION:-us-east-1}
@@ -282,6 +284,20 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+  glb_unwrapper:
+    image: ghcr.io/admst-dz/spruzhyk-glb-unwrapper:latest
+    pull_policy: always
+    container_name: spruzhuk_glb_unwrapper
+    restart: unless-stopped
+    networks:
+      - spruzhuk_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
 networks:
   spruzhuk_net:

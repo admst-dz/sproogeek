@@ -66,6 +66,7 @@ services:
       TECHCARD_URL: ${TECHCARD_URL:-http://techcard:8000}
       UNWRAP_URL: ${UNWRAP_URL:-http://unwrap:8000}
       BLOCK_BUILDER_URL: ${BLOCK_BUILDER_URL:-http://block_builder:8000}
+      GLB_UNWRAPPER_URL: ${GLB_UNWRAPPER_URL:-http://glb_unwrapper:8000}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
       S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-${MINIO_ROOT_USER:-spruzhyk}}
@@ -221,6 +222,25 @@ services:
       retries: 3
       start_period: 15s
 
+  glb_unwrapper:
+    image: ghcr.io/admst-dz/spruzhyk-glb-unwrapper:dev
+    pull_policy: always
+    build:
+      # build-контекст = корень репо, чтобы Dockerfile видел GLB-модели
+      # из frontend/src/assets/ (см. Dockerfile, секция COPY).
+      context: .
+      dockerfile: microservices/glb-unwrapper/Dockerfile
+    container_name: spruzhuk_glb_unwrapper
+    restart: unless-stopped
+    networks:
+      - spruzhuk_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
   watchtower:
     image: containrrr/watchtower
     container_name: spruzhuk_watchtower
@@ -235,7 +255,7 @@ services:
       WATCHTOWER_POLL_INTERVAL: "30"
       WATCHTOWER_INCLUDE_RESTARTING: "true"
       WATCHTOWER_ROLLING_RESTART: "true"
-    command: spruzhuk_app spruzhuk_app_render spruzhuk_backend spruzhuk_renderer spruzhuk_techcard spruzhuk_unwrap spruzhuk_block_builder
+    command: spruzhuk_app spruzhuk_app_render spruzhuk_backend spruzhuk_renderer spruzhuk_techcard spruzhuk_unwrap spruzhuk_block_builder spruzhuk_glb_unwrapper
 
 networks:
   spruzhuk_net:
