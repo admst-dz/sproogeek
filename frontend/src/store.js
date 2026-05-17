@@ -13,11 +13,17 @@ const _makeCartId = () => (
         : `cart_${Date.now()}_${Math.random().toString(36).slice(2)}`
 );
 
-const _decorateCartEntry = (item) => ({
-    id: item.id || _makeCartId(),
-    quantity: Number.isFinite(item.quantity) && item.quantity > 0 ? item.quantity : 1,
-    ...item,
-});
+// Важно: id/quantity ставим в конце, чтобы spread рассыпки `item` не затирал
+// сгенерированный id значением `undefined` из исходного объекта (это уже
+// один раз сломало удаление по id — все айтемы получали id=undefined).
+const _decorateCartEntry = (item) => {
+    const { id, quantity, ...rest } = item;
+    return {
+        ...rest,
+        id: id || _makeCartId(),
+        quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+    };
+};
 
 // Cookie может хранить либо новый формат (массив объектов), либо старый
 // (один объект с productName на верхнем уровне). Поддерживаем обе схемы,
@@ -216,9 +222,10 @@ export const useConfigurator = create(temporal((set, get) => ({
     // обновляется по месту, чтобы UX правки не плодил дубли.
     addToCart: (itemData) => set((state) => {
         const editingId = state.editingCartId;
+        const targetId = editingId || itemData.id || _makeCartId();
         const decorated = _decorateCartEntry({
             ...itemData,
-            id: editingId || itemData.id,
+            id: targetId,
             createdAt: itemData.createdAt || Date.now(),
         });
         let nextItems;
@@ -235,6 +242,7 @@ export const useConfigurator = create(temporal((set, get) => ({
         };
     }),
     removeFromCart: (id) => set((state) => {
+        if (!id) return state;
         const nextItems = state.cartItems.filter(i => i.id !== id);
         _persistCart(nextItems);
         return {
