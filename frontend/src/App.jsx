@@ -417,7 +417,7 @@ function MainApp() {
         userRole,
         logout,
         theme,
-        cartItem,
+        cartItems,
         cartRestoredFromCookie,
         clearCart,
         language,
@@ -617,9 +617,13 @@ function MainApp() {
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="font-bold text-white text-sm leading-tight mb-1">{t(language, 'cartRestoredTitle')}</p>
-                            <p className="text-gray-400 text-xs truncate">{cartItem?.productName}</p>
-                            {cartItem?.design && (
-                                <p className="text-gray-600 text-[11px] truncate mt-0.5">{cartItem.design}</p>
+                            <p className="text-gray-400 text-xs truncate">
+                                {cartItems?.length > 1
+                                    ? `${cartItems.length} × ${cartItems[0]?.productName}${cartItems.length > 1 ? '…' : ''}`
+                                    : cartItems?.[0]?.productName}
+                            </p>
+                            {cartItems?.[0]?.design && cartItems.length === 1 && (
+                                <p className="text-gray-600 text-[11px] truncate mt-0.5">{cartItems[0].design}</p>
                             )}
                         </div>
                         <button

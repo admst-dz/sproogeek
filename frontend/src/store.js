@@ -7,14 +7,46 @@ const CART_COOKIE = 'spruzhuk_cart';
 const AUTH_COOKIE = 'spruzhuk_auth';
 export const THEME_SWITCHING_ENABLED = false;
 
-const _initialCart = (() => {
+const _makeCartId = () => (
+    typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `cart_${Date.now()}_${Math.random().toString(36).slice(2)}`
+);
+
+const _decorateCartEntry = (item) => ({
+    id: item.id || _makeCartId(),
+    quantity: Number.isFinite(item.quantity) && item.quantity > 0 ? item.quantity : 1,
+    ...item,
+});
+
+// Cookie может хранить либо новый формат (массив объектов), либо старый
+// (один объект с productName на верхнем уровне). Поддерживаем обе схемы,
+// чтобы клиенты с уже сохранённой корзиной не потеряли её при обновлении.
+const _initialCartItems = (() => {
     try {
         const raw = getCookie(CART_COOKIE);
-        return raw ? JSON.parse(raw) : null;
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.map(_decorateCartEntry);
+        if (parsed && typeof parsed === 'object') return [_decorateCartEntry(parsed)];
+        return [];
     } catch {
-        return null;
+        return [];
     }
 })();
+
+const _persistCart = (items) => {
+    try {
+        if (!hasCookieConsent()) return;
+        if (!items || items.length === 0) {
+            deleteCookie(CART_COOKIE);
+            return;
+        }
+        setCookie(CART_COOKIE, JSON.stringify(items), 7);
+    } catch {
+        /* noop */
+    }
+};
 
 let _webglCanvas = null
 export const registerWebGLCanvas = (el) => { _webglCanvas = el }
@@ -149,8 +181,9 @@ export const useConfigurator = create(temporal((set, get) => ({
     language: 'ru',
     theme: 'dark',
 
-    cartItem: _initialCart,
-    cartRestoredFromCookie: !!_initialCart,
+    cartItems: _initialCartItems,
+    cartRestoredFromCookie: _initialCartItems.length > 0,
+    editingCartId: null,
     renderSnapshot: null,
 
     // --- ACTIONS ---
@@ -163,7 +196,7 @@ export const useConfigurator = create(temporal((set, get) => ({
         deleteCookie(AUTH_COOKIE);
         deleteCookie(CART_COOKIE);
         import('./api').then(({ clearMemoryToken }) => clearMemoryToken()).catch(() => {});
-        set({ currentUser: null, userRole: null, clientSubRole: 'PL', cartItem: null, cartRestoredFromCookie: false });
+        set({ currentUser: null, userRole: null, clientSubRole: 'PL', cartItems: [], cartRestoredFromCookie: false, editingCartId: null });
     },
 
     setLanguage: (lang) => set({ language: lang }),
@@ -178,14 +211,64 @@ export const useConfigurator = create(temporal((set, get) => ({
         return { theme: newTheme };
     }),
 
-    addToCart: (itemData) => {
-        if (hasCookieConsent()) setCookie(CART_COOKIE, JSON.stringify(itemData), 7);
-        set({ cartItem: itemData, cartRestoredFromCookie: false });
-    },
+    // Корзина — массив энтри. Каждый вызов конфигуратора добавляет новый
+    // дизайн. Если редактируется существующий (editingCartId), он
+    // обновляется по месту, чтобы UX правки не плодил дубли.
+    addToCart: (itemData) => set((state) => {
+        const editingId = state.editingCartId;
+        const decorated = _decorateCartEntry({
+            ...itemData,
+            id: editingId || itemData.id,
+            createdAt: itemData.createdAt || Date.now(),
+        });
+        let nextItems;
+        if (editingId && state.cartItems.some(i => i.id === editingId)) {
+            nextItems = state.cartItems.map(i => i.id === editingId ? decorated : i);
+        } else {
+            nextItems = [...state.cartItems, decorated];
+        }
+        _persistCart(nextItems);
+        return {
+            cartItems: nextItems,
+            cartRestoredFromCookie: false,
+            editingCartId: null,
+        };
+    }),
+    removeFromCart: (id) => set((state) => {
+        const nextItems = state.cartItems.filter(i => i.id !== id);
+        _persistCart(nextItems);
+        return {
+            cartItems: nextItems,
+            cartRestoredFromCookie: false,
+            editingCartId: state.editingCartId === id ? null : state.editingCartId,
+        };
+    }),
+    updateCartItem: (id, patch) => set((state) => {
+        const nextItems = state.cartItems.map(i => (
+            i.id === id ? _decorateCartEntry({ ...i, ...patch }) : i
+        ));
+        _persistCart(nextItems);
+        return { cartItems: nextItems };
+    }),
     clearCart: () => {
+        _persistCart([]);
         deleteCookie(CART_COOKIE);
-        set({ cartItem: null, cartRestoredFromCookie: false });
+        set({ cartItems: [], cartRestoredFromCookie: false, editingCartId: null });
     },
+    startEditingCartItem: (id) => set((state) => {
+        const item = state.cartItems.find(i => i.id === id);
+        if (!item) return state;
+        // Грузим конфиг товара в активные поля конструктора — applyRenderConfig
+        // мёрджит верхнеуровневые ключи; activeProduct/colors/logos сами лягут.
+        const { id: _id, createdAt: _ca, ...rest } = item;
+        return {
+            ...state,
+            ...rest,
+            innerCoverColor: rest.innerCoverColor ?? rest.coverColor ?? state.innerCoverColor,
+            editingCartId: id,
+        };
+    }),
+    cancelEditingCartItem: () => set({ editingCartId: null }),
     setRenderSnapshot: (url) => set({ renderSnapshot: url }),
 
     setProduct: (type) => set({ activeProduct: normalizeProduct(type) }),

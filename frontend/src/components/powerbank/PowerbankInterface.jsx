@@ -43,6 +43,7 @@ export const PowerbankInterface = ({ onFinish }) => {
             powerbankLogos,
             status: 'draft',
             rendersGenerated: 0,
+            renderUrl: snapshot || null,
         });
         onFinish();
     };
