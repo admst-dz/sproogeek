@@ -11,6 +11,7 @@ import {
     FloatingLogoSettings,
     LogoList,
     MiniDropdown,
+    MiniSegment,
     MiniToggle,
     RotationScrub,
     SettingGroup,
@@ -290,7 +291,7 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
                 <FileUploadChip label={t(language, 'addLogo')} onFile={(file) => addLogo(file, activeSide)} />
             </SettingRow>
             <SettingRow label={t(language, 'applicationSide') || t(language, 'sideFront')} inline={compact}>
-                <MiniDropdown
+                <MiniSegment
                     value={activeSide}
                     onChange={selectSide}
                     options={[

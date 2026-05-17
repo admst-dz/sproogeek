@@ -7,7 +7,7 @@ import {
     FileUploadChip,
     FloatingLogoSettings,
     LogoList,
-    MiniDropdown,
+    MiniSegment,
     RotationScrub,
     SettingGroup,
     SettingRow,
@@ -105,7 +105,7 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
                 <>
                     <div className="mt-3 space-y-3 xl:hidden">
                         <SettingRow label={t(language, 'applicationSide')}>
-                            <MiniDropdown
+                            <MiniSegment
                                 value={selected.side ?? 'outer'}
                                 onChange={setLogoSide}
                                 options={[
@@ -123,7 +123,7 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
                     </div>
                     <FloatingLogoSettings title={t(language, 'logoLabel')} subtitle={selected.filename}>
                     <SettingRow label={t(language, 'applicationSide')}>
-                        <MiniDropdown
+                        <MiniSegment
                             value={selected.side ?? 'outer'}
                             onChange={setLogoSide}
                             options={[
