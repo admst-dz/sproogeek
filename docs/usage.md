@@ -76,6 +76,7 @@ logs/events_YYYYMMDD_0002.csv
 | `ORDER_TYPE_FILE_MAX_BYTES` | максимальный размер одного JSON-файла |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | OAuth Google |
 | `YANDEX_CLIENT_ID`, `YANDEX_CLIENT_SECRET` | OAuth Yandex ID |
+| `VK_CLIENT_ID`, `VK_CLIENT_SECRET` | OAuth VK |
 | `KAFKA_BOOTSTRAP_SERVERS` | адрес Kafka |
 
 ## Безопасная эксплуатация

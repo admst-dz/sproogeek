@@ -23,6 +23,11 @@ async def get_user_by_yandex_id(db: AsyncSession, yandex_id: str) -> Optional[Us
     return result.scalar_one_or_none()
 
 
+async def get_user_by_vk_id(db: AsyncSession, vk_id: str) -> Optional[User]:
+    result = await db.execute(select(User).where(User.vk_id == vk_id))
+    return result.scalar_one_or_none()
+
+
 async def get_all_users(db: AsyncSession) -> list[User]:
     result = await db.execute(select(User).order_by(User.created_at.desc()))
     return result.scalars().all()

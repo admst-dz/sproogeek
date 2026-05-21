@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useConfigurator } from '../../store';
 import { t } from '../../i18n';
 
@@ -6,12 +6,7 @@ const COOKIE_CONSENT_KEY = 'spruzhuk_cookie_consent';
 
 export const CookieBanner = () => {
     const { language } = useConfigurator();
-    const [visible, setVisible] = useState(false);
-
-    useEffect(() => {
-        const stored = localStorage.getItem(COOKIE_CONSENT_KEY);
-        if (!stored) setVisible(true);
-    }, []);
+    const [visible, setVisible] = useState(() => !localStorage.getItem(COOKIE_CONSENT_KEY));
 
     const accept = () => {
         localStorage.setItem(COOKIE_CONSENT_KEY, 'accepted');

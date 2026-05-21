@@ -235,7 +235,16 @@ function OrderDetails({ order, onSaved, language }) {
             status: order.status || 'new',
             configuration: JSON.stringify(order.configuration || {}, null, 2),
         });
-    }, [order.id]);
+    }, [
+        order.configuration,
+        order.currency,
+        order.id,
+        order.product_name,
+        order.quantity,
+        order.status,
+        order.total_price,
+        order.user_email,
+    ]);
 
     const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
@@ -722,7 +731,14 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
             company_name: user.company_name || '',
             token_balance: user.token_balance ?? 0,
         });
-    }, [user.id]);
+    }, [
+        user.company_name,
+        user.display_name,
+        user.id,
+        user.role,
+        user.sub_role,
+        user.token_balance,
+    ]);
 
     const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
@@ -881,7 +897,8 @@ function UsersTab({ initialFilter = null }) {
         }
     };
 
-    useEffect(() => { reload(filter); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { reload(filter); }, []);
     useEffect(() => {
         if (initialFilter !== filter.role) {
             const next = { ...filter, role: initialFilter };

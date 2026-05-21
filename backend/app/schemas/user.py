@@ -53,6 +53,10 @@ class YandexAuthRequest(BaseModel):
     yandex_code: str
     redirect_uri: str = Field(..., max_length=2048)
 
+class VkAuthRequest(BaseModel):
+    vk_code: str
+    redirect_uri: str = Field(..., max_length=2048)
+
 class GoogleTokenResponse(BaseModel):
     access_token: str
     user: UserResponse

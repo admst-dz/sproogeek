@@ -622,7 +622,6 @@ const CartRow = ({ label, value }) => (
 );
 
 const CartItemCard = ({ item, language, onEdit, onRemove, onQuantityChange }) => {
-    const productType = item.activeProduct || item.type;
     const bodyColor = item.thermosBodyColor || item.powerbankBodyColor || item.coverColor;
 
     return (

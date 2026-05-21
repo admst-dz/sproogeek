@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-export const ConstructorDock = ({ title, tabs = [], activeTab, onTabChange, onSave, saveLabel, desktopTitleColumn = false, children }) => (
+export const ConstructorDock = ({ tabs = [], activeTab, onTabChange, onSave, saveLabel, children }) => (
     <div className="pointer-events-auto w-full h-full md:h-auto md:w-[min(1120px,calc(100vw-3rem))] lg:h-full lg:w-[min(400px,calc(100vw-2.5rem))] md:max-h-[64vh] lg:max-h-none flex flex-col items-center lg:items-stretch gap-4 lg:gap-3 font-zen text-white">
         <section className="w-full h-full md:h-auto lg:h-full md:max-h-[calc(64vh-54px)] lg:max-h-none min-h-0 flex flex-col rounded-t-[24px] md:rounded-[8px] lg:rounded-[12px] border border-white/35 bg-[#4b393c]/84 shadow-2xl backdrop-blur-xl overflow-hidden">
             {tabs.length > 0 && (
@@ -56,7 +56,7 @@ export const DockGrid = ({ children, cols = 'md:grid-cols-2', leading = null }) 
     </div>
 );
 
-export const DockTitleColumn = ({ title }) => (
+export const DockTitleColumn = () => (
     <div className="hidden md:flex min-w-0 flex-col justify-start px-0 py-0 pr-5 lg:pr-6" />
 );
 
@@ -117,26 +117,24 @@ export const MiniSegment = ({ options, value, onChange }) => (
     </div>
 );
 
-const DropdownPortal = ({ btnRef, open, onClose, children, itemCount = 4 }) => {
-    if (!open) return null;
-    const r = btnRef.current?.getBoundingClientRect();
-    if (!r) return null;
+const DropdownPortal = ({ anchorRect, open, onClose, children, itemCount = 4 }) => {
+    if (!open || !anchorRect) return null;
     const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
     const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
     const gap = 4;
     const viewportPadding = 12;
     const estimatedPanelHeight = Math.min(Math.max(itemCount * 34, 44), 260);
-    const spaceBelow = viewportHeight - r.bottom - viewportPadding;
-    const spaceAbove = r.top - viewportPadding;
+    const spaceBelow = viewportHeight - anchorRect.bottom - viewportPadding;
+    const spaceAbove = anchorRect.top - viewportPadding;
     const openUp = spaceBelow < estimatedPanelHeight && spaceAbove > spaceBelow;
     const maxHeight = Math.max(44, Math.min(estimatedPanelHeight, openUp ? spaceAbove - gap : spaceBelow - gap));
     const panelStyle = {
         position: 'fixed',
-        left: Math.min(r.left, viewportWidth - Math.max(r.width, 100) - viewportPadding),
-        width: Math.max(r.width, 100),
+        left: Math.min(anchorRect.left, viewportWidth - Math.max(anchorRect.width, 100) - viewportPadding),
+        width: Math.max(anchorRect.width, 100),
         maxHeight,
         zIndex: 9999,
-        ...(openUp ? { bottom: viewportHeight - r.top + gap } : { top: r.bottom + gap }),
+        ...(openUp ? { bottom: viewportHeight - anchorRect.top + gap } : { top: anchorRect.bottom + gap }),
     };
     return createPortal(
         <>
@@ -151,14 +149,23 @@ const DropdownPortal = ({ btnRef, open, onClose, children, itemCount = 4 }) => {
 
 export const MiniDropdown = ({ options, value, onChange }) => {
     const [open, setOpen] = useState(false);
+    const [anchorRect, setAnchorRect] = useState(null);
     const btnRef = useRef(null);
     const current = options.find(o => o.value === value);
+    const close = () => {
+        setOpen(false);
+        setAnchorRect(null);
+    };
+    const toggle = () => {
+        setAnchorRect(btnRef.current?.getBoundingClientRect() || null);
+        setOpen(o => !o);
+    };
     return (
         <div className="w-full">
             <button
                 ref={btnRef}
                 type="button"
-                onClick={() => setOpen(o => !o)}
+                onClick={toggle}
                 className="w-full flex items-center justify-between gap-2 rounded-[8px] border border-white/20 bg-white/8 px-2.5 py-1.5 text-[10px] md:text-[12px] font-black uppercase tracking-wider text-white transition hover:bg-white/14"
             >
                 <span className="truncate">{current?.label ?? value}</span>
@@ -166,12 +173,12 @@ export const MiniDropdown = ({ options, value, onChange }) => {
                     <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
             </button>
-            <DropdownPortal btnRef={btnRef} open={open} onClose={() => setOpen(false)} itemCount={options.length}>
+            <DropdownPortal anchorRect={anchorRect} open={open} onClose={close} itemCount={options.length}>
                 {options.map(opt => (
                     <button
                         key={opt.value}
                         type="button"
-                        onClick={() => { onChange(opt.value); setOpen(false); }}
+                        onClick={() => { onChange(opt.value); close(); }}
                         className={`w-full px-3 py-2 text-left text-[10px] md:text-[12px] font-black uppercase tracking-wider transition ${opt.value === value ? 'bg-[#fff9ec] text-[#191919]' : 'text-white/80 hover:bg-white/12'}`}
                     >
                         {opt.label}

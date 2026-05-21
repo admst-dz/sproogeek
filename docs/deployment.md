@@ -33,7 +33,12 @@ KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 SENTRY_DSN=<sentry-dsn>
 GOOGLE_CLIENT_ID=<google-client-id>
 GOOGLE_CLIENT_SECRET=<google-client-secret>
+VK_CLIENT_ID=<vk-app-id>
+VK_CLIENT_SECRET=<vk-secure-key>
 ```
+
+Для VK в поле доверенного Redirect URL укажите URL фронтенда с путём
+`/auth/vk/callback`, например `https://sproogeek.com/auth/vk/callback`.
 
 `SECRET_KEY` должен быть длинным случайным значением. При смене ключа старые JWT станут недействительными.
 
@@ -158,4 +163,3 @@ GET /api/health
 6. создать тестовый заказ.
 
 Если миграция базы несовместима назад, rollback должен выполняться по отдельному плану миграций.
-

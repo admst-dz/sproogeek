@@ -3,6 +3,8 @@ import { useProgress } from '@react-three/drei';
 import Lottie from 'lottie-react';
 import animationData from '../../assets/loader/loader.json';
 
+/* eslint-disable react-refresh/only-export-components */
+
 const clampProgress = (value) => Math.max(0, Math.min(100, Math.round(value || 0)));
 const LOGO_ANIMATION_MS = 4000;
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -13,9 +15,11 @@ export function useLoaderCompletionGate(loading, duration = LOGO_ANIMATION_MS) {
 
     useEffect(() => {
         if (loading) {
-            setStartedAt(now());
-            setVisible(true);
-            return undefined;
+            const timeout = window.setTimeout(() => {
+                setStartedAt(now());
+                setVisible(true);
+            }, 0);
+            return () => window.clearTimeout(timeout);
         }
 
         if (!visible) return undefined;
@@ -64,19 +68,24 @@ export function SceneLoadingOverlay({ label, compact = false }) {
 
     useEffect(() => {
         if (active) {
-            if (!visible) setStartedAt(now());
-            setVisible(true);
-            setDisplayProgress(clampProgress(progress));
-            return undefined;
+            const timeout = window.setTimeout(() => {
+                if (!visible) setStartedAt(now());
+                setVisible(true);
+                setDisplayProgress(clampProgress(progress));
+            }, 0);
+            return () => window.clearTimeout(timeout);
         }
 
         if (visible) {
-            setDisplayProgress(100);
             const elapsed = Math.max(0, now() - startedAt);
             const remainingCycle = LOGO_ANIMATION_MS - (elapsed % LOGO_ANIMATION_MS);
             const delay = Math.max(520, remainingCycle);
-            const timeout = window.setTimeout(() => setVisible(false), delay);
-            return () => window.clearTimeout(timeout);
+            const progressTimeout = window.setTimeout(() => setDisplayProgress(100), 0);
+            const hideTimeout = window.setTimeout(() => setVisible(false), delay);
+            return () => {
+                window.clearTimeout(progressTimeout);
+                window.clearTimeout(hideTimeout);
+            };
         }
 
         return undefined;

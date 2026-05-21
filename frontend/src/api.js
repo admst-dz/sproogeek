@@ -28,6 +28,9 @@ export const authApi = {
     yandexAuthorizeUrl: (redirect_uri, state) =>
         apiClient.get('/auth/yandex/authorize-url', { params: { redirect_uri, state } }),
     yandex: (yandex_code, redirect_uri) => apiClient.post('/auth/yandex', { yandex_code, redirect_uri }),
+    vkAuthorizeUrl: (redirect_uri, state) =>
+        apiClient.get('/auth/vk/authorize-url', { params: { redirect_uri, state } }),
+    vk: (vk_code, redirect_uri) => apiClient.post('/auth/vk', { vk_code, redirect_uri }),
     adminBackdoor: (data) => apiClient.post('/auth/admin-backdoor', data),
     me: () => apiClient.get('/auth/me'),
     updateRole: (role, sub_role) => apiClient.patch('/auth/me/role', { role, sub_role }),
@@ -186,6 +189,17 @@ export const getYandexAuthorizeUrl = async (redirectUri, state) => {
 
 export const loginWithYandexCode = async (yandexCode, redirectUri) => {
     const { data } = await authApi.yandex(yandexCode, redirectUri);
+    saveAuthToken(data.access_token);
+    return data;
+};
+
+export const getVkAuthorizeUrl = async (redirectUri, state) => {
+    const { data } = await authApi.vkAuthorizeUrl(redirectUri, state);
+    return data.authorize_url;
+};
+
+export const loginWithVkCode = async (vkCode, redirectUri) => {
+    const { data } = await authApi.vk(vkCode, redirectUri);
     saveAuthToken(data.access_token);
     return data;
 };

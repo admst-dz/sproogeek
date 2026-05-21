@@ -19,6 +19,12 @@ from app.core.yandex_verify import (
     extract_yandex_avatar_url,
     extract_yandex_email,
 )
+from app.core.vk_verify import (
+    build_vk_authorize_url,
+    exchange_vk_code,
+    extract_vk_display_name,
+    extract_vk_email,
+)
 from app.crud import user as crud_user
 from app.database import get_db
 from app.models.user import User
@@ -28,6 +34,7 @@ from app.schemas.user import (
     TokenResponse,
     UserLogin,
     UserRegister,
+    VkAuthRequest,
     UserResponse,
     YandexAuthRequest,
 )
@@ -281,6 +288,92 @@ async def yandex_auth(request: Request, body: YandexAuthRequest, db: AsyncSessio
         status_code=200,
         request_id=request_id(request),
         details={"yandex_id": yandex_id},
+    )
+    return {"access_token": token, "user": user, "needs_role_setup": needs_role_setup}
+
+
+@router.get("/vk/authorize-url")
+async def vk_authorize_url(
+    redirect_uri: str = Query(..., max_length=2048),
+    state: str = Query(..., min_length=16, max_length=1024),
+):
+    try:
+        return {"authorize_url": build_vk_authorize_url(redirect_uri, state)}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="VK OAuth is not configured") from exc
+
+
+@router.post("/vk", response_model=GoogleTokenResponse)
+@limiter.limit("10/minute")
+async def vk_auth(request: Request, body: VkAuthRequest, db: AsyncSession = Depends(get_db)):
+    try:
+        payload = await exchange_vk_code(body.vk_code, body.redirect_uri)
+    except Exception as exc:
+        event_logger.log(
+            "AUTH_VK_FAILED",
+            "VK authentication failed",
+            direction="user->backend",
+            method=request.method,
+            path=request.url.path,
+            status_code=401,
+            request_id=request_id(request),
+            details={"error_type": type(exc).__name__},
+        )
+        raise HTTPException(status_code=401, detail="Invalid VK token") from exc
+
+    vk_id = str(payload.get("id") or "").strip()
+    email = extract_vk_email(payload)
+    if not vk_id:
+        raise HTTPException(status_code=400, detail="VK ID not found in profile")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email not found in VK profile")
+
+    user = await crud_user.get_user_by_vk_id(db, vk_id)
+    if not user:
+        user = await crud_user.get_user_by_email(db, email)
+
+    profile_updates = {
+        "vk_id": vk_id,
+        "vk_screen_name": payload.get("screen_name") or "",
+        "vk_avatar_url": payload.get("photo_200") or "",
+        "vk_profile": payload,
+    }
+
+    if not user:
+        user = User(
+            id=str(uuid.uuid4()),
+            email=email,
+            display_name=extract_vk_display_name(payload),
+            role="client",
+            sub_role=None,
+            token_balance=0.0,
+            **profile_updates,
+        )
+        db.add(user)
+    else:
+        for key, value in profile_updates.items():
+            setattr(user, key, value)
+        if not user.display_name:
+            user.display_name = extract_vk_display_name(payload)
+        db.add(user)
+
+    await db.commit()
+    await db.refresh(user)
+
+    needs_role_setup = user.role == "client" and user.sub_role is None
+    token = create_access_token(user.id, user.email, user.role)
+    event_logger.log(
+        "AUTH_VK_COMPLETED",
+        "User authenticated through VK",
+        direction="user->backend",
+        actor_type=user.role,
+        actor_id=user.id,
+        actor_email=user.email,
+        method=request.method,
+        path=request.url.path,
+        status_code=200,
+        request_id=request_id(request),
+        details={"vk_id": vk_id},
     )
     return {"access_token": token, "user": user, "needs_role_setup": needs_role_setup}
 
