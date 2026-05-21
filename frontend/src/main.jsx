@@ -4,11 +4,14 @@ import './index.css'
 import App from './App.jsx'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import { YandexOAuthCallback } from './components/auth/YandexOAuthCallback.jsx'
+import { VkOAuthCallback } from './components/auth/VkOAuthCallback.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     {window.location.pathname === '/auth/yandex/callback' ? (
       <YandexOAuthCallback />
+    ) : window.location.pathname === '/auth/vk/callback' ? (
+      <VkOAuthCallback />
     ) : (
       <GoogleOAuthProvider clientId="676254181092-tuo565l0o1ucu5e5f3cnh9o3ehvk3f8c.apps.googleusercontent.com">
         <App />

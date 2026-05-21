@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import {
+    getVkAuthorizeUrl,
     getYandexAuthorizeUrl,
     loginUser,
     loginWithGoogleCode,
+    loginWithVkCode,
     loginWithYandexCode,
     registerUser,
     updateUserRole,
@@ -13,10 +15,17 @@ import { t } from '../../i18n';
 
 const DEALER_ACCOUNT_TYPE = 'TP';
 const YANDEX_STATE_KEY = 'spruzhuk_yandex_oauth_state';
+const VK_STATE_KEY = 'spruzhuk_vk_oauth_state';
 
 const YandexIcon = () => (
     <span className="w-[22px] h-[22px] rounded-[7px] bg-[#FC3F1D] flex items-center justify-center text-white font-black text-[15px] leading-none shadow-[0_6px_18px_rgba(252,63,29,0.3)]">
         Я
+    </span>
+);
+
+const VkIcon = () => (
+    <span className="w-[22px] h-[22px] rounded-[7px] bg-[#0077FF] flex items-center justify-center text-white font-black text-[13px] leading-none shadow-[0_6px_18px_rgba(0,119,255,0.32)]">
+        VK
     </span>
 );
 
@@ -52,6 +61,9 @@ export const AuthModal = ({ onClose, onRoleCreated }) => {
     const yandexPopupRef = useRef(null);
     const yandexPopupTimerRef = useRef(null);
     const yandexDoneRef = useRef(false);
+    const vkPopupRef = useRef(null);
+    const vkPopupTimerRef = useRef(null);
+    const vkDoneRef = useRef(false);
 
     const completeSocialLogin = (data) => {
         if (data.needs_role_setup) {
@@ -111,6 +123,50 @@ export const AuthModal = ({ onClose, onRoleCreated }) => {
         return () => {
             window.removeEventListener('message', handleYandexMessage);
             window.clearInterval(yandexPopupTimerRef.current);
+        };
+    }, [language]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        const handleVkMessage = async (event) => {
+            if (event.origin !== window.location.origin) return;
+            const payload = event.data || {};
+            if (payload.type !== 'spruzhuk:vk-oauth') return;
+
+            vkDoneRef.current = true;
+            window.clearInterval(vkPopupTimerRef.current);
+            vkPopupRef.current?.close?.();
+
+            const expectedState = sessionStorage.getItem(VK_STATE_KEY);
+            sessionStorage.removeItem(VK_STATE_KEY);
+
+            if (!expectedState || payload.state !== expectedState) {
+                setError(t(language, 'authErrVk'));
+                setLoading(false);
+                return;
+            }
+            if (payload.error || !payload.code) {
+                setError(t(language, 'authErrVkClosed'));
+                setLoading(false);
+                return;
+            }
+
+            setError(null);
+            setLoading(true);
+            try {
+                const redirectUri = `${window.location.origin}/auth/vk/callback`;
+                const data = await loginWithVkCode(payload.code, redirectUri);
+                completeSocialLogin(data);
+            } catch (err) {
+                console.error('[VK] Backend exchange failed:', err?.response?.data ?? err);
+                setError(t(language, 'authErrVk'));
+                setLoading(false);
+            }
+        };
+
+        window.addEventListener('message', handleVkMessage);
+        return () => {
+            window.removeEventListener('message', handleVkMessage);
+            window.clearInterval(vkPopupTimerRef.current);
         };
     }, [language]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -225,6 +281,52 @@ export const AuthModal = ({ onClose, onRoleCreated }) => {
         }
     };
 
+    const vkLogin = async () => {
+        setError(null);
+        setLoading(true);
+        vkDoneRef.current = false;
+
+        const state = makeOauthState();
+        const redirectUri = `${window.location.origin}/auth/vk/callback`;
+        sessionStorage.setItem(VK_STATE_KEY, state);
+
+        const popup = window.open(
+            'about:blank',
+            'spruzhuk_vk_oauth',
+            'width=520,height=680,menubar=no,toolbar=no,location=no,status=no'
+        );
+        if (!popup) {
+            sessionStorage.removeItem(VK_STATE_KEY);
+            setError(t(language, 'authErrVkClosed'));
+            setLoading(false);
+            return;
+        }
+
+        vkPopupRef.current = popup;
+
+        try {
+            const authorizeUrl = await getVkAuthorizeUrl(redirectUri, state);
+            popup.location.href = authorizeUrl;
+
+            vkPopupTimerRef.current = window.setInterval(() => {
+                if (popup.closed) {
+                    window.clearInterval(vkPopupTimerRef.current);
+                    if (!vkDoneRef.current) {
+                        sessionStorage.removeItem(VK_STATE_KEY);
+                        setError(t(language, 'authErrVkClosed'));
+                        setLoading(false);
+                    }
+                }
+            }, 500);
+        } catch (err) {
+            console.error('[VK] Failed to fetch authorize URL:', err);
+            popup.close();
+            sessionStorage.removeItem(VK_STATE_KEY);
+            setError(t(language, 'authErrVk'));
+            setLoading(false);
+        }
+    };
+
     const selectRole = (role) => {
         if (role === 'dealer') {
             finishRegistration(role, DEALER_ACCOUNT_TYPE);
@@ -297,6 +399,15 @@ export const AuthModal = ({ onClose, onRoleCreated }) => {
                         </div>
 
                         <div className="w-full grid gap-3">
+                            <button
+                                onClick={vkLogin}
+                                disabled={loading}
+                                className="w-full py-3.5 bg-[#0077FF] text-white border border-[#0077FF] rounded-[16px] font-bold text-sm flex items-center justify-center gap-3 hover:bg-[#0b6fe5] transition-all active:scale-95 disabled:opacity-50 shadow-[0_16px_36px_rgba(0,119,255,0.25)]"
+                            >
+                                <VkIcon />
+                                {t(language, 'authVkBtn')}
+                            </button>
+
                             <button
                                 onClick={yandexLogin}
                                 disabled={loading}

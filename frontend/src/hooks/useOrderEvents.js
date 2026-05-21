@@ -22,7 +22,10 @@ async function fetchEventToken() {
  */
 export function useOrderEvents(onEvent, { enabled = true } = {}) {
     const handlerRef = useRef(onEvent);
-    handlerRef.current = onEvent;
+
+    useEffect(() => {
+        handlerRef.current = onEvent;
+    }, [onEvent]);
 
     useEffect(() => {
         if (!enabled) return undefined;

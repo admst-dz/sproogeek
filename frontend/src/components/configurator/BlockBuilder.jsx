@@ -35,7 +35,7 @@ export const BlockBuilder = () => {
         return () => { cancelled = true; };
     }, []);
 
-    const templates = manifest?.templates || [];
+    const templates = useMemo(() => manifest?.templates || [], [manifest]);
     const templatesLocked = true;
     const byId = useMemo(() => {
         const map = new Map();

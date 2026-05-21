@@ -89,6 +89,7 @@ function CameraReset({ activeProduct }) {
 
     useEffect(() => {
         if (ORBIT_PRODUCTS.has(prevProduct.current) && !ORBIT_PRODUCTS.has(activeProduct)) {
+            // eslint-disable-next-line react-hooks/immutability
             camera.zoom = 1
             camera.position.set(0, 0, 4.5)
             camera.lookAt(0, 0, 0)
@@ -105,6 +106,7 @@ function CameraUpdater({ targetZoom }) {
 
     useFrame(() => {
         if (Math.abs(camera.zoom - targetZoom) < 0.001) return
+        // eslint-disable-next-line react-hooks/immutability
         camera.zoom = targetZoom
         camera.updateProjectionMatrix()
     })
@@ -126,6 +128,7 @@ function OrbitCameraRig({ activeProduct, controlsRef, isMobile, zoomLevel }) {
     useEffect(() => {
         if (!ORBIT_PRODUCTS.has(activeProduct)) return
 
+        // eslint-disable-next-line react-hooks/immutability
         camera.zoom = 1
         camera.position.copy(target).addScaledVector(defaultDirection, desiredDistance)
         camera.lookAt(target)
@@ -139,7 +142,7 @@ function OrbitCameraRig({ activeProduct, controlsRef, isMobile, zoomLevel }) {
             controls.update()
             controls.saveState()
         }
-    }, [activeProduct, isMobile])
+    }, [activeProduct, camera, config.maxDistance, config.minDistance, controlsRef, defaultDirection, desiredDistance, target])
 
     useEffect(() => {
         const controls = controlsRef.current

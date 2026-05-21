@@ -24,8 +24,11 @@ export function BlockPDFPreview({ pattern }) {
         if (!pdfUrl) return;
 
         let cancelled = false;
-        setLoading(true);
-        setError(false);
+        window.setTimeout(() => {
+            if (cancelled) return;
+            setLoading(true);
+            setError(false);
+        }, 0);
 
         (async () => {
             try {

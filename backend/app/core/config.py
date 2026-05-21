@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     google_client_secret: str = Field("", alias="GOOGLE_CLIENT_SECRET")
     yandex_client_id: str = Field("", alias="YANDEX_CLIENT_ID")
     yandex_client_secret: str = Field("", alias="YANDEX_CLIENT_SECRET")
+    vk_client_id: str = Field("", alias="VK_CLIENT_ID")
+    vk_client_secret: str = Field("", alias="VK_CLIENT_SECRET")
 
     kafka_bootstrap_servers: str = Field("", alias="KAFKA_BOOTSTRAP_SERVERS")
 
