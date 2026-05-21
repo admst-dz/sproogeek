@@ -12,6 +12,8 @@ import { Powerbank } from '../powerbank/Powerbank';
 import { ConfiguratorProductMenu } from '../home/Home';
 import { getUserDisplayName, getUserSecondaryLabel } from '../../utils/user';
 import { SceneLoadingOverlay } from '../shared/VibeLoader';
+import { SiteFooter } from '../shared/SiteFooter';
+import { CLIENT_ORDER_STAGE_INDEX, CLIENT_ORDER_STAGES } from '../../config/orderStages';
 
 const TabBtn = ({ active, children, onClick }) => (
     <button
@@ -26,22 +28,9 @@ const TabBtn = ({ active, children, onClick }) => (
     </button>
 );
 
-const ORDER_STAGE_KEYS = [
-    { key: 'new',         labelKey: 'stageNew',        icon: '🕐' },
-    { key: 'awaiting_signature', labelKey: 'stageAwaitingSignature', icon: '✍️' },
-    { key: 'awaiting_quotes', labelKey: 'stageAwaitingQuotes', icon: '₽' },
-    { key: 'quotes_ready', labelKey: 'stageQuotesReady', icon: '₽' },
-    { key: 'processing',  labelKey: 'stageProcessing',  icon: '⚙️' },
-    { key: 'production',  labelKey: 'stageProduction',  icon: '🏭' },
-    { key: 'in_delivery', labelKey: 'stageDelivery',    icon: '🚚' },
-    { key: 'done',        labelKey: 'stageDone',        icon: '✅' },
-];
-
-const STAGE_INDEX = Object.fromEntries(ORDER_STAGE_KEYS.map((s, i) => [s.key, i]));
-
 const OrderProgressBar = ({ status, stageHistory = [], language }) => {
-    const currentIdx = STAGE_INDEX[status] ?? 0;
-    const ORDER_STAGES = ORDER_STAGE_KEYS.map(s => ({ ...s, label: t(language, s.labelKey) }));
+    const currentIdx = CLIENT_ORDER_STAGE_INDEX[status] ?? 0;
+    const orderStages = CLIENT_ORDER_STAGES.map(s => ({ ...s, label: t(language, s.labelKey) }));
     const historyMap = {};
     stageHistory.forEach(h => { historyMap[h.status] = h; });
 
@@ -51,7 +40,7 @@ const OrderProgressBar = ({ status, stageHistory = [], language }) => {
             <div className="relative flex items-start">
                 {/* Connecting line */}
                 <div className="absolute top-4 left-0 right-0 h-px bg-white/10 mx-8" style={{ zIndex: 0 }} />
-                {ORDER_STAGES.map((stage, idx) => {
+                {orderStages.map((stage, idx) => {
                     const isDone = idx < currentIdx;
                     const isCurrent = idx === currentIdx;
                     const entry = historyMap[stage.key];
@@ -596,6 +585,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                         </div>
                     </div>
                 )}
+                <SiteFooter compact className="mt-10 -mx-4 sm:-mx-6" />
             </main>
 
             {/* SUCCESS TOAST */}

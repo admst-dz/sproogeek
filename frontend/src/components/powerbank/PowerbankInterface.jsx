@@ -14,10 +14,7 @@ import {
     SizeSlider,
     TransformPad,
 } from '../configurator/ConstructorDock';
-
-const palette = [
-    { bg: '#75787B', name: 'Серебристый' },
-];
+import { POWERBANK_COLOR_PALETTE } from '../../config/productPalettes';
 
 export const PowerbankInterface = ({ onFinish }) => {
     const {
@@ -55,7 +52,7 @@ export const PowerbankInterface = ({ onFinish }) => {
             >
                 <SettingGroup title={t(language, 'bodyColor')}>
                     <SettingRow label={t(language, 'bodyColor')}>
-                        <ColorDropdown colors={palette} currentColor={powerbankBodyColor} onSelect={(c) => setColor('powerbankBody', c)} />
+                        <ColorDropdown colors={POWERBANK_COLOR_PALETTE} currentColor={powerbankBodyColor} onSelect={(c) => setColor('powerbankBody', c)} />
                     </SettingRow>
                 </SettingGroup>
 

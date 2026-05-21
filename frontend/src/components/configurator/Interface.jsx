@@ -24,21 +24,11 @@ import patternLined  from '../../assets/icons/pattern-lined.svg';
 import patternTlined from '../../assets/icons/pattern-tlined.svg';
 import patternGrid   from '../../assets/icons/pattern-grid.svg';
 import patternDotted from '../../assets/icons/pattern-dotted.svg';
+import { NOTEBOOK_COLOR_PALETTE } from '../../config/productPalettes';
 
 const PATTERN_IDS = ['blank', 'lined', 'tlined', 'grid', 'dotted'];
 const PATTERN_ICONS = { blank: patternBlank, lined: patternLined, tlined: patternTlined, grid: patternGrid, dotted: patternDotted };
 const PATTERN_KEYS = { blank: 'patternBlank', lined: 'patternLined', tlined: 'patternTLined', grid: 'patternGrid', dotted: 'patternDotted' };
-
-const palette = [
-    { name: 'Yellow', bg: '#FDD835' },
-    { name: 'Red', bg: '#D32F2F' },
-    { name: 'Green', bg: '#43A047' },
-    { name: 'Black', bg: '#1a1a1a' },
-    { name: 'Blue', bg: '#1565C0' },
-    { name: 'White', bg: '#ffffff' },
-    { name: 'Pink', bg: '#EC407A' },
-    { name: 'Silver', bg: '#C0C0C0' },
-];
 
 export const Interface = ({ onFinish }) => {
     const [tab, setTab] = useState('cover');
@@ -155,16 +145,16 @@ export const Interface = ({ onFinish }) => {
 
                     <SettingGroup title={bindingCaps.hasInnerCoverColor ? t(language, 'coverColorsLabel') : t(language, 'coverColorLabel')} compact>
                         <SettingRow label={bindingCaps.hasInnerCoverColor ? t(language, 'outerCoverColorLabel') : t(language, 'coverColorLabel')}>
-                            <ColorDropdown colors={palette} currentColor={coverColor} onSelect={(c) => setColor('cover', c)} />
+                            <ColorDropdown colors={NOTEBOOK_COLOR_PALETTE} currentColor={coverColor} onSelect={(c) => setColor('cover', c)} />
                         </SettingRow>
                         {bindingCaps.hasInnerCoverColor && (
                             <SettingRow label={t(language, 'innerCoverColorLabel')}>
-                                <ColorDropdown colors={palette} currentColor={innerCoverColor} onSelect={(c) => setColor('innerCover', c)} />
+                                <ColorDropdown colors={NOTEBOOK_COLOR_PALETTE} currentColor={innerCoverColor} onSelect={(c) => setColor('innerCover', c)} />
                             </SettingRow>
                         )}
                         {bindingCaps.hasStitchColor && (
                             <SettingRow label={t(language, 'threadColorLabel')}>
-                                <ColorDropdown colors={palette} currentColor={stitchColor} onSelect={(c) => setColor('stitch', c)} />
+                                <ColorDropdown colors={NOTEBOOK_COLOR_PALETTE} currentColor={stitchColor} onSelect={(c) => setColor('stitch', c)} />
                             </SettingRow>
                         )}
                         {bindingCaps.hasElastic && (
@@ -174,14 +164,14 @@ export const Interface = ({ onFinish }) => {
                                 </SettingRow>
                                 {hasElastic && (
                                     <SettingRow label={t(language, 'elasticColorLabel')}>
-                                        <ColorDropdown colors={palette} currentColor={elasticColor} onSelect={(c) => setColor('elastic', c)} />
+                                        <ColorDropdown colors={NOTEBOOK_COLOR_PALETTE} currentColor={elasticColor} onSelect={(c) => setColor('elastic', c)} />
                                     </SettingRow>
                                 )}
                             </>
                         )}
                         {bindingCaps.hasSpiralColor && (
                             <SettingRow label={t(language, 'spiralColorLabel')}>
-                                <ColorDropdown colors={palette} currentColor={spiralColor} onSelect={(c) => setColor('spiral', c)} />
+                                <ColorDropdown colors={NOTEBOOK_COLOR_PALETTE} currentColor={spiralColor} onSelect={(c) => setColor('spiral', c)} />
                             </SettingRow>
                         )}
                     </SettingGroup>
@@ -351,7 +341,7 @@ const GlassDropdown = ({ label, currentValue, children, isColor = false, colorVa
 const ColorGlassList = ({ label, currentColor, onSelect }) => (
     <GlassDropdown label={label} isColor={true} colorValue={currentColor}>
         <div className="flex flex-col gap-1">
-            {palette.map((c) => (
+            {NOTEBOOK_COLOR_PALETTE.map((c) => (
                 <button key={c.name} onClick={() => onSelect(c.bg)} className={`p-3 rounded-[6px] flex items-center gap-3 transition-colors ${currentColor === c.bg ? 'bg-white/30 shadow-sm border border-white/20' : 'hover:bg-white/10'}`}>
                     <div className="w-8 h-8 rounded-full border border-white/20 shadow-sm" style={{backgroundColor: c.bg}} />
                     <span className="font-bold text-sm">{c.name}</span>

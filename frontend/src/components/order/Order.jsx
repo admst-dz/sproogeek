@@ -8,6 +8,7 @@ import { Notebook } from '../shared/Notebook';
 import { Thermos } from '../thermos/Thermos';
 import { Powerbank } from '../powerbank/Powerbank';
 import { SceneLoadingOverlay } from '../shared/VibeLoader';
+import { SiteFooter } from '../shared/SiteFooter';
 
 export const Order = ({ onBack, onSuccess }) => {
     const {
@@ -277,6 +278,7 @@ export const Order = ({ onBack, onSuccess }) => {
                     </div>
                 </div>
             </div>
+            <SiteFooter compact />
         </div>
     );
 }

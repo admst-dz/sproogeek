@@ -6,16 +6,8 @@ import { downloadBlob } from '../../utils/download';
 import { getUserSecondaryLabel } from '../../utils/user';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 import { OrderQrTile } from '../shared/OrderQrTile';
-
-const PRODUCTION_STAGES = [
-    { key: 'awaiting_quotes', textKey: 'statusAwaitingQuotes', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30', icon: '₽' },
-    { key: 'quotes_ready', textKey: 'statusQuotesReady', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', icon: '₽' },
-    { key: 'processing',  textKey: 'statusProcessing',  color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',                icon: '⚙️' },
-    { key: 'production',  textKey: 'statusProduction',  color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',          icon: '🏭' },
-    { key: 'in_delivery', textKey: 'statusDelivery',    color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',          icon: '🚚' },
-    { key: 'done',        textKey: 'statusDone',        color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',       icon: '✅' },
-];
-const STAGE_INDEX = Object.fromEntries(PRODUCTION_STAGES.map((s, i) => [s.key, i]));
+import { SiteFooter } from '../shared/SiteFooter';
+import { PRODUCTION_STAGE_INDEX, PRODUCTION_STAGES } from '../../config/orderStages';
 
 const StatusBadge = ({ status, language }) => {
     const s = PRODUCTION_STAGES.find(x => x.key === status) || { textKey: null, color: 'bg-white/10 text-gray-400 border-white/10' };
@@ -32,7 +24,7 @@ const StatCard = ({ label, value, accent }) => (
 );
 
 const ProgressTrack = ({ status, stageHistory = [], language = 'ru' }) => {
-    const currentIdx = STAGE_INDEX[status] ?? 0;
+    const currentIdx = PRODUCTION_STAGE_INDEX[status] ?? 0;
     const historyMap = {};
     stageHistory.forEach(h => { historyMap[h.status] = h; });
     return (
@@ -382,7 +374,7 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
                             const isExpanded = expanded.has(orderId);
                             const isUpdating = updating === orderId;
                             const isTcBusy = techcardBusy === orderId;
-                            const currentStageIdx = STAGE_INDEX[order.status] ?? 0;
+                            const currentStageIdx = PRODUCTION_STAGE_INDEX[order.status] ?? 0;
                             const isQuoteStage = order.status === 'awaiting_quotes' || order.status === 'quotes_ready';
                             const isSelectedManufacturer = order.selected_manufacturer_id === currentUser?.id;
                             const myQuote = (order.manufacturer_quotes || []).find(q => q.manufacturer_id === currentUser?.id);
@@ -474,7 +466,7 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
                                                             <div className="flex flex-wrap gap-2">
                                                                 {PRODUCTION_ONLY_STAGES.map((stage) => {
                                                                     const isCurrent = stage.key === order.status;
-                                                                    const stageIdx = STAGE_INDEX[stage.key];
+                                                                    const stageIdx = PRODUCTION_STAGE_INDEX[stage.key];
                                                                     const isPast = stageIdx < currentStageIdx;
                                                                     return (
                                                                         <button
@@ -571,6 +563,7 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
                 </div>
                 </>
                 )}
+                <SiteFooter compact className="mt-10 -mx-4 md:-mx-8" />
             </main>
 
             {/* MOBILE BOTTOM NAV */}
