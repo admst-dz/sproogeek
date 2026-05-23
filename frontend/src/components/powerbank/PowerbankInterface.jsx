@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useConfigurator, captureRender } from '../../store';
 import { t } from '../../i18n';
 import {
@@ -15,6 +16,7 @@ import {
     TransformPad,
 } from '../configurator/ConstructorDock';
 import { POWERBANK_COLOR_PALETTE } from '../../config/productPalettes';
+import { GuestApprovalModal } from '../shared/GuestApprovalModal';
 
 export const PowerbankInterface = ({ onFinish }) => {
     const {
@@ -27,26 +29,44 @@ export const PowerbankInterface = ({ onFinish }) => {
         addToCart, setRenderSnapshot, language,
     } = useConfigurator();
 
+    const [approvalOpen, setApprovalOpen] = useState(false);
+    const [approvalSnapshot, setApprovalSnapshot] = useState(null);
+
+    const buildPowerbankCartItem = (snapshot) => ({
+        productName: t(language, 'powerbank'),
+        design: `${t(language, 'bodyColor')}: ${powerbankBodyColor}`,
+        priceTK: 80,
+        priceBYN: 3200,
+        activeProduct: 'powerbank',
+        powerbankBodyColor,
+        powerbankLogos,
+        status: 'draft',
+        rendersGenerated: 0,
+        renderUrl: snapshot || null,
+    });
+
     const handleAddToCart = () => {
         const snapshot = captureRender();
         if (snapshot) setRenderSnapshot(snapshot);
-        addToCart({
-            productName: t(language, 'powerbank'),
-            design: `${t(language, 'bodyColor')}: ${powerbankBodyColor}`,
-            priceTK: 80,
-            priceBYN: 3200,
-            activeProduct: 'powerbank',
-            powerbankBodyColor,
-            powerbankLogos,
-            status: 'draft',
-            rendersGenerated: 0,
-            renderUrl: snapshot || null,
-        });
+        addToCart(buildPowerbankCartItem(snapshot));
         onFinish();
     };
 
+    const handleEmailApproval = () => {
+        const snapshot = captureRender();
+        if (snapshot) setRenderSnapshot(snapshot);
+        setApprovalSnapshot(snapshot || null);
+        setApprovalOpen(true);
+    };
+
     return (
-        <ConstructorDock title={t(language, 'powerbankTitle')} onSave={handleAddToCart} saveLabel={t(language, 'placeOrder')}>
+        <ConstructorDock
+            title={t(language, 'powerbankTitle')}
+            onSave={handleAddToCart}
+            saveLabel={t(language, 'placeOrder')}
+            onEmailApproval={handleEmailApproval}
+            emailApprovalLabel={t(language, 'emailApproval')}
+        >
             <DockGrid
                 cols="md:grid-cols-2"
             >
@@ -79,6 +99,15 @@ export const PowerbankInterface = ({ onFinish }) => {
                     </SettingRow>
                 </SettingGroup>
             </DockGrid>
+
+            <GuestApprovalModal
+                isOpen={approvalOpen}
+                onClose={() => setApprovalOpen(false)}
+                renderDataURL={approvalSnapshot}
+                productName={t(language, 'powerbank')}
+                configuration={{ productConfig: buildPowerbankCartItem(approvalSnapshot) }}
+                quantity={1}
+            />
         </ConstructorDock>
     );
 };

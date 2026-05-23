@@ -316,4 +316,12 @@ export const saveOrderType = async (typeId, data) => {
     return response.data?.data || {};
 };
 
+// Гостевой запрос согласования по email (без авторизации).
+// Возвращает { status, guest_order_id, pdf_bytes } либо бросает исключение
+// с понятным сообщением (server detail / network error).
+export const requestGuestApproval = async (payload) => {
+    const { data } = await apiClient.post('/approval/guest', payload);
+    return data;
+};
+
 export default apiClient;

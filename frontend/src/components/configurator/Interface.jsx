@@ -25,6 +25,7 @@ import patternTlined from '../../assets/icons/pattern-tlined.svg';
 import patternGrid   from '../../assets/icons/pattern-grid.svg';
 import patternDotted from '../../assets/icons/pattern-dotted.svg';
 import { NOTEBOOK_COLOR_PALETTE } from '../../config/productPalettes';
+import { GuestApprovalModal } from '../shared/GuestApprovalModal';
 
 const PATTERN_IDS = ['blank', 'lined', 'tlined', 'grid', 'dotted'];
 const PATTERN_ICONS = { blank: patternBlank, lined: patternLined, tlined: patternTlined, grid: patternGrid, dotted: patternDotted };
@@ -65,16 +66,17 @@ export const Interface = ({ onFinish }) => {
 
     const bindingCaps = getNotebookBindingCapabilities(bindingType);
 
-    const handleAddToCart = () => {
-        const snapshot = captureRender();
-        if (snapshot) setRenderSnapshot(snapshot);
+    const [approvalOpen, setApprovalOpen] = useState(false);
+    const [approvalSnapshot, setApprovalSnapshot] = useState(null);
+
+    const buildNotebookItem = (snapshot) => {
         const bindingLabel = bindingType === 'hard' ? t(language, 'bindingHard') : bindingType === 'spiral' ? t(language, 'bindingSpiral') : t(language, 'bindingSoft');
         const orderHasElastic = bindingCaps.hasElastic && hasElastic;
         const orderHasCorners = bindingCaps.hasCorners && hasCorners;
         const orderSpiralColor = bindingCaps.hasSpiralColor ? spiralColor : null;
         const orderInnerCoverColor = bindingCaps.hasInnerCoverColor ? innerCoverColor : null;
         const orderStitchColor = bindingCaps.hasStitchColor ? stitchColor : null;
-        const newItem = {
+        return {
             productName: `${t(language, 'notebook')} ${format}`,
             design: `${t(language, 'bindingFormatLabel')} ${bindingLabel}, ${t(language, 'patternLabel')}: ${paperPattern}`,
             priceBYN: 1500,
@@ -88,8 +90,20 @@ export const Interface = ({ onFinish }) => {
             isSample,
             renderUrl: snapshot || null,
         };
-        addToCart(newItem);
+    };
+
+    const handleAddToCart = () => {
+        const snapshot = captureRender();
+        if (snapshot) setRenderSnapshot(snapshot);
+        addToCart(buildNotebookItem(snapshot));
         onFinish();
+    };
+
+    const handleEmailApproval = () => {
+        const snapshot = captureRender();
+        if (snapshot) setRenderSnapshot(snapshot);
+        setApprovalSnapshot(snapshot || null);
+        setApprovalOpen(true);
     };
 
     return (
@@ -97,6 +111,8 @@ export const Interface = ({ onFinish }) => {
             title={t(language, 'notebook')}
             onSave={handleAddToCart}
             saveLabel={t(language, 'placeOrder')}
+            onEmailApproval={handleEmailApproval}
+            emailApprovalLabel={t(language, 'emailApproval')}
         >
             <div className="flex justify-center mb-3 md:mb-4">
                 <div className="flex gap-1 rounded-full border border-white/15 bg-white/10 p-1">
@@ -236,6 +252,15 @@ export const Interface = ({ onFinish }) => {
                     </div>
                 </DockGrid>
             )}
+
+            <GuestApprovalModal
+                isOpen={approvalOpen}
+                onClose={() => setApprovalOpen(false)}
+                renderDataURL={approvalSnapshot}
+                productName={`${t(language, 'notebook')} ${format}`}
+                configuration={{ productConfig: buildNotebookItem(approvalSnapshot) }}
+                quantity={quantity}
+            />
         </ConstructorDock>
     )
 }

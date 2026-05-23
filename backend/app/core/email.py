@@ -30,8 +30,13 @@ def send_email(
     subject: str,
     body: str,
     reply_to: Optional[str] = None,
+    attachments: Optional[list[dict]] = None,
 ) -> bool:
-    """Отправляет plain-text email. Возвращает True/False — без исключений."""
+    """Отправляет email. Возвращает True/False — без исключений.
+
+    attachments: [{filename, content (bytes), mime_type}]. Используется
+    для PDF-согласования или PNG-превью.
+    """
     settings = get_settings()
     if not is_email_configured():
         log.warning("SMTP not configured — skipping email to %s", to)
@@ -44,6 +49,20 @@ def send_email(
     if reply_to:
         msg["Reply-To"] = reply_to
     msg.set_content(body)
+
+    for att in attachments or []:
+        content = att.get("content")
+        filename = att.get("filename") or "attachment.bin"
+        mime = att.get("mime_type") or "application/octet-stream"
+        if not content:
+            continue
+        try:
+            maintype, _, subtype = mime.partition("/")
+            if not subtype:
+                maintype, subtype = "application", "octet-stream"
+            msg.add_attachment(content, maintype=maintype, subtype=subtype, filename=filename)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Failed to attach %s: %s", filename, exc)
 
     try:
         if settings.smtp_use_tls:

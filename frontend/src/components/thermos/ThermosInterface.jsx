@@ -17,6 +17,7 @@ import {
     TransformPad,
 } from '../configurator/ConstructorDock';
 import { THERMOS_COLOR_PALETTE } from '../../config/productPalettes';
+import { GuestApprovalModal } from '../shared/GuestApprovalModal';
 
 export const ThermosInterface = ({ onFinish }) => {
     const [logoArea, setLogoArea] = useState('body');
@@ -32,29 +33,45 @@ export const ThermosInterface = ({ onFinish }) => {
     } = useConfigurator();
     const activeLogoTarget = logoArea === 'body' ? 'body' : capLogoTarget;
 
+    const [approvalOpen, setApprovalOpen] = useState(false);
+    const [approvalSnapshot, setApprovalSnapshot] = useState(null);
+
+    const buildThermosCartItem = (snapshot) => ({
+        productName: t(language, 'thermos'),
+        design: `${t(language, 'thermosBodyPart')}: ${thermosBodyColor}, ${t(language, 'thermosCapPart')}: ${thermosBodyColor}`,
+        priceTK: 50,
+        priceBYN: 2000,
+        activeProduct: 'thermos',
+        thermosBodyColor,
+        thermosCapColor: thermosBodyColor,
+        thermosLogos,
+        status: 'draft',
+        rendersGenerated: 0,
+        renderUrl: snapshot || null,
+    });
+
     const handleAddToCart = () => {
         const snapshot = captureRender();
         if (snapshot) setRenderSnapshot(snapshot);
-        // Поля на верхнем уровне — applyRenderConfig мёрджит их напрямую в store
-        const newItem = {
-            productName: t(language, 'thermos'),
-            design: `${t(language, 'thermosBodyPart')}: ${thermosBodyColor}, ${t(language, 'thermosCapPart')}: ${thermosBodyColor}`,
-            priceTK: 50,
-            priceBYN: 2000,
-            activeProduct: 'thermos',
-            thermosBodyColor,
-            thermosCapColor: thermosBodyColor,
-            thermosLogos,
-            status: 'draft',
-            rendersGenerated: 0,
-            renderUrl: snapshot || null,
-        };
-        addToCart(newItem);
+        addToCart(buildThermosCartItem(snapshot));
         onFinish();
     };
 
+    const handleEmailApproval = () => {
+        const snapshot = captureRender();
+        if (snapshot) setRenderSnapshot(snapshot);
+        setApprovalSnapshot(snapshot || null);
+        setApprovalOpen(true);
+    };
+
     return (
-        <ConstructorDock title={t(language, 'thermosTitle')} onSave={handleAddToCart} saveLabel={t(language, 'placeOrder')}>
+        <ConstructorDock
+            title={t(language, 'thermosTitle')}
+            onSave={handleAddToCart}
+            saveLabel={t(language, 'placeOrder')}
+            onEmailApproval={handleEmailApproval}
+            emailApprovalLabel={t(language, 'emailApproval')}
+        >
             <DockGrid
                 cols="md:grid-cols-2"
             >
@@ -118,6 +135,15 @@ export const ThermosInterface = ({ onFinish }) => {
                     </SettingRow>
                 </SettingGroup>
             </DockGrid>
+
+            <GuestApprovalModal
+                isOpen={approvalOpen}
+                onClose={() => setApprovalOpen(false)}
+                renderDataURL={approvalSnapshot}
+                productName={t(language, 'thermos')}
+                configuration={{ productConfig: buildThermosCartItem(approvalSnapshot) }}
+                quantity={1}
+            />
         </ConstructorDock>
     );
 };
