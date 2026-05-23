@@ -28,8 +28,8 @@ export const CookiePolicy = ({ onBack }) => {
     const { language } = useConfigurator();
 
     return (
-        <div className="app-bg h-full min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar font-sans text-gray-900 dark:text-white transition-colors">
-            <header className="sticky top-0 z-20 border-b border-gray-200/70 dark:border-white/10 bg-[#E5E5E5]/90 dark:bg-[#080B13]/90 backdrop-blur-xl">
+        <div className="app-bg h-[100dvh] min-h-[100dvh] overflow-y-auto overflow-x-hidden custom-scrollbar font-sans text-gray-900 dark:text-white transition-colors flex flex-col">
+            <header className="sticky top-0 z-20 shrink-0 border-b border-gray-200/70 dark:border-white/10 bg-[#E5E5E5]/90 dark:bg-[#080B13]/90 backdrop-blur-xl">
                 <div className="max-w-5xl mx-auto px-4 md:px-8 py-4 flex items-center justify-between gap-3">
                     <button
                         type="button"
@@ -47,7 +47,7 @@ export const CookiePolicy = ({ onBack }) => {
                 </div>
             </header>
 
-            <main className="max-w-5xl mx-auto px-4 md:px-8 py-10 md:py-14">
+            <main className="flex-1 w-full max-w-5xl mx-auto px-4 md:px-8 py-10 md:py-14">
                 <div className="mb-10">
                     <p className="text-xs font-bold uppercase tracking-[0.24em] text-blue-600 dark:text-blue-300 mb-3">Sproogeek</p>
                     <h1 className="text-3xl md:text-5xl font-black tracking-tight text-gray-900 dark:text-white">
@@ -122,7 +122,7 @@ export const CookiePolicy = ({ onBack }) => {
                     </Section>
                 </div>
             </main>
-            <SiteFooter compact />
+            <SiteFooter compact className="shrink-0" />
         </div>
     );
 };

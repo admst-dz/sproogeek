@@ -53,6 +53,9 @@ export const Interface = ({ onFinish }) => {
         language
     } = useConfigurator();
 
+    const [approvalOpen, setApprovalOpen] = useState(false);
+    const [approvalSnapshot, setApprovalSnapshot] = useState(null);
+
     if (activeProduct === 'calendar') {
         return (
             <div className="pointer-events-auto w-full h-full md:h-[95%] custom-gradient backdrop-blur-xl rounded-t-[30px] md:rounded-[9px] flex items-center justify-center border-t md:border border-white/30 relative">
@@ -65,9 +68,6 @@ export const Interface = ({ onFinish }) => {
     }
 
     const bindingCaps = getNotebookBindingCapabilities(bindingType);
-
-    const [approvalOpen, setApprovalOpen] = useState(false);
-    const [approvalSnapshot, setApprovalSnapshot] = useState(null);
 
     const buildNotebookItem = (snapshot) => {
         const bindingLabel = bindingType === 'hard' ? t(language, 'bindingHard') : bindingType === 'spiral' ? t(language, 'bindingSpiral') : t(language, 'bindingSoft');

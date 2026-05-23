@@ -7,10 +7,23 @@ const AUTH_COOKIE = 'spruzhuk_auth';
 let _memoryToken = null;
 export const clearMemoryToken = () => { _memoryToken = null; };
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
+
 const apiClient = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || '/api/v1',
+    baseURL: API_BASE_URL,
     headers: { 'Content-Type': 'application/json' },
 });
+
+export const resolveApiUrl = (url) => {
+    if (!url || /^https?:\/\//i.test(url)) return url;
+    if (/^https?:\/\//i.test(API_BASE_URL)) {
+        const relative = url.startsWith('/api/v1/')
+            ? url.replace(/^\/api\/v1\/?/, '')
+            : url.replace(/^\//, '');
+        return new URL(relative, API_BASE_URL.endsWith('/') ? API_BASE_URL : `${API_BASE_URL}/`).toString();
+    }
+    return url;
+};
 
 apiClient.interceptors.request.use((config) => {
     const token = _memoryToken || localStorage.getItem('token') || getCookie(AUTH_COOKIE);
@@ -145,6 +158,16 @@ export const productApi = {
     create: (data) => apiClient.post('/products/', data),
     update: (id, data) => apiClient.put(`/products/${id}`, data),
     delete: (id) => apiClient.delete(`/products/${id}`),
+};
+
+export const logoTransferApi = {
+    createSession: (baseUrl) => apiClient.post('/files/logo-upload-sessions', { base_url: baseUrl }),
+    getSession: (sessionId) => apiClient.get(`/files/logo-upload-sessions/${encodeURIComponent(sessionId)}`),
+    uploadToSession: (sessionId, file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return apiClient.post(`/files/logo-upload-sessions/${encodeURIComponent(sessionId)}/upload`, formData);
+    },
 };
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
