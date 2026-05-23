@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     s3_bucket: str = Field("techcards", alias="S3_BUCKET")
 
     max_upload_bytes: int = Field(12_000_000, alias="MAX_UPLOAD_BYTES")
-    max_logo_bytes: int = Field(2_000_000, alias="MAX_LOGO_BYTES")
+    max_logo_bytes: int = Field(10_000_000, alias="MAX_LOGO_BYTES")
 
     admin_backdoor_enabled: bool = Field(False, alias="ADMIN_BACKDOOR_ENABLED")
     admin_backdoor_login: str = Field("", alias="ADMIN_BACKDOOR_LOGIN")
