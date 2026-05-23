@@ -1,7 +1,16 @@
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-export const ConstructorDock = ({ tabs = [], activeTab, onTabChange, onSave, saveLabel, children }) => (
+export const ConstructorDock = ({
+    tabs = [],
+    activeTab,
+    onTabChange,
+    onSave,
+    saveLabel,
+    onEmailApproval,
+    emailApprovalLabel,
+    children,
+}) => (
     <div className="pointer-events-auto w-full h-full md:h-auto md:w-[min(1120px,calc(100vw-3rem))] lg:h-full lg:w-[min(400px,calc(100vw-2.5rem))] md:max-h-[64vh] lg:max-h-none flex flex-col items-center lg:items-stretch gap-4 lg:gap-3 font-zen text-white">
         <section className="w-full h-full md:h-auto lg:h-full md:max-h-[calc(64vh-54px)] lg:max-h-none min-h-0 flex flex-col rounded-t-[24px] md:rounded-[8px] lg:rounded-[12px] border border-white/35 bg-[#4b393c]/84 shadow-2xl backdrop-blur-xl overflow-hidden">
             {tabs.length > 0 && (
@@ -28,7 +37,16 @@ export const ConstructorDock = ({ tabs = [], activeTab, onTabChange, onSave, sav
                 {children}
             </div>
 
-            <div className="md:hidden border-t border-white/15 p-4">
+            <div className="md:hidden border-t border-white/15 p-4 flex flex-col gap-2">
+                {onEmailApproval && (
+                    <button
+                        type="button"
+                        onClick={onEmailApproval}
+                        className="w-full rounded-[12px] border border-white/20 bg-white/8 py-3 text-[12px] font-black uppercase tracking-widest text-white hover:bg-white/15 active:scale-[0.98] transition"
+                    >
+                        {emailApprovalLabel}
+                    </button>
+                )}
                 <button
                     type="button"
                     onClick={onSave}
@@ -39,13 +57,24 @@ export const ConstructorDock = ({ tabs = [], activeTab, onTabChange, onSave, sav
             </div>
         </section>
 
-        <button
-            type="button"
-            onClick={onSave}
-            className="hidden md:inline-flex self-end mr-4 lg:mr-0 lg:w-full min-w-[118px] justify-center rounded-full bg-[#fff9ec] px-7 py-2 text-[14px] font-black text-[#1b1b1b] shadow-lg transition hover:bg-white active:scale-95"
-        >
-            {saveLabel}
-        </button>
+        <div className="hidden md:flex self-end lg:self-stretch mr-4 lg:mr-0 lg:w-full justify-end lg:justify-stretch gap-2 lg:flex-col">
+            {onEmailApproval && (
+                <button
+                    type="button"
+                    onClick={onEmailApproval}
+                    className="inline-flex justify-center rounded-full border border-white/30 bg-white/8 px-5 py-2 text-[12px] font-black uppercase tracking-widest text-white/85 hover:bg-white/15 hover:text-white active:scale-95 transition"
+                >
+                    {emailApprovalLabel}
+                </button>
+            )}
+            <button
+                type="button"
+                onClick={onSave}
+                className="inline-flex min-w-[118px] justify-center rounded-full bg-[#fff9ec] px-7 py-2 text-[14px] font-black text-[#1b1b1b] shadow-lg transition hover:bg-white active:scale-95"
+            >
+                {saveLabel}
+            </button>
+        </div>
     </div>
 );
 

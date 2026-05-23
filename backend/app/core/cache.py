@@ -15,10 +15,10 @@ from __future__ import annotations
 
 import functools
 import hashlib
-import json
 import logging
 from typing import Any, Awaitable, Callable, Optional
 
+import orjson
 import redis.asyncio as aioredis
 
 from app.core.config import get_settings
@@ -30,13 +30,16 @@ _client: Optional[aioredis.Redis] = None
 
 
 def get_cache() -> aioredis.Redis:
-    """Lazy-init shared Redis client. Single connection pool per process."""
+    """Lazy-init shared Redis client. Single connection pool per process.
+
+    decode_responses=False, потому что в кеше теперь лежит сырой orjson
+    (bytes) — это быстрее и спасает от двойного перевода str↔bytes.
+    """
     global _client
     if _client is None:
         _client = aioredis.from_url(
             _settings.redis_url,
-            encoding="utf-8",
-            decode_responses=True,
+            decode_responses=False,
             socket_timeout=2.0,
             socket_connect_timeout=2.0,
             health_check_interval=30,
@@ -52,12 +55,12 @@ def _build_key(prefix: str, args: tuple, kwargs: dict) -> str:
         if cls_name in {"AsyncSession", "Request", "Depends"}:
             continue
         serializable.append(repr(a))
-    payload = json.dumps(
+    payload = orjson.dumps(
         {"a": serializable, "k": {k: repr(v) for k, v in sorted(kwargs.items())}},
-        sort_keys=True,
+        option=orjson.OPT_SORT_KEYS,
         default=str,
     )
-    digest = hashlib.sha1(payload.encode()).hexdigest()[:16]
+    digest = hashlib.sha1(payload).hexdigest()[:16]
     return f"cache:{prefix}:{digest}"
 
 
@@ -78,7 +81,7 @@ def cached(
                 key = key_fn(*args, **kwargs) if key_fn else _build_key(prefix, args, kwargs)
                 cached_raw = await cache.get(key)
                 if cached_raw is not None:
-                    return json.loads(cached_raw)
+                    return orjson.loads(cached_raw)
             except Exception as e:  # noqa: BLE001
                 logger.warning("cache.get failed (%s) — bypass: %s", prefix, e)
                 key = None
@@ -87,7 +90,7 @@ def cached(
 
             if key is not None:
                 try:
-                    await cache.set(key, json.dumps(result, default=str), ex=effective_ttl)
+                    await cache.set(key, orjson.dumps(result, default=str), ex=effective_ttl)
                 except Exception as e:  # noqa: BLE001
                     logger.warning("cache.set failed (%s): %s", prefix, e)
 

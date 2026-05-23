@@ -21,6 +21,11 @@ from app.models.order import Order
 from app.schemas.order import OrderResponse
 from app.services.event_hub import event_hub
 from app.services.imposition import plan_for_order, qr_png_bytes
+from app.services.glb_unwrapper_client import (
+    GlbUnwrapperError,
+    export_print_kit,
+    resolve_model_name,
+)
 from app.services.techcard_client import fetch_techcard_pdf, generate_techcard
 from app.services.warehouse import deduct_for_order, list_materials, low_stock, topup
 
@@ -373,4 +378,88 @@ async def download_manufacturer_techcard(
         content=data,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+    )
+
+
+# ── Печатная развёртка из настоящей GLB-геометрии (C++ glb-unwrapper) ──
+class PrintKitDimensions(BaseModel):
+    body_diameter_mm: Optional[float] = Field(default=None, gt=0, le=500)
+    body_height_mm: Optional[float] = Field(default=None, gt=0, le=1000)
+    cap_diameter_mm: Optional[float] = Field(default=None, gt=0, le=500)
+    cap_side_height_mm: Optional[float] = Field(default=None, gt=0, le=500)
+    bleed_mm: Optional[float] = Field(default=None, ge=0, le=20)
+    safe_mm: Optional[float] = Field(default=None, ge=0, le=20)
+    notebook_width_mm: Optional[float] = Field(default=None, gt=0, le=500)
+    notebook_height_mm: Optional[float] = Field(default=None, gt=0, le=500)
+    notebook_spine_mm: Optional[float] = Field(default=None, gt=0, le=100)
+    powerbank_width_mm: Optional[float] = Field(default=None, gt=0, le=300)
+    powerbank_height_mm: Optional[float] = Field(default=None, gt=0, le=300)
+
+
+def _resolve_order_model_name(order: Order) -> Optional[str]:
+    """По данным заказа подобрать имя GLB-модели внутри glb_unwrapper-образа.
+
+    Конфигурация заказа на сайте кладётся в configuration.productConfig либо
+    configuration.cart[0].config (для мульти-айтемных корзин). Берём первый
+    дизайн как репрезентативный — для производства все айтемы заказа
+    обычно одного типа.
+    """
+    cfg = order.configuration or {}
+    cart = cfg.get("cart") if isinstance(cfg.get("cart"), list) else None
+    head_config = (cart[0].get("config") if cart and isinstance(cart[0], dict) else None) or cfg.get("productConfig") or cfg
+    active_product = (head_config or {}).get("activeProduct") or (head_config or {}).get("type")
+    binding = (head_config or {}).get("bindingType")
+    return resolve_model_name(active_product or "", binding)
+
+
+@router.post("/orders/{order_id}/print-kit.zip")
+async def order_print_kit(
+    order_id: str,
+    request: Request,
+    payload: Optional[PrintKitDimensions] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_manufacturer_user),
+):
+    """Сгенерировать print-kit (template SVG + spec JSON + README) по
+    реальной GLB-геометрии заказа. Отдаёт zip-архив.
+    """
+    safe_path_segment(order_id)
+    order = await crud_order.get_order(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if not _visible_for_manufacturer(order, current_user):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    model_name = _resolve_order_model_name(order)
+    if not model_name:
+        raise HTTPException(
+            status_code=422,
+            detail="Order has no recognizable product/binding for print-kit generation",
+        )
+
+    dimensions = (payload.model_dump(exclude_none=True) if payload else {}) or {}
+    try:
+        zip_bytes = await export_print_kit(model_name, dimensions_mm=dimensions)
+    except GlbUnwrapperError as exc:
+        raise HTTPException(status_code=502, detail=f"glb_unwrapper failed: {exc}") from exc
+
+    event_logger.log(
+        "ORDER_PRINT_KIT_GENERATED",
+        "Manufacturer generated print kit for order",
+        direction="user->backend",
+        actor_type=current_user.role,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        entity_type="order",
+        entity_id=order_id,
+        request_id=getattr(request.state, "request_id", ""),
+        details={"model": model_name, "bytes": len(zip_bytes), "dimensions": dimensions},
+    )
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="print-kit-{order_id[:8]}.zip"',
+            "Cache-Control": "no-store",
+        },
     )

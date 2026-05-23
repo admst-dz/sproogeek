@@ -20,3 +20,5 @@ uvicorn[standard]>=0.23.0
 aiokafka>=0.8.1
 qrcode[pil]>=7.4.2
 redis>=5.0.0
+orjson>=3.10.0
+

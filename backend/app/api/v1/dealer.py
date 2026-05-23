@@ -1,15 +1,13 @@
 """Dealer cabinet endpoints — clients list, summary, etc."""
 from __future__ import annotations
 
-from collections import defaultdict
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.orders import _extract_dealer_id
 from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.order import Order
@@ -36,6 +34,25 @@ def _ensure_dealer(current_user) -> None:
         raise HTTPException(status_code=403, detail="Access denied")
 
 
+def _orders_visible_to_dealer_filter(dealer_id: str):
+    """SQL-выражение «заказы, видимые дилеру».
+
+    Это либо явно выбранный manufacturer, либо dealerId, лежащий в JSONB
+    конфигурации заказа (legacy способ привязки). Достаём напрямую из
+    PostgreSQL вместо выгрузки всех Order'ов в Python — было O(N) на
+    каждый запрос с фильтрацией в коде.
+    """
+    cfg = Order.configuration
+    pc = cfg["productConfig"]
+    return or_(
+        Order.selected_manufacturer_id == dealer_id,
+        pc["dealerId"].astext == dealer_id,
+        pc["dealer_id"].astext == dealer_id,
+        cfg["dealerId"].astext == dealer_id,
+        cfg["dealer_id"].astext == dealer_id,
+    )
+
+
 @router.get("/clients", response_model=List[DealerClient])
 async def list_dealer_clients(
     db: AsyncSession = Depends(get_db),
@@ -43,48 +60,46 @@ async def list_dealer_clients(
 ):
     """Clients linked to this dealer/typography.
 
-    A client becomes visible here after they choose this typography's quote.
-    Older product-owned orders are kept visible for backward compatibility.
+    Один SQL-запрос вместо двух + python-агрегация: GROUP BY user_id с
+    COUNT/MAX по заказам, привязанным к дилеру.
     """
     _ensure_dealer(current_user)
 
-    orders = (await db.execute(select(Order))).scalars().all()
-    if current_user.role == "dealer":
-        orders = [
-            o for o in orders
-            if o.selected_manufacturer_id == current_user.id or _extract_dealer_id(o) == current_user.id
-        ]
+    orders_count = func.count(Order.id).label("orders_count")
+    last_order_at = func.max(Order.created_at).label("last_order_at")
 
-    by_user: dict[str, list[Order]] = defaultdict(list)
-    for order in orders:
-        if order.user_id:
-            by_user[order.user_id].append(order)
-
-    if not by_user:
-        return []
-
-    users = (
-        await db.execute(select(User).where(User.id.in_(list(by_user.keys()))))
-    ).scalars().all()
-
-    out: list[DealerClient] = []
-    for user in users:
-        user_orders = by_user[user.id]
-        last = max((o.created_at for o in user_orders if o.created_at), default=None)
-        out.append(
-            DealerClient(
-                id=user.id,
-                email=user.email,
-                display_name=user.display_name,
-                company_name=user.company_name,
-                role=user.role,
-                sub_role=user.sub_role,
-                orders_count=len(user_orders),
-                last_order_at=last.isoformat() if last else None,
-            )
+    stmt = (
+        select(
+            User.id,
+            User.email,
+            User.display_name,
+            User.company_name,
+            User.role,
+            User.sub_role,
+            orders_count,
+            last_order_at,
         )
-    out.sort(key=lambda c: c.last_order_at or "", reverse=True)
-    return out
+        .join(Order, Order.user_id == User.id)
+        .group_by(User.id)
+        .order_by(last_order_at.desc().nullslast())
+    )
+    if current_user.role == "dealer":
+        stmt = stmt.where(_orders_visible_to_dealer_filter(current_user.id))
+
+    rows = (await db.execute(stmt)).all()
+    return [
+        DealerClient(
+            id=row.id,
+            email=row.email,
+            display_name=row.display_name,
+            company_name=row.company_name,
+            role=row.role,
+            sub_role=row.sub_role,
+            orders_count=row.orders_count or 0,
+            last_order_at=row.last_order_at.isoformat() if row.last_order_at else None,
+        )
+        for row in rows
+    ]
 
 
 @router.get("/orders", response_model=List[OrderResponse])
@@ -95,10 +110,9 @@ async def list_dealer_selected_orders(
     """Orders where this typography was selected by the client."""
     _ensure_dealer(current_user)
 
-    query = select(Order).order_by(Order.created_at.desc())
-    orders = (await db.execute(query)).scalars().all()
+    stmt = select(Order).order_by(Order.created_at.desc())
     if current_user.role == "dealer":
-        orders = [o for o in orders if o.selected_manufacturer_id == current_user.id]
+        stmt = stmt.where(Order.selected_manufacturer_id == current_user.id)
     else:
-        orders = [o for o in orders if o.selected_manufacturer_id]
-    return orders
+        stmt = stmt.where(Order.selected_manufacturer_id.isnot(None))
+    return (await db.execute(stmt)).scalars().all()
