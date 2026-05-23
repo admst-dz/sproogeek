@@ -1,5 +1,7 @@
 import { useConfigurator } from '../../store';
 import { t } from '../../i18n';
+import { SiteFooter } from './SiteFooter';
+import { ORGANIZATION_INFO } from '../../utils/organizationInfo';
 
 const storageRows = [
     ['spruzhuk_auth', 'cookie', 'JWT-токен авторизации, если пользователь принял cookie; используется для входа в личный кабинет.', 'до 30 дней'],
@@ -111,13 +113,16 @@ export const CookiePolicy = ({ onBack }) => {
 
                     <Section title="7. Контакты">
                         <p>Если у вас есть вопросы относительно данной Политики, свяжитесь с нами:</p>
-                        <p>Оператор данных: [Полное наименование ООО]</p>
-                        <p>Юридический адрес: [Ваш адрес]</p>
-                        <p>Email: [Ваш email]</p>
-                        <p>Дата последнего обновления: [Дата]</p>
+                        <p>Оператор данных: {ORGANIZATION_INFO.legalName}</p>
+                        <p>Юридический адрес: {ORGANIZATION_INFO.legalAddress}</p>
+                        <p>Email: <a className="text-blue-600 dark:text-blue-300 underline underline-offset-4" href={`mailto:${ORGANIZATION_INFO.email}`}>{ORGANIZATION_INFO.email}</a></p>
+                        <p>Телефон: <a className="text-blue-600 dark:text-blue-300 underline underline-offset-4" href={`tel:${ORGANIZATION_INFO.phoneHref}`}>{ORGANIZATION_INFO.phone}</a></p>
+                        <p>Telegram: <a className="text-blue-600 dark:text-blue-300 underline underline-offset-4" href={ORGANIZATION_INFO.telegramHref} target="_blank" rel="noreferrer">{ORGANIZATION_INFO.telegram}</a></p>
+                        <p>Дата последнего обновления: 21 мая 2026 г.</p>
                     </Section>
                 </div>
             </main>
+            <SiteFooter compact />
         </div>
     );
 };

@@ -4,6 +4,7 @@ import { VibeLoader, useLoaderCompletionGate } from '../shared/VibeLoader';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 import { getNotebookBindingCapabilities, useConfigurator } from '../../store';
 import { t } from '../../i18n';
+import { SiteFooter } from '../shared/SiteFooter';
 
 const STATUS_KEYS = {
     new: 'adminStatusNew',
@@ -1308,6 +1309,7 @@ export const AdminDashboard = ({ onLogout }) => {
                 {tab === 'admins' && <UsersTab key="admins" initialFilter="admin" />}
                 {tab === 'json' && <JsonTab language={language} />}
                 {tab === 'products' && <ProductsTab language={language} />}
+                <SiteFooter compact className="mt-10 -mx-4 sm:-mx-6" />
             </div>
         </div>
     );

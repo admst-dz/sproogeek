@@ -16,19 +16,8 @@ import { Notebook } from '../shared/Notebook';
 import { Thermos } from '../thermos/Thermos';
 import { downloadBlob } from '../../utils/download';
 import { OrderQrTile } from '../shared/OrderQrTile';
-
-const ORDER_STAGES = [
-    { key: 'new',         textKey: 'statusNew',        color: 'bg-white/10 text-gray-400 border-white/10',            icon: '🕐' },
-    { key: 'awaiting_signature', textKey: 'statusAwaitingSignature', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30', icon: '✎' },
-    { key: 'awaiting_quotes', textKey: 'statusAwaitingQuotes', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30', icon: '₽' },
-    { key: 'quotes_ready', textKey: 'statusQuotesReady', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', icon: '₽' },
-    { key: 'processing',  textKey: 'statusProcessing',  color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',       icon: '⚙️' },
-    { key: 'production',  textKey: 'statusProduction',  color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30', icon: '🏭' },
-    { key: 'in_delivery', textKey: 'statusDelivery',    color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: '🚚' },
-    { key: 'done',        textKey: 'statusDone',        color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', icon: '✅' },
-];
-
-const STAGE_INDEX = Object.fromEntries(ORDER_STAGES.map((s, i) => [s.key, i]));
+import { SiteFooter } from '../shared/SiteFooter';
+import { ORDER_STAGE_INDEX, ORDER_STAGES } from '../../config/orderStages';
 
 const StatusBadge = ({ status, language = 'ru' }) => {
     const s = ORDER_STAGES.find(x => x.key === status) || { textKey: null, color: 'bg-white/10 text-gray-400 border-white/10' };
@@ -40,7 +29,7 @@ const StatusBadge = ({ status, language = 'ru' }) => {
 };
 
 const OrderProgressBar = ({ status, stageHistory = [], language = 'ru' }) => {
-    const currentIdx = STAGE_INDEX[status] ?? 0;
+    const currentIdx = ORDER_STAGE_INDEX[status] ?? 0;
     const historyMap = {};
     stageHistory.forEach(h => { historyMap[h.status] = h; });
 
@@ -1326,7 +1315,7 @@ export const DealerDashboard = ({ onBack, initialTab, onTabChange }) => {
                                 orders.map((order, i) => {
                                     const isExpanded = expandedOrders.has(order.id);
                                     const isUpdating = statusUpdating === order.id;
-                                    const currentStageIdx = STAGE_INDEX[order.status] ?? 0;
+                                    const currentStageIdx = ORDER_STAGE_INDEX[order.status] ?? 0;
                                     const isQuoteStage = !isAdmin && (order.status === 'awaiting_quotes' || order.status === 'quotes_ready');
                                     const myQuote = (order.manufacturerQuotes || []).find(q => q.manufacturer_id === currentUser?.id);
                                     return (
@@ -1486,6 +1475,7 @@ export const DealerDashboard = ({ onBack, initialTab, onTabChange }) => {
                         language={language}
                     />
                 )}
+                <SiteFooter compact className="mt-10 -mx-4 md:-mx-8" />
             </main>
 
             {/* BOTTOM NAV — только на mobile */}

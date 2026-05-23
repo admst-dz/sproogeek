@@ -18,6 +18,7 @@ const SPIRAL_REFERENCE_FRAME = {
     centerY: 1.0145961622650757,
     height: 2.1338905657777962,
 };
+const HIDDEN_SPIRAL_MESH_NAMES = new Set(['seam']);
 
 function LogoPlane({ texture, x, y, z, side = 'front', rotation = 0, scale = 0.6 }) {
     const map = useLogoTexture(texture);
@@ -453,6 +454,10 @@ function NaPruzhineModel({ coverColor, innerCoverColor, stitchColor, spiralColor
         scene.updateMatrixWorld(true);
         return Object.entries(nodes)
             .filter(([, n]) => n.isMesh || n.geometry)
+            .filter(([name, node]) => {
+                const meshName = node.geometry?.name ?? '';
+                return ![name, meshName].some(value => HIDDEN_SPIRAL_MESH_NAMES.has(normalizeMeshName(value)));
+            })
             .map(([name, node]) => {
                 const geo = node.geometry.clone();
                 geo.applyMatrix4(node.matrixWorld);

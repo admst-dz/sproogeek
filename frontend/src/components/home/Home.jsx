@@ -10,6 +10,7 @@ import termosModelUrl from '../../assets/termos3.glb?url';
 import powerbankModelUrl from '../../assets/poverbank.glb?url';
 import { FeedbackPanel } from './FeedbackPanel';
 import { Notebook } from '../shared/Notebook';
+import { SiteFooter } from '../shared/SiteFooter';
 
 const NOTEBOOK_PREVIEW_CONFIG = {
     bindingType: 'spiral',
@@ -477,6 +478,7 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
 
                 <FeedbackPanel language={language} />
             </main>
+            <SiteFooter className="shrink-0" />
         </div>
     );
 };

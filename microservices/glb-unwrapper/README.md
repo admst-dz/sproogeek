@@ -17,6 +17,16 @@ cmake -S microservices/glb-unwrapper -B microservices/glb-unwrapper/build
 cmake --build microservices/glb-unwrapper/build --parallel
 ```
 
+## Source layout
+
+- `main.cpp` is only the executable entry point.
+- `cli.*` parses commands and flags.
+- `glb_reader.*` loads GLB chunks and maps glTF JSON into lightweight model structs.
+- `accessor_reader.*` reads typed accessor data and mesh bounds.
+- `uv_exporter.*` exports `TEXCOORD_0` triangles to SVG.
+- `print_kit.*` writes the millimeter print template, spec JSON, and print README.
+- `json.*`, `format.*`, and `error.hpp` contain small shared helpers.
+
 ## Inspect a model
 
 ```bash
@@ -51,12 +61,33 @@ clean millimeter template with named layers:
 microservices/glb-unwrapper/build/glb_unwrapper export-print-kit \
   frontend/src/assets/termos3.glb \
   /tmp/termos-print-kit \
+  --product thermos \
   --body-diameter-mm 70 \
   --body-height-mm 190 \
   --cap-diameter-mm 55 \
   --cap-side-height-mm 35 \
   --bleed-mm 3 \
   --safe-mm 3
+```
+
+For flat products use product-specific dimensions:
+
+```bash
+microservices/glb-unwrapper/build/glb_unwrapper export-print-kit \
+  frontend/src/assets/tverdiy_pereplet.glb \
+  /tmp/notebook-print-kit \
+  --product notebook \
+  --width-mm 145 \
+  --height-mm 210 \
+  --spine-thickness-mm 12
+
+microservices/glb-unwrapper/build/glb_unwrapper export-print-kit \
+  frontend/src/assets/poverbank.glb \
+  /tmp/powerbank-print-kit \
+  --product powerbank \
+  --width-mm 95 \
+  --height-mm 65 \
+  --depth-mm 22
 ```
 
 The command writes:

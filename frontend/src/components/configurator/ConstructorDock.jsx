@@ -191,15 +191,24 @@ export const MiniDropdown = ({ options, value, onChange }) => {
 
 export const ColorDropdown = ({ colors, currentColor, onSelect }) => {
     const [open, setOpen] = useState(false);
+    const [anchorRect, setAnchorRect] = useState(null);
     const btnRef = useRef(null);
     const current = colors.find(c => (c.bg ?? c) === currentColor);
     const label = current?.name ?? currentColor;
+    const close = () => {
+        setOpen(false);
+        setAnchorRect(null);
+    };
+    const toggle = () => {
+        setAnchorRect(btnRef.current?.getBoundingClientRect() || null);
+        setOpen(o => !o);
+    };
     return (
         <div className="w-full">
             <button
                 ref={btnRef}
                 type="button"
-                onClick={() => setOpen(o => !o)}
+                onClick={toggle}
                 className="w-full flex items-center justify-between gap-2 rounded-[8px] border border-white/20 bg-white/8 px-2.5 py-1.5 text-[10px] md:text-[12px] font-black uppercase tracking-wider text-white transition hover:bg-white/14"
             >
                 <div className="flex items-center gap-2 min-w-0">
@@ -210,7 +219,7 @@ export const ColorDropdown = ({ colors, currentColor, onSelect }) => {
                     <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
             </button>
-            <DropdownPortal btnRef={btnRef} open={open} onClose={() => setOpen(false)} itemCount={colors.length}>
+            <DropdownPortal anchorRect={anchorRect} open={open} onClose={close} itemCount={colors.length}>
                 {colors.map(color => {
                     const val = color.bg ?? color;
                     const name = color.name ?? val;
@@ -218,7 +227,7 @@ export const ColorDropdown = ({ colors, currentColor, onSelect }) => {
                         <button
                             key={val}
                             type="button"
-                            onClick={() => { onSelect(val); setOpen(false); }}
+                            onClick={() => { onSelect(val); close(); }}
                             className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-[10px] md:text-[12px] font-black uppercase tracking-wider transition ${val === currentColor ? 'bg-white/20 text-white' : 'text-white/80 hover:bg-white/12'}`}
                         >
                             <span className="h-[14px] w-[14px] shrink-0 rounded-full border border-white/25" style={{ backgroundColor: val }} />

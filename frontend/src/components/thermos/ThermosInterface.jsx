@@ -16,16 +16,7 @@ import {
     SizeSlider,
     TransformPad,
 } from '../configurator/ConstructorDock';
-
-const palette = [
-    { bg: '#e65405', name: 'Оранжевый' },
-    { bg: '#003087', name: 'Синий' },
-    { bg: '#115740', name: 'Зелёный' },
-    { bg: '#5E366E', name: 'Фиолетовый' },
-    { bg: '#BA0C2F', name: 'Красный' },
-    { bg: '#716D6A', name: 'Серый' },
-    { bg: '#1B365D', name: 'Тёмно-синий' },
-];
+import { THERMOS_COLOR_PALETTE } from '../../config/productPalettes';
 
 export const ThermosInterface = ({ onFinish }) => {
     const [logoArea, setLogoArea] = useState('body');
@@ -69,7 +60,7 @@ export const ThermosInterface = ({ onFinish }) => {
             >
                 <SettingGroup title={t(language, 'thermosBodyPart')}>
                     <SettingRow label={t(language, 'bodyColor')}>
-                        <ColorDropdown colors={palette} currentColor={thermosBodyColor} onSelect={(c) => setColor('thermosBody', c)} />
+                        <ColorDropdown colors={THERMOS_COLOR_PALETTE} currentColor={thermosBodyColor} onSelect={(c) => setColor('thermosBody', c)} />
                     </SettingRow>
                     <SettingRow label={t(language, 'thermosCap')}>
                         <MiniToggle checked={thermosCapVisible} onChange={toggleThermosCap} />
