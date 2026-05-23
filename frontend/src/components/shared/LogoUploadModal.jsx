@@ -106,13 +106,19 @@ export const LogoUploadModal = ({ open, onClose, onFile }) => {
                 .then(({ data }) => {
                     if (cancelled || consumedRemoteRef.current) return;
                     setSession((current) => ({ ...(current || {}), ...(data || {}) }));
+                    setError('');
                     setStatus(data?.status || 'pending');
                     if (data?.status === 'ready') handleRemoteReady(data);
                 })
                 .catch(() => {
                     if (cancelled) return;
-                    setStatus('error');
-                    setError(t(language, 'logoUploadSessionError'));
+                    if (session?.session_id) {
+                        setStatus((current) => current === 'loading' ? 'pending' : current);
+                        setError(t(language, 'logoUploadPollError'));
+                    } else {
+                        setStatus('error');
+                        setError(t(language, 'logoUploadSessionError'));
+                    }
                 });
         };
 

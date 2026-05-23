@@ -118,6 +118,7 @@ export default {
     "logoUploadTooLarge": "Файл слишком большой. Максимум 2 МБ.",
     "logoUploadFailed": "Не получилось загрузить логотип. Попробуйте ещё раз.",
     "logoUploadSessionError": "Не получилось создать QR-сессию. Проверьте подключение.",
+    "logoUploadPollError": "Не получилось проверить загрузку с телефона. QR-код можно отсканировать ещё раз.",
     "logoUploadSessionMissing": "Сессия не найдена. Отсканируйте новый QR-код.",
     "logoUploadMobileTitle": "Загрузка логотипа",
     "logoUploadMobileSubtitle": "Выберите изображение на телефоне и отправьте его в открытый конструктор.",

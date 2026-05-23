@@ -118,6 +118,7 @@ export default {
     "logoUploadTooLarge": "File is too large. Maximum size is 2 MB.",
     "logoUploadFailed": "Could not upload the logo. Please try again.",
     "logoUploadSessionError": "Could not create a QR session. Check your connection.",
+    "logoUploadPollError": "Could not check the phone upload. You can scan the QR code again.",
     "logoUploadSessionMissing": "Session not found. Scan a new QR code.",
     "logoUploadMobileTitle": "Logo upload",
     "logoUploadMobileSubtitle": "Choose an image on your phone and send it to the open configurator.",

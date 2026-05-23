@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
+from app.core.cache import get_cache
 from app.core.config import get_settings
 from app.core.deps import get_staff_user, request_id
 from app.core.event_logger import event_logger
@@ -23,6 +24,7 @@ UPLOAD_DIR = "uploads/logos"
 SESSION_DIR = "uploads/logo_sessions"
 SESSION_TTL_MINUTES = 30
 SESSION_ID_RE = re.compile(r"^[a-f0-9]{32}$")
+SESSION_REDIS_PREFIX = "logo-upload-session"
 ALLOWED_IMAGE_TYPES = {
     "image/png": ("png", lambda content: content.startswith(b"\x89PNG\r\n\x1a\n")),
     "image/jpeg": ("jpg", lambda content: content.startswith(b"\xff\xd8\xff")),
@@ -47,6 +49,18 @@ def _session_path(session_id: str) -> str:
     return os.path.join(SESSION_DIR, f"{session_id}.json")
 
 
+def _session_key(session_id: str) -> str:
+    if not SESSION_ID_RE.fullmatch(session_id or ""):
+        raise HTTPException(status_code=404, detail="Logo upload session not found")
+    return f"{SESSION_REDIS_PREFIX}:{session_id}"
+
+
+def _session_file_key(session_id: str) -> str:
+    if not SESSION_ID_RE.fullmatch(session_id or ""):
+        raise HTTPException(status_code=404, detail="Logo upload session not found")
+    return f"{SESSION_REDIS_PREFIX}:file:{session_id}"
+
+
 def _iso(value: datetime) -> str:
     return value.astimezone(timezone.utc).isoformat()
 
@@ -58,6 +72,11 @@ def _parse_dt(value: str) -> datetime:
         return _now_utc() - timedelta(seconds=1)
 
 
+def _ttl_seconds(session: dict) -> int:
+    expires_at = _parse_dt(session.get("expires_at", ""))
+    return max(1, int((expires_at - _now_utc()).total_seconds()))
+
+
 def _normalize_public_origin(base_url: str) -> str:
     parsed = urlsplit((base_url or "").strip())
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -65,7 +84,14 @@ def _normalize_public_origin(base_url: str) -> str:
     return urlunsplit((parsed.scheme, parsed.netloc, "", "", "")).rstrip("/")
 
 
-def _read_session(session_id: str) -> dict | None:
+async def _read_session(session_id: str) -> dict | None:
+    try:
+        cached = await get_cache().get(_session_key(session_id))
+        if cached:
+            return json.loads(cached)
+    except Exception:
+        pass
+
     path = _session_path(session_id)
     if not os.path.exists(path):
         return None
@@ -76,7 +102,17 @@ def _read_session(session_id: str) -> dict | None:
         return None
 
 
-def _write_session(session: dict) -> None:
+async def _write_session(session: dict) -> None:
+    try:
+        await get_cache().set(
+            _session_key(session["id"]),
+            json.dumps(session, ensure_ascii=False).encode("utf-8"),
+            ex=_ttl_seconds(session),
+        )
+        return
+    except Exception:
+        pass
+
     path = _session_path(session["id"])
     tmp_path = f"{path}.{uuid.uuid4().hex}.tmp"
     with open(tmp_path, "w", encoding="utf-8") as session_file:
@@ -88,11 +124,30 @@ def _is_expired(session: dict) -> bool:
     return _parse_dt(session.get("expires_at", "")) <= _now_utc()
 
 
-def _get_session_or_404(session_id: str) -> dict:
-    session = _read_session(session_id)
+async def _get_session_or_404(session_id: str) -> dict:
+    session = await _read_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Logo upload session not found")
     return session
+
+
+async def _write_session_file(session_id: str, content: bytes, session: dict) -> str | None:
+    try:
+        key = _session_file_key(session_id)
+        await get_cache().set(key, content, ex=_ttl_seconds(session))
+        return key
+    except Exception:
+        return None
+
+
+async def _read_session_file(session: dict) -> bytes | None:
+    file_key = session.get("file_key")
+    if not file_key:
+        return None
+    try:
+        return await get_cache().get(file_key)
+    except Exception:
+        return None
 
 
 def _cleanup_expired_sessions() -> None:
@@ -107,10 +162,14 @@ def _cleanup_expired_sessions() -> None:
         if not SESSION_ID_RE.fullmatch(session_id):
             continue
         try:
-            session = _read_session(session_id)
+            session = None
+            path = _session_path(session_id)
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as session_file:
+                    session = json.load(session_file)
             if session and _is_expired(session):
                 os.remove(_session_path(session_id))
-        except OSError:
+        except (OSError, json.JSONDecodeError):
             continue
 
 
@@ -165,6 +224,7 @@ async def _save_logo_file(file: UploadFile) -> dict:
         "filename": original_filename or f"logo.{extension}",
         "content_type": content_type,
         "size": len(content),
+        "content": content,
     }
 
 
@@ -207,19 +267,19 @@ async def create_logo_upload_session(payload: LogoUploadSessionCreate):
         "expires_at": _iso(expires_at),
         "upload_url": f"{origin}/mobile-logo/{session_id}",
     }
-    _write_session(session)
+    await _write_session(session)
     return _session_payload(session)
 
 
 @router.get("/logo-upload-sessions/{session_id}")
 async def get_logo_upload_session(session_id: str):
-    session = _get_session_or_404(session_id)
+    session = await _get_session_or_404(session_id)
     return _session_payload(session)
 
 
 @router.get("/logo-upload-sessions/{session_id}/qr.png")
 async def get_logo_upload_session_qr(session_id: str):
-    session = _get_session_or_404(session_id)
+    session = await _get_session_or_404(session_id)
     if _is_expired(session):
         raise HTTPException(status_code=410, detail="Logo upload session expired")
     return Response(
@@ -235,21 +295,23 @@ async def upload_logo_to_session(
     request: Request,
     file: UploadFile = File(...),
 ):
-    session = _get_session_or_404(session_id)
+    session = await _get_session_or_404(session_id)
     if _is_expired(session):
         raise HTTPException(status_code=410, detail="Logo upload session expired")
 
     saved = await _save_logo_file(file)
+    file_key = await _write_session_file(session_id, saved["content"], session)
     session.update({
         "status": "ready",
         "uploaded_at": _iso(_now_utc()),
         "url": saved["url"],
         "file_path": saved["path"],
+        "file_key": file_key,
         "filename": saved["filename"],
         "content_type": saved["content_type"],
         "size": saved["size"],
     })
-    _write_session(session)
+    await _write_session(session)
 
     event_logger.log(
         "LOGO_SESSION_FILE_UPLOADED",
@@ -271,10 +333,19 @@ async def upload_logo_to_session(
 
 @router.get("/logo-upload-sessions/{session_id}/file")
 async def download_logo_upload_session_file(session_id: str):
-    session = _get_session_or_404(session_id)
+    session = await _get_session_or_404(session_id)
     if _is_expired(session):
         raise HTTPException(status_code=410, detail="Logo upload session expired")
-    if session.get("status") != "ready" or not session.get("file_path"):
+    if session.get("status") != "ready":
+        raise HTTPException(status_code=404, detail="Logo file not uploaded yet")
+    content = await _read_session_file(session)
+    if content is not None:
+        return Response(
+            content=content,
+            media_type=session.get("content_type") or "application/octet-stream",
+            headers={"Cache-Control": "no-store"},
+        )
+    if not session.get("file_path"):
         raise HTTPException(status_code=404, detail="Logo file not uploaded yet")
     if not os.path.exists(session["file_path"]):
         raise HTTPException(status_code=404, detail="Logo file not found")

@@ -118,6 +118,7 @@ export default {
     "logoUploadTooLarge": "Файл занадта вялікі. Максімум 2 МБ.",
     "logoUploadFailed": "Не атрымалася загрузіць лагатып. Паспрабуйце яшчэ раз.",
     "logoUploadSessionError": "Не атрымалася стварыць QR-сесію. Праверце падключэнне.",
+    "logoUploadPollError": "Не атрымалася праверыць загрузку з тэлефона. QR-код можна адсканіраваць яшчэ раз.",
     "logoUploadSessionMissing": "Сесія не знойдзена. Адсканіруйце новы QR-код.",
     "logoUploadMobileTitle": "Загрузка лагатыпа",
     "logoUploadMobileSubtitle": "Выберыце выяву на тэлефоне і адпраўце яе ў адкрыты канструктар.",
