@@ -2,13 +2,28 @@ import { useEffect, useRef, useState } from 'react';
 import { logoTransferApi } from '../../api';
 import { t } from '../../i18n';
 import { useConfigurator } from '../../store';
-import { isLogoFileTooLarge, isSupportedLogoFile, LOGO_ACCEPT } from '../../utils/logoUpload';
+import {
+    isConvertibleLogoFile,
+    isLogoSourceTooLarge,
+    LOGO_ACCEPT,
+    prepareLogoUploadFile,
+} from '../../utils/logoUpload';
 
 const validateFile = (file, language) => {
     if (!file) return t(language, 'logoUploadNoFile');
-    if (!isSupportedLogoFile(file)) return t(language, 'logoUploadUnsupported');
-    if (isLogoFileTooLarge(file)) return t(language, 'logoUploadTooLarge');
+    if (!isConvertibleLogoFile(file)) return t(language, 'logoUploadUnsupported');
+    if (isLogoSourceTooLarge(file)) return t(language, 'logoUploadSourceTooLarge');
     return '';
+};
+
+const uploadErrorMessage = (err, language) => {
+    const code = err?.response?.status;
+    const detail = err?.response?.data?.detail;
+    if (code === 410) return t(language, 'logoUploadExpired');
+    if (code === 404) return t(language, 'logoUploadSessionMissing');
+    if (code === 413 || detail === 'File is too large' || detail === 'Payload too large') return t(language, 'logoUploadTooLarge');
+    if (code === 400 || detail === 'Unsupported file format' || detail === 'File content does not match declared type') return t(language, 'logoUploadUnsupported');
+    return t(language, 'logoUploadFailed');
 };
 
 export const MobileLogoUpload = ({ sessionId }) => {
@@ -47,12 +62,20 @@ export const MobileLogoUpload = ({ sessionId }) => {
         setStatus('uploading');
         setError('');
         try {
-            await logoTransferApi.uploadToSession(sessionId, file);
+            let uploadFile;
+            try {
+                uploadFile = await prepareLogoUploadFile(file);
+            } catch {
+                setStatus('ready');
+                setError(t(language, 'logoUploadUnsupported'));
+                return;
+            }
+            await logoTransferApi.uploadToSession(sessionId, uploadFile);
             setStatus('done');
         } catch (err) {
             const code = err?.response?.status;
             setStatus(code === 410 ? 'expired' : 'ready');
-            setError(code === 410 ? t(language, 'logoUploadExpired') : t(language, 'logoUploadFailed'));
+            setError(uploadErrorMessage(err, language));
         }
     };
 
@@ -85,7 +108,7 @@ export const MobileLogoUpload = ({ sessionId }) => {
                             {file?.name || t(language, 'logoUploadMobileChoose')}
                         </span>
                         <span className="mt-2 text-[12px] font-bold leading-relaxed text-white/45">
-                            {t(language, 'logoUploadDropHint')}
+                            {t(language, 'logoUploadMobileHint')}
                         </span>
                     </button>
 

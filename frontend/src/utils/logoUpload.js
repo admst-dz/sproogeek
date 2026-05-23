@@ -1,12 +1,79 @@
-export const LOGO_ACCEPT = 'image/png,image/jpeg,image/webp';
+export const LOGO_ACCEPT = 'image/*';
 export const LOGO_MAX_BYTES = 10_000_000;
+export const LOGO_SOURCE_MAX_BYTES = 25_000_000;
 
 const ACCEPTED_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const CONVERTIBLE_TYPES = new Set([...ACCEPTED_TYPES, 'image/heic', 'image/heif']);
 const ACCEPTED_EXTENSIONS = /\.(png|jpe?g|webp)$/i;
+const CONVERTIBLE_EXTENSIONS = /\.(png|jpe?g|webp|heic|heif)$/i;
+
+const readAsDataURL = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => resolve(event.target.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+});
+
+const loadImage = (src) => new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+});
+
+const canvasToBlob = (canvas, type, quality) => new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('Image conversion failed'));
+    }, type, quality);
+});
 
 export const isSupportedLogoFile = (file) => {
     if (!file) return false;
     return ACCEPTED_TYPES.has(file.type) || ACCEPTED_EXTENSIONS.test(file.name || '');
 };
 
+export const isConvertibleLogoFile = (file) => {
+    if (!file) return false;
+    return (file.type || '').startsWith('image/')
+        || CONVERTIBLE_TYPES.has(file.type)
+        || CONVERTIBLE_EXTENSIONS.test(file.name || '');
+};
+
 export const isLogoFileTooLarge = (file) => Boolean(file && file.size > LOGO_MAX_BYTES);
+export const isLogoSourceTooLarge = (file) => Boolean(file && file.size > LOGO_SOURCE_MAX_BYTES);
+
+export async function prepareLogoUploadFile(file) {
+    if (!file) return file;
+    if (isSupportedLogoFile(file) && !isLogoFileTooLarge(file)) return file;
+
+    const source = await readAsDataURL(file);
+    const image = await loadImage(source);
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+    const nameBase = (file.name || 'logo').replace(/\.[^.]+$/, '') || 'logo';
+
+    for (const maxSize of [2400, 2048, 1600, 1200]) {
+        const scale = Math.min(1, maxSize / Math.max(sourceWidth, sourceHeight));
+        const width = Math.max(1, Math.round(sourceWidth * scale));
+        const height = Math.max(1, Math.round(sourceHeight * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d', { alpha: false, colorSpace: 'srgb' });
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(image, 0, 0, width, height);
+
+        for (const quality of [0.92, 0.84, 0.74, 0.64]) {
+            const blob = await canvasToBlob(canvas, 'image/jpeg', quality);
+            if (blob.size <= LOGO_MAX_BYTES) {
+                return new File([blob], `${nameBase}.jpg`, { type: 'image/jpeg' });
+            }
+        }
+    }
+
+    throw new Error('Prepared logo is too large');
+}
