@@ -5,6 +5,7 @@ import { useConfigurator } from '../../store';
 import {
     isConvertibleLogoFile,
     isLogoSourceTooLarge,
+    LogoUploadPreparationError,
     LOGO_ACCEPT,
     prepareLogoUploadFile,
 } from '../../utils/logoUpload';
@@ -19,17 +20,31 @@ const validateFile = (file, language) => {
 const uploadErrorMessage = (err, language) => {
     const code = err?.response?.status;
     const detail = err?.response?.data?.detail;
+    if (!err?.response) return t(language, 'logoUploadNetworkError');
     if (code === 410) return t(language, 'logoUploadExpired');
     if (code === 404) return t(language, 'logoUploadSessionMissing');
     if (code === 413 || detail === 'File is too large' || detail === 'Payload too large') return t(language, 'logoUploadTooLarge');
-    if (code === 400 || detail === 'Unsupported file format' || detail === 'File content does not match declared type') return t(language, 'logoUploadUnsupported');
+    if (detail === 'File content does not match declared type') return t(language, 'logoUploadInvalidImage');
+    if (code === 400 || detail === 'Unsupported file format') return t(language, 'logoUploadUnsupported');
+    if (code >= 500) return t(language, 'logoUploadServerError');
     return t(language, 'logoUploadFailed');
 };
+
+const preparationErrorMessage = (err, language) => {
+    if (!(err instanceof LogoUploadPreparationError)) return t(language, 'logoUploadFailed');
+    if (err.reason === 'too-large-after-compression') return t(language, 'logoUploadCompressTooLarge');
+    if (err.reason === 'read-failed') return t(language, 'logoUploadReadFailed');
+    if (err.reason === 'conversion-failed') return t(language, 'logoUploadCompressFailed');
+    return t(language, 'logoUploadDecodeFailed');
+};
+
+const toFiles = (fileList) => Array.from(fileList || []).filter(Boolean);
 
 export const MobileLogoUpload = ({ sessionId }) => {
     const language = useConfigurator((state) => state.language);
     const inputRef = useRef(null);
-    const [file, setFile] = useState(null);
+    const errorRef = useRef(null);
+    const [files, setFiles] = useState([]);
     const [status, setStatus] = useState('loading');
     const [error, setError] = useState('');
 
@@ -47,14 +62,27 @@ export const MobileLogoUpload = ({ sessionId }) => {
         return () => { cancelled = true; };
     }, [sessionId]);
 
-    const pickFile = (nextFile) => {
-        const message = validateFile(nextFile, language);
-        setFile(message ? null : nextFile);
+    useEffect(() => {
+        if (!error || !errorRef.current) return;
+        const timer = window.setTimeout(() => {
+            errorRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }, 50);
+        return () => window.clearTimeout(timer);
+    }, [error]);
+
+    const pickFiles = (nextFiles) => {
+        const uploadFiles = toFiles(nextFiles);
+        const message = uploadFiles.length
+            ? uploadFiles.map((file) => validateFile(file, language)).find(Boolean)
+            : t(language, 'logoUploadNoFile');
+        setFiles(message ? [] : uploadFiles);
         setError(message);
     };
 
     const submit = async () => {
-        const message = validateFile(file, language);
+        const message = files.length
+            ? files.map((file) => validateFile(file, language)).find(Boolean)
+            : t(language, 'logoUploadNoFile');
         if (message) {
             setError(message);
             return;
@@ -62,15 +90,17 @@ export const MobileLogoUpload = ({ sessionId }) => {
         setStatus('uploading');
         setError('');
         try {
-            let uploadFile;
+            const uploadFiles = [];
             try {
-                uploadFile = await prepareLogoUploadFile(file);
-            } catch {
+                for (const file of files) {
+                    uploadFiles.push(await prepareLogoUploadFile(file));
+                }
+            } catch (err) {
                 setStatus('ready');
-                setError(t(language, 'logoUploadUnsupported'));
+                setError(preparationErrorMessage(err, language));
                 return;
             }
-            await logoTransferApi.uploadToSession(sessionId, uploadFile);
+            await logoTransferApi.uploadToSession(sessionId, uploadFiles);
             setStatus('done');
         } catch (err) {
             const code = err?.response?.status;
@@ -80,6 +110,9 @@ export const MobileLogoUpload = ({ sessionId }) => {
     };
 
     const disabled = status === 'loading' || status === 'uploading' || status === 'done' || status === 'expired' || status === 'missing';
+    const selectedLabel = files.length > 1
+        ? `${files.length} ${t(language, 'logoUploadFilesSelected')}`
+        : files[0]?.name;
 
     return (
         <main className="min-h-screen bg-[#211a1d] px-4 py-6 font-zen text-white">
@@ -105,7 +138,7 @@ export const MobileLogoUpload = ({ sessionId }) => {
                             </svg>
                         </div>
                         <span className="text-[14px] font-black uppercase tracking-wider">
-                            {file?.name || t(language, 'logoUploadMobileChoose')}
+                            {selectedLabel || t(language, 'logoUploadMobileChoose')}
                         </span>
                         <span className="mt-2 text-[12px] font-bold leading-relaxed text-white/45">
                             {t(language, 'logoUploadMobileHint')}
@@ -116,16 +149,22 @@ export const MobileLogoUpload = ({ sessionId }) => {
                         ref={inputRef}
                         type="file"
                         accept={LOGO_ACCEPT}
+                        multiple
                         className="hidden"
                         onChange={(event) => {
-                            pickFile(event.target.files?.[0]);
+                            pickFiles(event.target.files);
                             event.target.value = '';
                         }}
                     />
 
                     {error && (
-                        <div className="mt-4 rounded-[10px] border border-red-300/25 bg-red-500/12 px-3 py-2 text-[12px] font-bold text-red-100">
-                            {error}
+                        <div
+                            ref={errorRef}
+                            role="alert"
+                            className="mt-4 rounded-[12px] border border-red-300/35 bg-red-500/16 px-4 py-3 text-left text-red-50 shadow-[0_14px_40px_rgba(0,0,0,0.22)]"
+                        >
+                            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-red-100/70">{t(language, 'logoUploadErrorTitle')}</p>
+                            <p className="mt-1 text-[13px] font-bold leading-relaxed">{error}</p>
                         </div>
                     )}
 
@@ -143,7 +182,7 @@ export const MobileLogoUpload = ({ sessionId }) => {
 
                     <button
                         type="button"
-                        disabled={!file || disabled}
+                        disabled={!files.length || disabled}
                         onClick={submit}
                         className="mt-5 w-full rounded-full bg-[#fff9ec] px-5 py-3 text-[12px] font-black uppercase tracking-widest text-[#211a1d] transition enabled:hover:bg-white enabled:active:scale-[0.98] disabled:opacity-50"
                     >

@@ -163,9 +163,10 @@ export const productApi = {
 export const logoTransferApi = {
     createSession: (baseUrl) => apiClient.post('/files/logo-upload-sessions', { base_url: baseUrl }),
     getSession: (sessionId) => apiClient.get(`/files/logo-upload-sessions/${encodeURIComponent(sessionId)}`),
-    uploadToSession: (sessionId, file) => {
+    uploadToSession: (sessionId, files) => {
         const formData = new FormData();
-        formData.append('file', file);
+        const uploadFiles = Array.isArray(files) ? files : [files];
+        uploadFiles.forEach((file) => formData.append('files', file));
         return apiClient.post(`/files/logo-upload-sessions/${encodeURIComponent(sessionId)}/upload`, formData);
     },
 };

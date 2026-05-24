@@ -55,10 +55,10 @@ def _session_key(session_id: str) -> str:
     return f"{SESSION_REDIS_PREFIX}:{session_id}"
 
 
-def _session_file_key(session_id: str) -> str:
+def _session_file_key(session_id: str, index: int = 0) -> str:
     if not SESSION_ID_RE.fullmatch(session_id or ""):
         raise HTTPException(status_code=404, detail="Logo upload session not found")
-    return f"{SESSION_REDIS_PREFIX}:file:{session_id}"
+    return f"{SESSION_REDIS_PREFIX}:file:{session_id}:{index}"
 
 
 def _iso(value: datetime) -> str:
@@ -131,23 +131,39 @@ async def _get_session_or_404(session_id: str) -> dict:
     return session
 
 
-async def _write_session_file(session_id: str, content: bytes, session: dict) -> str | None:
+async def _write_session_file(session_id: str, content: bytes, session: dict, index: int = 0) -> str | None:
     try:
-        key = _session_file_key(session_id)
+        key = _session_file_key(session_id, index)
         await get_cache().set(key, content, ex=_ttl_seconds(session))
         return key
     except Exception:
         return None
 
 
-async def _read_session_file(session: dict) -> bytes | None:
-    file_key = session.get("file_key")
+async def _read_session_file(file_meta: dict) -> bytes | None:
+    file_key = file_meta.get("file_key")
     if not file_key:
         return None
     try:
         return await get_cache().get(file_key)
     except Exception:
         return None
+
+
+def _session_files(session: dict) -> list[dict]:
+    files = session.get("files")
+    if isinstance(files, list):
+        return [item for item in files if isinstance(item, dict)]
+    if session.get("file_path") or session.get("file_key"):
+        return [{
+            "url": session.get("url"),
+            "file_path": session.get("file_path"),
+            "file_key": session.get("file_key"),
+            "filename": session.get("filename"),
+            "content_type": session.get("content_type"),
+            "size": session.get("size"),
+        }]
+    return []
 
 
 def _cleanup_expired_sessions() -> None:
@@ -189,11 +205,21 @@ def _session_payload(session: dict) -> dict:
         "qr_url": f"/api/v1/files/logo-upload-sessions/{session['id']}/qr.png",
     }
     if session.get("status") == "ready":
+        files = _session_files(session)
         result.update({
             "download_url": f"/api/v1/files/logo-upload-sessions/{session['id']}/file",
-            "filename": session.get("filename"),
-            "content_type": session.get("content_type"),
-            "size": session.get("size"),
+            "files": [
+                {
+                    "download_url": f"/api/v1/files/logo-upload-sessions/{session['id']}/file?index={index}",
+                    "filename": item.get("filename"),
+                    "content_type": item.get("content_type"),
+                    "size": item.get("size"),
+                }
+                for index, item in enumerate(files)
+            ],
+            "filename": files[0].get("filename") if files else session.get("filename"),
+            "content_type": files[0].get("content_type") if files else session.get("content_type"),
+            "size": files[0].get("size") if files else session.get("size"),
         })
     return result
 
@@ -293,23 +319,43 @@ async def get_logo_upload_session_qr(session_id: str):
 async def upload_logo_to_session(
     session_id: str,
     request: Request,
-    file: UploadFile = File(...),
+    file: UploadFile | None = File(None),
+    files: list[UploadFile] | None = File(None),
 ):
     session = await _get_session_or_404(session_id)
     if _is_expired(session):
         raise HTTPException(status_code=410, detail="Logo upload session expired")
 
-    saved = await _save_logo_file(file)
-    file_key = await _write_session_file(session_id, saved["content"], session)
+    upload_files = list(files or [])
+    if file is not None:
+        upload_files.insert(0, file)
+    if not upload_files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+
+    saved_files = []
+    for index, item in enumerate(upload_files):
+        saved = await _save_logo_file(item)
+        file_key = await _write_session_file(session_id, saved["content"], session, index)
+        saved_files.append({
+            "url": saved["url"],
+            "file_path": saved["path"],
+            "file_key": file_key,
+            "filename": saved["filename"],
+            "content_type": saved["content_type"],
+            "size": saved["size"],
+        })
+
+    first_file = saved_files[0]
     session.update({
         "status": "ready",
         "uploaded_at": _iso(_now_utc()),
-        "url": saved["url"],
-        "file_path": saved["path"],
-        "file_key": file_key,
-        "filename": saved["filename"],
-        "content_type": saved["content_type"],
-        "size": saved["size"],
+        "files": saved_files,
+        "url": first_file["url"],
+        "file_path": first_file["file_path"],
+        "file_key": first_file["file_key"],
+        "filename": first_file["filename"],
+        "content_type": first_file["content_type"],
+        "size": first_file["size"],
     })
     await _write_session(session)
 
@@ -326,32 +372,41 @@ async def upload_logo_to_session(
         request_id=request_id(request),
         entity_type="logo_upload_session",
         entity_id=session_id,
-        details={"content_type": saved["content_type"], "size": saved["size"]},
+        details={
+            "count": len(saved_files),
+            "content_types": [item["content_type"] for item in saved_files],
+            "total_size": sum(item["size"] for item in saved_files),
+        },
     )
     return _session_payload(session)
 
 
 @router.get("/logo-upload-sessions/{session_id}/file")
-async def download_logo_upload_session_file(session_id: str):
+async def download_logo_upload_session_file(session_id: str, index: int = 0):
     session = await _get_session_or_404(session_id)
     if _is_expired(session):
         raise HTTPException(status_code=410, detail="Logo upload session expired")
     if session.get("status") != "ready":
         raise HTTPException(status_code=404, detail="Logo file not uploaded yet")
-    content = await _read_session_file(session)
+    files = _session_files(session)
+    if index < 0 or index >= len(files):
+        raise HTTPException(status_code=404, detail="Logo file not found")
+
+    file_meta = files[index]
+    content = await _read_session_file(file_meta)
     if content is not None:
         return Response(
             content=content,
-            media_type=session.get("content_type") or "application/octet-stream",
+            media_type=file_meta.get("content_type") or "application/octet-stream",
             headers={"Cache-Control": "no-store"},
         )
-    if not session.get("file_path"):
+    if not file_meta.get("file_path"):
         raise HTTPException(status_code=404, detail="Logo file not uploaded yet")
-    if not os.path.exists(session["file_path"]):
+    if not os.path.exists(file_meta["file_path"]):
         raise HTTPException(status_code=404, detail="Logo file not found")
     return FileResponse(
-        session["file_path"],
-        media_type=session.get("content_type") or "application/octet-stream",
-        filename=session.get("filename") or "logo.png",
+        file_meta["file_path"],
+        media_type=file_meta.get("content_type") or "application/octet-stream",
+        filename=file_meta.get("filename") or "logo.png",
         headers={"Cache-Control": "no-store"},
     )

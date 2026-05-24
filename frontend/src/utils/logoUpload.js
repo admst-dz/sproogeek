@@ -7,6 +7,14 @@ const CONVERTIBLE_TYPES = new Set([...ACCEPTED_TYPES, 'image/heic', 'image/heif'
 const ACCEPTED_EXTENSIONS = /\.(png|jpe?g|webp)$/i;
 const CONVERTIBLE_EXTENSIONS = /\.(png|jpe?g|webp|heic|heif)$/i;
 
+export class LogoUploadPreparationError extends Error {
+    constructor(reason) {
+        super(reason);
+        this.name = 'LogoUploadPreparationError';
+        this.reason = reason;
+    }
+}
+
 const readAsDataURL = (file) => new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (event) => resolve(event.target.result);
@@ -47,10 +55,26 @@ export async function prepareLogoUploadFile(file) {
     if (!file) return file;
     if (isSupportedLogoFile(file) && !isLogoFileTooLarge(file)) return file;
 
-    const source = await readAsDataURL(file);
-    const image = await loadImage(source);
+    let source;
+    try {
+        source = await readAsDataURL(file);
+    } catch {
+        throw new LogoUploadPreparationError('read-failed');
+    }
+
+    let image;
+    try {
+        image = await loadImage(source);
+    } catch {
+        throw new LogoUploadPreparationError('decode-failed');
+    }
+
     const sourceWidth = image.naturalWidth || image.width;
     const sourceHeight = image.naturalHeight || image.height;
+    if (!sourceWidth || !sourceHeight) {
+        throw new LogoUploadPreparationError('decode-failed');
+    }
+
     const nameBase = (file.name || 'logo').replace(/\.[^.]+$/, '') || 'logo';
 
     for (const maxSize of [2400, 2048, 1600, 1200]) {
@@ -61,6 +85,9 @@ export async function prepareLogoUploadFile(file) {
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d', { alpha: false, colorSpace: 'srgb' });
+        if (!ctx) {
+            throw new LogoUploadPreparationError('conversion-failed');
+        }
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, width, height);
         ctx.imageSmoothingEnabled = true;
@@ -75,5 +102,5 @@ export async function prepareLogoUploadFile(file) {
         }
     }
 
-    throw new Error('Prepared logo is too large');
+    throw new LogoUploadPreparationError('too-large-after-compression');
 }

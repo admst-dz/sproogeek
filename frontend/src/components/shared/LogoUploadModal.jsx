@@ -14,6 +14,8 @@ const fileError = (file, language) => {
     return '';
 };
 
+const toFiles = (fileList) => Array.from(fileList || []).filter(Boolean);
+
 export const LogoUploadModal = ({ open, onClose, onFile }) => {
     const language = useConfigurator((state) => state.language);
     const inputRef = useRef(null);
@@ -28,8 +30,11 @@ export const LogoUploadModal = ({ open, onClose, onFile }) => {
         onClose?.();
     }, [onClose]);
 
-    const ingestFile = useCallback(async (file, nextStatus = 'ready') => {
-        const message = fileError(file, language);
+    const ingestFiles = useCallback(async (files, nextStatus = 'ready') => {
+        const uploadFiles = toFiles(files);
+        const message = uploadFiles.length
+            ? uploadFiles.map((file) => fileError(file, language)).find(Boolean)
+            : t(language, 'logoUploadNoFile');
         if (message) {
             setError(message);
             return;
@@ -37,7 +42,9 @@ export const LogoUploadModal = ({ open, onClose, onFile }) => {
         setError('');
         setStatus('processing');
         try {
-            await onFile?.(file);
+            for (const file of uploadFiles) {
+                await onFile?.(file);
+            }
             setStatus(nextStatus);
             window.setTimeout(close, 650);
         } catch {
@@ -46,33 +53,40 @@ export const LogoUploadModal = ({ open, onClose, onFile }) => {
         }
     }, [close, language, onFile]);
 
-    const handlePickedFile = useCallback((file) => {
-        if (!file) return;
+    const handlePickedFiles = useCallback((files) => {
+        const uploadFiles = toFiles(files);
+        if (!uploadFiles.length) return;
         consumedRemoteRef.current = true;
-        ingestFile(file);
-    }, [ingestFile]);
+        ingestFiles(uploadFiles);
+    }, [ingestFiles]);
 
     const handleRemoteReady = useCallback(async (payload) => {
-        if (consumedRemoteRef.current || !payload?.download_url) return;
+        const remoteFiles = Array.isArray(payload?.files) && payload.files.length
+            ? payload.files
+            : (payload?.download_url ? [payload] : []);
+        if (consumedRemoteRef.current || !remoteFiles.length) return;
         consumedRemoteRef.current = true;
         setStatus('processing');
         setError('');
         try {
-            const response = await fetch(resolveApiUrl(payload.download_url), { cache: 'no-store' });
-            if (!response.ok) throw new Error('download failed');
-            const blob = await response.blob();
-            const file = new File(
-                [blob],
-                payload.filename || 'logo.png',
-                { type: blob.type || payload.content_type || 'image/png' }
-            );
-            await ingestFile(file, 'uploaded');
+            const files = [];
+            for (const item of remoteFiles) {
+                const response = await fetch(resolveApiUrl(item.download_url || payload.download_url), { cache: 'no-store' });
+                if (!response.ok) throw new Error('download failed');
+                const blob = await response.blob();
+                files.push(new File(
+                    [blob],
+                    item.filename || 'logo.png',
+                    { type: blob.type || item.content_type || 'image/png' }
+                ));
+            }
+            await ingestFiles(files, 'uploaded');
         } catch {
             consumedRemoteRef.current = false;
             setStatus('error');
             setError(t(language, 'logoUploadFailed'));
         }
-    }, [ingestFile, language]);
+    }, [ingestFiles, language]);
 
     useEffect(() => {
         if (!open) return undefined;
@@ -188,7 +202,7 @@ export const LogoUploadModal = ({ open, onClose, onFile }) => {
                         onDrop={(event) => {
                             event.preventDefault();
                             setDragging(false);
-                            handlePickedFile(event.dataTransfer.files?.[0]);
+                            handlePickedFiles(event.dataTransfer.files);
                         }}
                         className={`flex min-h-[156px] cursor-pointer flex-col items-center justify-center rounded-[12px] border border-dashed px-5 py-6 text-center transition ${
                             dragging ? 'border-[#fff9ec] bg-white/16' : 'border-white/24 bg-white/8 hover:bg-white/12'
@@ -214,9 +228,10 @@ export const LogoUploadModal = ({ open, onClose, onFile }) => {
                             ref={inputRef}
                             type="file"
                             accept={LOGO_ACCEPT}
+                            multiple
                             className="hidden"
                             onChange={(event) => {
-                                handlePickedFile(event.target.files?.[0]);
+                                handlePickedFiles(event.target.files);
                                 event.target.value = '';
                             }}
                         />
