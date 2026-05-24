@@ -3,6 +3,7 @@ import { ALL_PRODUCT_DEFAULTS, THEME_SWITCHING_ENABLED, getNotebookBindingCapabi
 import { t } from './i18n'
 import { CookieBanner } from './components/shared/CookieBanner'
 import { getInitialRouteState, getPathForRouteState } from './config/routes'
+import { fetchPublicSettings } from './api'
 
 const Home = lazy(() => import('./components/home/Home').then((module) => ({ default: module.Home })));
 const Order = lazy(() => import('./components/order/Order').then((module) => ({ default: module.Order })));
@@ -323,6 +324,7 @@ function MainApp() {
         cartRestoredFromCookie,
         clearCart,
         language,
+        setGuestApprovalEnabled,
     } = useConfigurator();
 
     const guardedNavigate = (target) => {
@@ -359,6 +361,12 @@ function MainApp() {
             setShowAuth(true);
         }
     };
+
+    useEffect(() => {
+        fetchPublicSettings()
+            .then((settings) => setGuestApprovalEnabled(settings.guest_approval_enabled !== false))
+            .catch(() => setGuestApprovalEnabled(true));
+    }, [setGuestApprovalEnabled]);
 
     useEffect(() => {
         if (!THEME_SWITCHING_ENABLED) {

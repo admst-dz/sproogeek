@@ -467,7 +467,7 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
             </header>
 
             <main className="home-main flex-1 flex w-full flex-col items-center pt-6 sm:pt-10 lg:pt-12 2xl:pt-16 pb-20 sm:pb-24 px-4 sm:px-6 lg:px-8 z-10">
-                <h1 className="home-title max-w-[72rem] break-words px-2 text-[2.35rem] font-bold text-center leading-[1.05] tracking-normal mb-4 sm:text-5xl md:text-6xl xl:text-7xl sm:mb-6 text-gray-900 dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-b dark:from-white dark:to-gray-400 drop-shadow-sm dark:drop-shadow-2xl transition-colors">
+                <h1 className="home-title max-w-[72rem] break-words px-2 pb-2 text-[2.35rem] font-bold text-center leading-[1.16] tracking-normal mb-3 sm:text-5xl md:text-6xl xl:text-7xl sm:mb-4 text-gray-900 dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-b dark:from-white dark:to-gray-400 drop-shadow-sm dark:drop-shadow-2xl transition-colors">
                     {t(language, 'title1')}<br />{t(language, 'title2')}
                 </h1>
                 <p className="home-subtitle text-gray-500 dark:text-gray-400 text-sm md:text-base text-center max-w-xl mb-8 sm:mb-10 lg:mb-12 xl:mb-14 font-medium leading-relaxed transition-colors">

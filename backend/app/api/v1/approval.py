@@ -38,6 +38,7 @@ from app.core.deps import request_id
 from app.core.email import is_email_configured, send_email
 from app.core.event_logger import event_logger
 from app.services.imposition import qr_png_bytes
+from app.services.settings_store import read_settings
 from app.services.unwrap_client import fetch_block_pdf, fetch_unwrap_zip
 
 
@@ -71,6 +72,15 @@ class GuestApprovalRequest(BaseModel):
     name: Optional[str] = Field(default=None, max_length=120)
     phone: Optional[str] = Field(default=None, max_length=40)
     comment: Optional[str] = Field(default=None, max_length=4000)
+
+
+class ApprovalSettingsResponse(BaseModel):
+    guest_approval_enabled: bool = True
+
+
+@router.get("/settings", response_model=ApprovalSettingsResponse)
+async def get_approval_settings():
+    return read_settings()
 
 
 def _kind_from_active_product(active_product: str) -> str:
@@ -392,6 +402,8 @@ async def request_guest_approval(
     клиента на медленном SMTP. PDF-генерация — синхронно (нужно поймать
     ошибки techcard и сообщить пользователю).
     """
+    if not read_settings().get("guest_approval_enabled", True):
+        raise HTTPException(status_code=403, detail="guest approval is disabled")
     if len(payload.render_data_url) > _MAX_RENDER_BYTES * 4 // 3:
         raise HTTPException(status_code=413, detail="render image too large")
 

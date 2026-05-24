@@ -84,6 +84,8 @@ export const orderApi = {
 export const adminApi = {
     getOrders: (page = 1, size = 100) => apiClient.get(`/admin/orders?${new URLSearchParams({ page, size })}`),
     updateOrder: (orderId, data) => apiClient.patch(`/admin/orders/${encodeURIComponent(orderId)}`, data),
+    getSettings: () => apiClient.get('/admin/settings'),
+    updateSettings: (data) => apiClient.patch('/admin/settings', data),
 
     getUsers: ({ role = null, search = null } = {}) => {
         const params = new URLSearchParams();
@@ -346,6 +348,11 @@ export const saveOrderType = async (typeId, data) => {
 export const requestGuestApproval = async (payload) => {
     const { data } = await apiClient.post('/approval/guest', payload);
     return data;
+};
+
+export const fetchPublicSettings = async () => {
+    const { data } = await apiClient.get('/approval/settings');
+    return data || { guest_approval_enabled: true };
 };
 
 export default apiClient;

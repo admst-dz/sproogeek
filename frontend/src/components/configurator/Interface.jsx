@@ -50,7 +50,8 @@ export const Interface = ({ onFinish }) => {
         zoomLevel, setZoom,
         addToCart,
         setRenderSnapshot,
-        language
+        language,
+        guestApprovalEnabled,
     } = useConfigurator();
 
     const [approvalOpen, setApprovalOpen] = useState(false);
@@ -111,7 +112,7 @@ export const Interface = ({ onFinish }) => {
             title={t(language, 'notebook')}
             onSave={handleAddToCart}
             saveLabel={t(language, 'placeOrder')}
-            onEmailApproval={handleEmailApproval}
+            onEmailApproval={guestApprovalEnabled ? handleEmailApproval : null}
             emailApprovalLabel={t(language, 'emailApproval')}
         >
             <div className="flex justify-center mb-3 md:mb-4">

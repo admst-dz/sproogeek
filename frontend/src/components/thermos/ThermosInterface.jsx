@@ -30,6 +30,7 @@ export const ThermosInterface = ({ onFinish }) => {
         resetThermosLogoTransform, setThermosLogoPosition,
         setThermosLogoRotation, setThermosLogoScale,
         addToCart, setRenderSnapshot, language,
+        guestApprovalEnabled,
     } = useConfigurator();
     const activeLogoTarget = logoArea === 'body' ? 'body' : capLogoTarget;
 
@@ -69,7 +70,7 @@ export const ThermosInterface = ({ onFinish }) => {
             title={t(language, 'thermosTitle')}
             onSave={handleAddToCart}
             saveLabel={t(language, 'placeOrder')}
-            onEmailApproval={handleEmailApproval}
+            onEmailApproval={guestApprovalEnabled ? handleEmailApproval : null}
             emailApprovalLabel={t(language, 'emailApproval')}
         >
             <DockGrid

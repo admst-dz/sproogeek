@@ -115,6 +115,14 @@ class AdminStatsResponse(BaseModel):
     new_orders_last_30d: int
 
 
+class AdminSettingsResponse(BaseModel):
+    guest_approval_enabled: bool = True
+
+
+class AdminSettingsPatch(BaseModel):
+    guest_approval_enabled: Optional[bool] = None
+
+
 class OrderTypeSummary(BaseModel):
     id: str
     filename: str

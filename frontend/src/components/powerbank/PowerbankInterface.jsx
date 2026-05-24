@@ -27,6 +27,7 @@ export const PowerbankInterface = ({ onFinish }) => {
         resetPowerbankLogoTransform,
         setPowerbankLogoPosition, setPowerbankLogoRotation, setPowerbankLogoScale, setPowerbankLogoSide,
         addToCart, setRenderSnapshot, language,
+        guestApprovalEnabled,
     } = useConfigurator();
 
     const [approvalOpen, setApprovalOpen] = useState(false);
@@ -64,7 +65,7 @@ export const PowerbankInterface = ({ onFinish }) => {
             title={t(language, 'powerbankTitle')}
             onSave={handleAddToCart}
             saveLabel={t(language, 'placeOrder')}
-            onEmailApproval={handleEmailApproval}
+            onEmailApproval={guestApprovalEnabled ? handleEmailApproval : null}
             emailApprovalLabel={t(language, 'emailApproval')}
         >
             <DockGrid

@@ -186,6 +186,7 @@ export const useConfigurator = create(temporal((set, get) => ({
 
     language: 'ru',
     theme: 'dark',
+    guestApprovalEnabled: true,
 
     cartItems: _initialCartItems,
     cartRestoredFromCookie: _initialCartItems.length > 0,
@@ -206,6 +207,7 @@ export const useConfigurator = create(temporal((set, get) => ({
     },
 
     setLanguage: (lang) => set({ language: lang }),
+    setGuestApprovalEnabled: (enabled) => set({ guestApprovalEnabled: Boolean(enabled) }),
     toggleTheme: () => set((state) => {
         if (!THEME_SWITCHING_ENABLED) {
             document.documentElement.classList.add('dark');
