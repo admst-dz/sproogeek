@@ -143,6 +143,7 @@ export default {
     "emailApprovalDesc": "Пришлём PDF-согласование с превью изделия и параметрами заказа на ваш email. Регистрация не нужна.",
     "emailApprovalSent": "Готово! PDF-согласование отправлено на",
     "emailApprovalError": "Не удалось отправить. Попробуйте ещё раз через минуту.",
+    "emailApprovalTooLarge": "Макет получился слишком большим для отправки. Уменьшите размер логотипа или попробуйте другой файл.",
     "emailApprovalSubmit": "Отправить",
     "emailApprovalEmail": "Ваш email",
     "emailApprovalName": "Имя (необязательно)",

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { temporal } from 'zundo'
 import { getCookie, setCookie, deleteCookie, hasCookieConsent } from './utils/cookies'
-import { normalizeImageFile } from './utils/images'
+import { canvasToDataURL, normalizeImageFile } from './utils/images'
 
 const CART_COOKIE = 'spruzhuk_cart';
 const AUTH_COOKIE = 'spruzhuk_auth';
@@ -56,9 +56,9 @@ const _persistCart = (items) => {
 
 let _webglCanvas = null
 export const registerWebGLCanvas = (el) => { _webglCanvas = el }
-export const captureRender = () => {
+export const captureRender = (options) => {
     if (!_webglCanvas) return null
-    try { return _webglCanvas.toDataURL('image/png') } catch { return null }
+    try { return canvasToDataURL(_webglCanvas, options) } catch { return null }
 }
 
 export const NOTEBOOK_BINDING_CAPABILITIES = {

@@ -46,16 +46,21 @@ router = APIRouter()
 limiter = Limiter(key_func=slowapi_key)
 
 
-# Лимит на data URL (≈12 МБ base64 = ~9 МБ PNG). Под LimitUploadSize
+# Лимит на raw image bytes после base64 decode. Под LimitUploadSize
 # (12 МБ) уже не пройдёт большее, но добавим явный sanity-check здесь.
 _MAX_RENDER_BYTES = 12_000_000
 _PRINT_ARCHIVE_TO = "info@sproogeek.com"
+_RENDER_MIME_EXTENSIONS = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+}
 
 
 class GuestApprovalRequest(BaseModel):
     email: EmailStr
     product_name: str = Field(..., min_length=1, max_length=120)
-    # data URL от canvas.toDataURL('image/png'): "data:image/png;base64,iVBOR…"
+    # data URL от canvas.toDataURL(...): "data:image/jpeg;base64,/9j/…"
     render_data_url: str = Field(..., min_length=32)
     # Полный конфиг (как в корзине): activeProduct, цвета, переплёт, лого и т.п.
     configuration: dict[str, Any] = Field(default_factory=dict)
@@ -161,13 +166,16 @@ async def _generate_approval_pdf(payload: GuestApprovalRequest, guest_order_id: 
     return await _generate_techcard_pdf(payload, guest_order_id, doc_type="approval")
 
 
-def _decode_render_png(data_url: str) -> Optional[bytes]:
-    """data:image/png;base64,xxxx → bytes. Используется как вторичное
-    вложение к письму (PNG отдельным файлом для удобства просмотра)."""
+def _decode_render_image(data_url: str) -> Optional[dict[str, Any]]:
+    """data:image/*;base64,xxxx → attachment metadata."""
     if not data_url or "," not in data_url:
         return None
     header, _, b64_payload = data_url.partition(",")
     if "base64" not in header.lower():
+        return None
+    mime_type = header.split(";", 1)[0].removeprefix("data:").lower()
+    extension = _RENDER_MIME_EXTENSIONS.get(mime_type)
+    if not extension:
         return None
     try:
         raw = base64.b64decode(b64_payload, validate=False)
@@ -175,7 +183,11 @@ def _decode_render_png(data_url: str) -> Optional[bytes]:
         return None
     if len(raw) > _MAX_RENDER_BYTES:
         return None
-    return raw
+    return {
+        "content": raw,
+        "mime_type": mime_type,
+        "extension": extension,
+    }
 
 
 def _short_id() -> str:
@@ -241,7 +253,7 @@ async def _build_guest_print_archive(
     guest_order_id: str,
     *,
     approval_pdf: bytes,
-    render_png: bytes | None,
+    render_image: dict[str, Any] | None,
 ) -> bytes:
     """Собирает гостевой архив по той же идее, что production-package.zip."""
     order_like = _guest_order_like(payload, guest_order_id)
@@ -257,8 +269,11 @@ async def _build_guest_print_archive(
 
         zf.writestr(f"approval/soglasovanie-{guest_order_id[-8:]}.pdf", approval_pdf)
 
-        if render_png:
-            zf.writestr(f"render/design-{guest_order_id[-8:]}.png", render_png)
+        if render_image:
+            zf.writestr(
+                f"render/design-{guest_order_id[-8:]}.{render_image['extension']}",
+                render_image["content"],
+            )
 
         try:
             unwrap_bytes = await fetch_unwrap_zip(order_like)
@@ -295,7 +310,7 @@ async def _deliver_guest_print_archive(
     *,
     guest_order_id: str,
     approval_pdf: bytes,
-    render_png: bytes | None,
+    render_image: dict[str, Any] | None,
     ip: str,
     req_id: str,
 ) -> None:
@@ -304,7 +319,7 @@ async def _deliver_guest_print_archive(
             payload,
             guest_order_id,
             approval_pdf=approval_pdf,
-            render_png=render_png,
+            render_image=render_image,
         )
         subject = f"[Spruzhyk] Гостевой архив для печати — {payload.product_name} — {guest_order_id}"
         body = "\n".join([
@@ -393,7 +408,7 @@ async def request_guest_approval(
         log.exception("guest approval generation failed")
         raise HTTPException(status_code=502, detail=f"approval render failed: {exc}") from exc
 
-    png_bytes = _decode_render_png(payload.render_data_url)
+    render_image = _decode_render_image(payload.render_data_url)
 
     subject = f"[Spruzhyk] Согласование макета — {payload.product_name}"
     body_lines = [
@@ -418,11 +433,11 @@ async def request_guest_approval(
             "mime_type": "application/pdf",
         }
     ]
-    if png_bytes:
+    if render_image:
         attachments.append({
-            "filename": f"design-{guest_order_id[-8:]}.png",
-            "content": png_bytes,
-            "mime_type": "image/png",
+            "filename": f"design-{guest_order_id[-8:]}.{render_image['extension']}",
+            "content": render_image["content"],
+            "mime_type": render_image["mime_type"],
         })
 
     ip = get_client_ip(request)
@@ -441,7 +456,8 @@ async def request_guest_approval(
             "product_name": payload.product_name,
             "quantity": payload.quantity,
             "pdf_bytes": len(pdf_bytes),
-            "png_bytes": len(png_bytes) if png_bytes else 0,
+            "render_bytes": len(render_image["content"]) if render_image else 0,
+            "render_mime_type": render_image["mime_type"] if render_image else None,
             "ip": ip,
             "name": payload.name,
             "phone": payload.phone,
@@ -467,7 +483,7 @@ async def request_guest_approval(
         payload,
         guest_order_id=guest_order_id,
         approval_pdf=pdf_bytes,
-        render_png=png_bytes,
+        render_image=render_image,
         ip=ip,
         req_id=request_id(request),
     )

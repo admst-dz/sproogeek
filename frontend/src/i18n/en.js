@@ -143,6 +143,7 @@ export default {
     "emailApprovalDesc": "We will email you a PDF proof with a preview of the product and your settings. No sign-up required.",
     "emailApprovalSent": "Done! Approval PDF was sent to",
     "emailApprovalError": "Could not send. Please retry in a minute.",
+    "emailApprovalTooLarge": "The design is too large to send. Reduce the logo size or try another file.",
     "emailApprovalSubmit": "Send",
     "emailApprovalEmail": "Your email",
     "emailApprovalName": "Name (optional)",

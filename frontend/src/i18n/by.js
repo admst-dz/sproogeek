@@ -143,6 +143,7 @@ export default {
     "emailApprovalDesc": "Дашлём PDF-узгадненне з выявай вырабу і параметрамі заказу на ваш email. Рэгістрацыя не патрабуецца.",
     "emailApprovalSent": "Гатова! PDF-узгадненне адпраўлена на",
     "emailApprovalError": "Не атрымалася адправіць. Паспрабуйце пазней.",
+    "emailApprovalTooLarge": "Макет атрымаўся занадта вялікім для адпраўкі. Паменшыце лагатып або паспрабуйце іншы файл.",
     "emailApprovalSubmit": "Адправіць",
     "emailApprovalEmail": "Ваш email",
     "emailApprovalName": "Імя (неабавязкова)",
