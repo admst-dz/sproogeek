@@ -1,5 +1,5 @@
 export const LOGO_ACCEPT = 'image/*';
-export const LOGO_MAX_BYTES = 10_000_000;
+export const LOGO_MAX_BYTES = 25_000_000;
 export const LOGO_SOURCE_MAX_BYTES = 25_000_000;
 
 const ACCEPTED_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
@@ -77,7 +77,7 @@ export async function prepareLogoUploadFile(file) {
 
     const nameBase = (file.name || 'logo').replace(/\.[^.]+$/, '') || 'logo';
 
-    for (const maxSize of [2400, 2048, 1600, 1200]) {
+    for (const maxSize of [4096, 3200, 2560, 2048, 1600, 1200]) {
         const scale = Math.min(1, maxSize / Math.max(sourceWidth, sourceHeight));
         const width = Math.max(1, Math.round(sourceWidth * scale));
         const height = Math.max(1, Math.round(sourceHeight * scale));
@@ -94,10 +94,15 @@ export async function prepareLogoUploadFile(file) {
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(image, 0, 0, width, height);
 
-        for (const quality of [0.92, 0.84, 0.74, 0.64]) {
-            const blob = await canvasToBlob(canvas, 'image/jpeg', quality);
-            if (blob.size <= LOGO_MAX_BYTES) {
-                return new File([blob], `${nameBase}.jpg`, { type: 'image/jpeg' });
+        for (const [type, extension, qualities] of [
+            ['image/webp', 'webp', [0.95, 0.9, 0.84, 0.78]],
+            ['image/jpeg', 'jpg', [0.94, 0.88, 0.82, 0.74, 0.64]],
+        ]) {
+            for (const quality of qualities) {
+                const blob = await canvasToBlob(canvas, type, quality);
+                if (blob.type === type && blob.size <= LOGO_MAX_BYTES) {
+                    return new File([blob], `${nameBase}.${extension}`, { type });
+                }
             }
         }
     }
