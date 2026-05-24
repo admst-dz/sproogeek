@@ -172,7 +172,7 @@ function OrbitCameraRig({ activeProduct, controlsRef, isMobile, zoomLevel }) {
 }
 
 export const Experience = () => {
-    const { activeProduct, zoomLevel, setZoom } = useConfigurator()
+    const { activeProduct, bindingType, zoomLevel, setZoom } = useConfigurator()
     const { active: assetsLoading, progress } = useProgress()
     const readyFrames = useRef(0)
     const orbitControlsRef = useRef(null)
@@ -216,6 +216,9 @@ export const Experience = () => {
 
     // Итоговый зум = База * То, что накликали кнопками
     const finalZoom = isOrbitProduct ? 1 : baseZoom * zoomLevel;
+    const presentationSpeed = activeProduct === 'notebook' && bindingType === 'spiral'
+        ? (isMobile ? 11.5 : 2.15)
+        : (isMobile ? 10.0 : 1.8);
 
     useEffect(() => {
         window.__3D_READY__ = false;
@@ -285,7 +288,7 @@ export const Experience = () => {
                 </>
             ) : (
                 <PresentationControls
-                    speed={isMobile ? 10.0 : 1.8}
+                    speed={presentationSpeed}
                     global
                     snap={false}
                     azimuth={[-Infinity, Infinity]}

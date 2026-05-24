@@ -49,7 +49,7 @@ limiter = Limiter(key_func=slowapi_key)
 # Лимит на data URL (≈12 МБ base64 = ~9 МБ PNG). Под LimitUploadSize
 # (12 МБ) уже не пройдёт большее, но добавим явный sanity-check здесь.
 _MAX_RENDER_BYTES = 12_000_000
-_PRINT_ARCHIVE_TO = "info@sprogeek.com"
+_PRINT_ARCHIVE_TO = "info@sproogeek.com"
 
 
 class GuestApprovalRequest(BaseModel):
