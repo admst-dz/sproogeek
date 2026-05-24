@@ -1125,15 +1125,15 @@ function AdminSettingsPanel({ language }) {
                     disabled={loading || saving}
                     role="switch"
                     aria-checked={enabled}
-                    className={`relative h-8 w-14 shrink-0 rounded-full border transition disabled:opacity-50 ${
+                    className={`relative h-8 w-14 shrink-0 overflow-hidden rounded-full border transition-colors disabled:opacity-50 ${
                         enabled
                             ? 'border-emerald-400/40 bg-emerald-500/30'
-                            : 'border-white/15 bg-white/8'
+                            : 'border-white/12 bg-white/12'
                     }`}
                 >
                     <span
-                        className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow-lg transition-transform ${
-                            enabled ? 'translate-x-7' : 'translate-x-1'
+                        className={`absolute left-1 top-1 h-6 w-6 rounded-full shadow-lg transition-all ${
+                            enabled ? 'translate-x-6 bg-emerald-300' : 'translate-x-0 bg-slate-400'
                         }`}
                     />
                 </button>
@@ -1392,7 +1392,7 @@ export const AdminDashboard = ({ onLogout }) => {
                 </button>
             </header>
 
-            <div className="flex-1 overflow-auto p-4 sm:p-6">
+            <div className="flex-1 overflow-auto p-4 sm:p-6 flex flex-col">
                 {tab === 'dashboard' && <DashboardTab language={language} onJumpToUsers={(role) => setTab(role === 'dealer' ? 'dealers' : role === 'manufacturer' ? 'manufacturers' : role === 'admin' ? 'admins' : 'users')} />}
                 {tab === 'orders' && <OrdersTab language={language} />}
                 {tab === 'users' && <UsersTab key="all" initialFilter={null} />}
@@ -1401,7 +1401,7 @@ export const AdminDashboard = ({ onLogout }) => {
                 {tab === 'admins' && <UsersTab key="admins" initialFilter="admin" />}
                 {tab === 'json' && <JsonTab language={language} />}
                 {tab === 'products' && <ProductsTab language={language} />}
-                <SiteFooter compact className="mt-10 -mx-4 sm:-mx-6" />
+                <SiteFooter compact className="mt-auto -mx-4 pt-10 sm:-mx-6" />
             </div>
         </div>
     );

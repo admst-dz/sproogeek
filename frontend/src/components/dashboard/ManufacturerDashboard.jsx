@@ -267,7 +267,7 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
             </div>
 
             {/* MAIN */}
-            <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 pt-16 md:pt-8">
+            <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 pt-16 md:pt-8 flex flex-col">
 
                 {/* STATS */}
                 <div className="flex flex-wrap gap-3 mb-6">
@@ -563,7 +563,7 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
                 </div>
                 </>
                 )}
-                <SiteFooter compact className="mt-10 -mx-4 md:-mx-8" />
+                <SiteFooter compact className="mt-auto -mx-4 pt-10 md:-mx-8" />
             </main>
 
             {/* MOBILE BOTTOM NAV */}
