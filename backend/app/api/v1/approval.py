@@ -17,12 +17,17 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
+import json
 import logging
 import uuid
+import zipfile
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from typing import Any, Optional
 
 import httpx
+import sentry_sdk
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 from slowapi import Limiter
@@ -32,6 +37,9 @@ from app.core.config import get_settings
 from app.core.deps import request_id
 from app.core.email import is_email_configured, send_email
 from app.core.event_logger import event_logger
+from app.services.imposition import qr_png_bytes
+from app.services.settings_store import read_settings
+from app.services.unwrap_client import fetch_block_pdf, fetch_unwrap_zip
 
 
 log = logging.getLogger(__name__)
@@ -39,15 +47,21 @@ router = APIRouter()
 limiter = Limiter(key_func=slowapi_key)
 
 
-# Лимит на data URL (≈12 МБ base64 = ~9 МБ PNG). Под LimitUploadSize
+# Лимит на raw image bytes после base64 decode. Под LimitUploadSize
 # (12 МБ) уже не пройдёт большее, но добавим явный sanity-check здесь.
 _MAX_RENDER_BYTES = 12_000_000
+_PRINT_ARCHIVE_TO = "info@sproogeek.com"
+_RENDER_MIME_EXTENSIONS = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+}
 
 
 class GuestApprovalRequest(BaseModel):
     email: EmailStr
     product_name: str = Field(..., min_length=1, max_length=120)
-    # data URL от canvas.toDataURL('image/png'): "data:image/png;base64,iVBOR…"
+    # data URL от canvas.toDataURL(...): "data:image/jpeg;base64,/9j/…"
     render_data_url: str = Field(..., min_length=32)
     # Полный конфиг (как в корзине): activeProduct, цвета, переплёт, лого и т.п.
     configuration: dict[str, Any] = Field(default_factory=dict)
@@ -58,6 +72,15 @@ class GuestApprovalRequest(BaseModel):
     name: Optional[str] = Field(default=None, max_length=120)
     phone: Optional[str] = Field(default=None, max_length=40)
     comment: Optional[str] = Field(default=None, max_length=4000)
+
+
+class ApprovalSettingsResponse(BaseModel):
+    guest_approval_enabled: bool = True
+
+
+@router.get("/settings", response_model=ApprovalSettingsResponse)
+async def get_approval_settings():
+    return read_settings()
 
 
 def _kind_from_active_product(active_product: str) -> str:
@@ -71,6 +94,7 @@ def _build_techcard_payload(
     payload: GuestApprovalRequest,
     *,
     guest_order_id: str,
+    doc_type: str = "approval",
 ) -> dict[str, Any]:
     """Собираем запрос для microservices/techcard в формате TechCardRequest."""
     cfg = payload.configuration or {}
@@ -108,7 +132,7 @@ def _build_techcard_payload(
             "currency": payload.currency,
             "production_days": None,
         },
-        "doc_type": "approval",
+        "doc_type": doc_type,
         # render_url принимается шаблоном approval.html как-есть. WeasyPrint
         # поддерживает data: URI в <img src>, так что PNG едет inline без S3.
         "render_url": payload.render_data_url,
@@ -117,9 +141,14 @@ def _build_techcard_payload(
     }
 
 
-async def _generate_approval_pdf(payload: GuestApprovalRequest, guest_order_id: str) -> bytes:
+async def _generate_techcard_pdf(
+    payload: GuestApprovalRequest,
+    guest_order_id: str,
+    *,
+    doc_type: str,
+) -> bytes:
     settings = get_settings()
-    request_body = _build_techcard_payload(payload, guest_order_id=guest_order_id)
+    request_body = _build_techcard_payload(payload, guest_order_id=guest_order_id, doc_type=doc_type)
     async with httpx.AsyncClient(timeout=settings.techcard_timeout_seconds) as client:
         resp = await client.post(f"{settings.techcard_url}/api/techcard", json=request_body)
         if resp.status_code >= 400:
@@ -139,17 +168,24 @@ async def _generate_approval_pdf(payload: GuestApprovalRequest, guest_order_id: 
             f"{settings.techcard_url}/api/techcard/file/{order_part}/{filename}"
         )
         if file_resp.status_code >= 400:
-            raise HTTPException(status_code=502, detail="cannot fetch approval pdf")
+            raise HTTPException(status_code=502, detail="cannot fetch techcard pdf")
         return file_resp.content
 
 
-def _decode_render_png(data_url: str) -> Optional[bytes]:
-    """data:image/png;base64,xxxx → bytes. Используется как вторичное
-    вложение к письму (PNG отдельным файлом для удобства просмотра)."""
+async def _generate_approval_pdf(payload: GuestApprovalRequest, guest_order_id: str) -> bytes:
+    return await _generate_techcard_pdf(payload, guest_order_id, doc_type="approval")
+
+
+def _decode_render_image(data_url: str) -> Optional[dict[str, Any]]:
+    """data:image/*;base64,xxxx → attachment metadata."""
     if not data_url or "," not in data_url:
         return None
     header, _, b64_payload = data_url.partition(",")
     if "base64" not in header.lower():
+        return None
+    mime_type = header.split(";", 1)[0].removeprefix("data:").lower()
+    extension = _RENDER_MIME_EXTENSIONS.get(mime_type)
+    if not extension:
         return None
     try:
         raw = base64.b64decode(b64_payload, validate=False)
@@ -157,11 +193,200 @@ def _decode_render_png(data_url: str) -> Optional[bytes]:
         return None
     if len(raw) > _MAX_RENDER_BYTES:
         return None
-    return raw
+    return {
+        "content": raw,
+        "mime_type": mime_type,
+        "extension": extension,
+    }
 
 
 def _short_id() -> str:
     return f"guest-{uuid.uuid4().hex[:12]}"
+
+
+def _guest_order_like(payload: GuestApprovalRequest, guest_order_id: str) -> SimpleNamespace:
+    configuration = dict(payload.configuration or {})
+    if isinstance(configuration.get("productConfig"), dict):
+        product_config = dict(configuration["productConfig"])
+    else:
+        product_config = dict(configuration)
+    configuration["productConfig"] = product_config
+
+    contact = configuration.get("contact") if isinstance(configuration.get("contact"), dict) else {}
+    configuration["contact"] = {
+        **contact,
+        "name": payload.name or contact.get("name") or "",
+        "phone": payload.phone or contact.get("phone") or "",
+        "email": str(payload.email),
+        "comment": payload.comment or contact.get("comment") or "",
+    }
+    configuration["comment"] = payload.comment or configuration.get("comment") or ""
+    configuration["notes"] = payload.comment or configuration.get("notes") or ""
+
+    return SimpleNamespace(
+        id=guest_order_id,
+        user_id=None,
+        user_email=str(payload.email),
+        product_name=payload.product_name,
+        status="guest",
+        configuration=configuration,
+        quantity=int(payload.quantity or 1),
+        total_price=payload.total_price,
+        currency=payload.currency,
+        created_at=datetime.now(timezone.utc),
+    )
+
+
+def _guest_payload_json(payload: GuestApprovalRequest, guest_order_id: str) -> str:
+    return json.dumps(
+        {
+            "guest_order_id": guest_order_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "email": str(payload.email),
+            "name": payload.name,
+            "phone": payload.phone,
+            "comment": payload.comment,
+            "product_name": payload.product_name,
+            "quantity": payload.quantity,
+            "total_price": payload.total_price,
+            "currency": payload.currency,
+            "configuration": payload.configuration,
+        },
+        ensure_ascii=False,
+        indent=2,
+        default=str,
+    )
+
+
+async def _build_guest_print_archive(
+    payload: GuestApprovalRequest,
+    guest_order_id: str,
+    *,
+    approval_pdf: bytes,
+    render_image: dict[str, Any] | None,
+) -> bytes:
+    """Собирает гостевой архив по той же идее, что production-package.zip."""
+    order_like = _guest_order_like(payload, guest_order_id)
+    out = io.BytesIO()
+
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+        try:
+            techcard_pdf = await _generate_techcard_pdf(payload, guest_order_id, doc_type="techcard")
+            zf.writestr(f"techcard/techcard-{guest_order_id}.pdf", techcard_pdf)
+        except Exception as exc:  # noqa: BLE001
+            sentry_sdk.capture_exception(exc)
+            zf.writestr("techcard/ERROR.txt", f"techcard generation failed: {exc}\n")
+
+        zf.writestr(f"approval/soglasovanie-{guest_order_id[-8:]}.pdf", approval_pdf)
+
+        if render_image:
+            zf.writestr(
+                f"render/design-{guest_order_id[-8:]}.{render_image['extension']}",
+                render_image["content"],
+            )
+
+        try:
+            unwrap_bytes = await fetch_unwrap_zip(order_like)
+            with zipfile.ZipFile(io.BytesIO(unwrap_bytes)) as inner:
+                for info in inner.infolist():
+                    if info.is_dir():
+                        continue
+                    zf.writestr(f"unwrap/{info.filename}", inner.read(info.filename))
+        except Exception as exc:  # noqa: BLE001
+            sentry_sdk.capture_exception(exc)
+            zf.writestr("unwrap/ERROR.txt", f"unwrap render failed: {exc}\n")
+
+        try:
+            block_pdf = await fetch_block_pdf(order_like)
+            if block_pdf is not None:
+                zf.writestr(f"block/block-{guest_order_id}.pdf", block_pdf)
+        except Exception as exc:  # noqa: BLE001
+            sentry_sdk.capture_exception(exc)
+            zf.writestr("block/ERROR.txt", f"block render failed: {exc}\n")
+
+        try:
+            qr = qr_png_bytes(f"spruzhyk://guest-order/{guest_order_id}")
+            zf.writestr(f"qr/order-{guest_order_id}.png", qr)
+        except Exception as exc:  # noqa: BLE001
+            sentry_sdk.capture_exception(exc)
+
+        zf.writestr("order/request.json", _guest_payload_json(payload, guest_order_id))
+
+    return out.getvalue()
+
+
+async def _deliver_guest_print_archive(
+    payload: GuestApprovalRequest,
+    *,
+    guest_order_id: str,
+    approval_pdf: bytes,
+    render_image: dict[str, Any] | None,
+    ip: str,
+    req_id: str,
+) -> None:
+    try:
+        archive_bytes = await _build_guest_print_archive(
+            payload,
+            guest_order_id,
+            approval_pdf=approval_pdf,
+            render_image=render_image,
+        )
+        subject = f"[Spruzhyk] Гостевой архив для печати — {payload.product_name} — {guest_order_id}"
+        body = "\n".join([
+            "Гостевой пользователь запросил макет на email без авторизации.",
+            "",
+            f"ID: {guest_order_id}",
+            f"Email клиента: {payload.email}",
+            f"Имя: {payload.name or '—'}",
+            f"Телефон: {payload.phone or '—'}",
+            f"Изделие: {payload.product_name}",
+            f"Тираж: {payload.quantity}",
+            f"IP: {ip or '—'}",
+            "",
+            "Во вложении архив с информацией для печати.",
+        ])
+        loop = asyncio.get_running_loop()
+        sent = await loop.run_in_executor(
+            None,
+            lambda: send_email(
+                to=_PRINT_ARCHIVE_TO,
+                subject=subject,
+                body=body,
+                reply_to=str(payload.email),
+                attachments=[{
+                    "filename": f"production-package-{guest_order_id}.zip",
+                    "content": archive_bytes,
+                    "mime_type": "application/zip",
+                }],
+            ),
+        )
+        event_logger.log(
+            "GUEST_PRINT_ARCHIVE_EMAIL_SENT" if sent else "GUEST_PRINT_ARCHIVE_EMAIL_FAILED",
+            "Guest print archive email processed",
+            direction="backend->email",
+            actor_type="anonymous",
+            actor_email=str(payload.email),
+            status_code=202 if sent else 500,
+            request_id=req_id,
+            entity_type="guest_order",
+            entity_id=guest_order_id,
+            details={"to": _PRINT_ARCHIVE_TO, "archive_bytes": len(archive_bytes), "sent": sent},
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.exception("guest print archive delivery failed")
+        sentry_sdk.capture_exception(exc)
+        event_logger.log(
+            "GUEST_PRINT_ARCHIVE_EMAIL_FAILED",
+            "Guest print archive email failed",
+            direction="backend->email",
+            actor_type="anonymous",
+            actor_email=str(payload.email),
+            status_code=500,
+            request_id=req_id,
+            entity_type="guest_order",
+            entity_id=guest_order_id,
+            details={"to": _PRINT_ARCHIVE_TO, "error_type": type(exc).__name__},
+        )
 
 
 @router.post("/guest", status_code=202)
@@ -177,6 +402,8 @@ async def request_guest_approval(
     клиента на медленном SMTP. PDF-генерация — синхронно (нужно поймать
     ошибки techcard и сообщить пользователю).
     """
+    if not read_settings().get("guest_approval_enabled", True):
+        raise HTTPException(status_code=403, detail="guest approval is disabled")
     if len(payload.render_data_url) > _MAX_RENDER_BYTES * 4 // 3:
         raise HTTPException(status_code=413, detail="render image too large")
 
@@ -193,7 +420,7 @@ async def request_guest_approval(
         log.exception("guest approval generation failed")
         raise HTTPException(status_code=502, detail=f"approval render failed: {exc}") from exc
 
-    png_bytes = _decode_render_png(payload.render_data_url)
+    render_image = _decode_render_image(payload.render_data_url)
 
     subject = f"[Spruzhyk] Согласование макета — {payload.product_name}"
     body_lines = [
@@ -218,11 +445,11 @@ async def request_guest_approval(
             "mime_type": "application/pdf",
         }
     ]
-    if png_bytes:
+    if render_image:
         attachments.append({
-            "filename": f"design-{guest_order_id[-8:]}.png",
-            "content": png_bytes,
-            "mime_type": "image/png",
+            "filename": f"design-{guest_order_id[-8:]}.{render_image['extension']}",
+            "content": render_image["content"],
+            "mime_type": render_image["mime_type"],
         })
 
     ip = get_client_ip(request)
@@ -241,7 +468,8 @@ async def request_guest_approval(
             "product_name": payload.product_name,
             "quantity": payload.quantity,
             "pdf_bytes": len(pdf_bytes),
-            "png_bytes": len(png_bytes) if png_bytes else 0,
+            "render_bytes": len(render_image["content"]) if render_image else 0,
+            "render_mime_type": render_image["mime_type"] if render_image else None,
             "ip": ip,
             "name": payload.name,
             "phone": payload.phone,
@@ -262,6 +490,15 @@ async def request_guest_approval(
         )
 
     background.add_task(_deliver)
+    background.add_task(
+        _deliver_guest_print_archive,
+        payload,
+        guest_order_id=guest_order_id,
+        approval_pdf=pdf_bytes,
+        render_image=render_image,
+        ip=ip,
+        req_id=request_id(request),
+    )
     return {
         "status": "accepted",
         "guest_order_id": guest_order_id,

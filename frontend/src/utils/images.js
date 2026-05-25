@@ -1,4 +1,9 @@
-const MAX_TEXTURE_SIZE = 2048;
+const MAX_TEXTURE_SIZE = 4096;
+const TEXTURE_EXPORT_QUALITY = 0.95;
+const DEFAULT_RENDER_MAX_DIMENSION = 1600;
+const DEFAULT_RENDER_MIME_TYPE = 'image/jpeg';
+const DEFAULT_RENDER_QUALITY = 0.84;
+const DEFAULT_RENDER_BACKGROUND = '#EBE5CD';
 
 const loadImage = (src) => new Promise((resolve, reject) => {
     const img = new Image();
@@ -19,6 +24,11 @@ export async function normalizeImageFile(file, maxSize = MAX_TEXTURE_SIZE) {
     const image = await loadImage(source);
     const width = image.naturalWidth || image.width;
     const height = image.naturalHeight || image.height;
+
+    if (Math.max(width, height) <= maxSize) {
+        return source;
+    }
+
     const scale = Math.min(1, maxSize / Math.max(width, height));
     const targetWidth = Math.max(1, Math.round(width * scale));
     const targetHeight = Math.max(1, Math.round(height * scale));
@@ -35,5 +45,52 @@ export async function normalizeImageFile(file, maxSize = MAX_TEXTURE_SIZE) {
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
 
+    const sourceType = (file?.type || '').split(';')[0].toLowerCase();
+    if (sourceType === 'image/jpeg') {
+        return canvas.toDataURL('image/jpeg', TEXTURE_EXPORT_QUALITY);
+    }
+    if (sourceType === 'image/webp') {
+        return canvas.toDataURL('image/webp', TEXTURE_EXPORT_QUALITY);
+    }
     return canvas.toDataURL('image/png');
+}
+
+export function canvasToDataURL(canvas, {
+    maxDimension = DEFAULT_RENDER_MAX_DIMENSION,
+    mimeType = DEFAULT_RENDER_MIME_TYPE,
+    quality = DEFAULT_RENDER_QUALITY,
+    background = DEFAULT_RENDER_BACKGROUND,
+} = {}) {
+    if (!canvas?.width || !canvas?.height) return null;
+
+    const sourceWidth = canvas.width;
+    const sourceHeight = canvas.height;
+    const scale = Number.isFinite(maxDimension) && maxDimension > 0
+        ? Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight))
+        : 1;
+    const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
+    const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
+    const shouldRasterize = scale < 1 || Boolean(background) || mimeType !== 'image/png';
+
+    if (!shouldRasterize) return canvas.toDataURL(mimeType, quality);
+
+    const out = document.createElement('canvas');
+    out.width = targetWidth;
+    out.height = targetHeight;
+    const ctx = out.getContext('2d', {
+        alpha: mimeType !== 'image/jpeg',
+        colorSpace: 'srgb',
+    });
+    if (!ctx) return canvas.toDataURL('image/png');
+
+    if (background) {
+        ctx.fillStyle = background;
+        ctx.fillRect(0, 0, targetWidth, targetHeight);
+    } else {
+        ctx.clearRect(0, 0, targetWidth, targetHeight);
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(canvas, 0, 0, targetWidth, targetHeight);
+    return out.toDataURL(mimeType, quality);
 }

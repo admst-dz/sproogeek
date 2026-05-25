@@ -312,7 +312,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
             </header>
 
             {/* MAIN */}
-            <main className="flex-1 min-h-0 overflow-y-auto custom-scrollbar max-w-6xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-8 pb-24">
+            <main className="flex-1 min-h-0 overflow-y-auto custom-scrollbar max-w-6xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-8 pb-24 flex flex-col">
 
                 {/* CATALOG TAB */}
                 {activeTab === 'catalog' && (
@@ -585,7 +585,7 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                         </div>
                     </div>
                 )}
-                <SiteFooter compact className="mt-10 -mx-4 sm:-mx-6" />
+                <SiteFooter compact className="mt-auto -mx-4 pt-10 sm:-mx-6" />
             </main>
 
             {/* SUCCESS TOAST */}

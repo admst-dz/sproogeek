@@ -198,5 +198,4 @@ Content-Type: multipart/form-data
 file=@logo.png
 ```
 
-Разрешены только PNG, JPEG и WEBP размером до 2 МБ. SVG и EPS отклоняются.
-
+Разрешены только PNG, JPEG и WEBP размером до 10 МБ. SVG и EPS отклоняются.

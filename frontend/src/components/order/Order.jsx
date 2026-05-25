@@ -131,7 +131,7 @@ export const Order = ({ onBack, onSuccess }) => {
     const bindingCaps = getNotebookBindingCapabilities(bindingType);
 
     return (
-        <div className="app-bg fixed inset-0 w-full h-full font-zen overflow-y-auto z-50 transition-colors duration-300">
+        <div className="app-bg fixed inset-0 w-full h-full font-zen overflow-y-auto z-50 transition-colors duration-300 flex flex-col">
 
             {/* Sticky header */}
             <div className="p-4 md:p-8 flex items-center sticky top-0 bg-[#E5E5E5]/90 dark:bg-[#080B13]/90 backdrop-blur-md z-30 border-b border-transparent dark:border-white/5">
@@ -140,7 +140,7 @@ export const Order = ({ onBack, onSuccess }) => {
                 </button>
             </div>
 
-            <div className="flex flex-col lg:flex-row max-w-7xl mx-auto w-full px-4 md:px-8 gap-8 md:gap-16 pb-20 md:pb-32 mt-4">
+            <div className="flex flex-col lg:flex-row max-w-7xl mx-auto w-full px-4 md:px-8 gap-8 md:gap-16 pb-20 md:pb-32 mt-4 flex-1">
 
                 {/* ЛЕВАЯ КОЛОНКА */}
                 <div className="w-full lg:w-1/3 flex flex-col gap-6">
@@ -278,7 +278,7 @@ export const Order = ({ onBack, onSuccess }) => {
                     </div>
                 </div>
             </div>
-            <SiteFooter compact />
+            <SiteFooter compact className="mt-auto" />
         </div>
     );
 }

@@ -4,6 +4,21 @@ import { useConfigurator } from '../../store';
 import { t } from '../../i18n';
 import { requestGuestApproval } from '../../api';
 
+const compactApprovalConfiguration = (value) => {
+    if (Array.isArray(value)) return value.map(compactApprovalConfiguration);
+    if (!value || typeof value !== 'object') return value;
+
+    return Object.fromEntries(
+        Object.entries(value)
+            .filter(([key, item]) => {
+                if (key === 'renderUrl') return false;
+                if (key === 'texture' && typeof item === 'string' && item.startsWith('data:')) return false;
+                return true;
+            })
+            .map(([key, item]) => [key, compactApprovalConfiguration(item)])
+    );
+};
+
 /**
  * Модалка «Получить согласование на email» — гостевой flow без логина.
  *
@@ -64,7 +79,7 @@ export const GuestApprovalModal = ({
                 email: email.trim(),
                 product_name: productName || 'Spruzhyk design',
                 render_data_url: renderDataURL,
-                configuration: configuration || {},
+                configuration: compactApprovalConfiguration(configuration || {}),
                 quantity: Number.isFinite(quantity) ? Math.max(1, quantity) : 1,
                 total_price: totalPrice ?? null,
                 currency,
@@ -74,6 +89,10 @@ export const GuestApprovalModal = ({
             });
             setSentTo(email.trim());
         } catch (err) {
+            if (err?.response?.status === 413) {
+                setError(t(language, 'emailApprovalTooLarge'));
+                return;
+            }
             const msg = err?.response?.data?.detail || err?.message || '';
             setError(msg || t(language, 'emailApprovalError'));
         } finally {

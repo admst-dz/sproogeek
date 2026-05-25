@@ -56,7 +56,7 @@ export const SiteFooter = ({ className = '', compact = false }) => {
     const year = new Date().getFullYear();
 
     return (
-        <footer className={`w-full border-t border-black/10 bg-transparent text-gray-900 dark:border-white/12 dark:text-[#D6D6D6] ${className}`}>
+        <footer className={`w-full shrink-0 border-t border-black/10 bg-transparent text-gray-900 dark:border-white/12 dark:text-[#D6D6D6] ${className}`}>
             <div className={`mx-auto w-full max-w-7xl px-4 sm:px-6 ${compact ? 'py-5' : 'py-6 md:py-7'}`}>
                 <div className="grid gap-5 md:grid-cols-[1.1fr_2fr] md:items-start">
                     <div className="min-w-0">

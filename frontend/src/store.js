@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { temporal } from 'zundo'
 import { getCookie, setCookie, deleteCookie, hasCookieConsent } from './utils/cookies'
-import { normalizeImageFile } from './utils/images'
+import { canvasToDataURL, normalizeImageFile } from './utils/images'
 
 const CART_COOKIE = 'spruzhuk_cart';
 const AUTH_COOKIE = 'spruzhuk_auth';
@@ -56,9 +56,9 @@ const _persistCart = (items) => {
 
 let _webglCanvas = null
 export const registerWebGLCanvas = (el) => { _webglCanvas = el }
-export const captureRender = () => {
+export const captureRender = (options) => {
     if (!_webglCanvas) return null
-    try { return _webglCanvas.toDataURL('image/png') } catch { return null }
+    try { return canvasToDataURL(_webglCanvas, options) } catch { return null }
 }
 
 export const NOTEBOOK_BINDING_CAPABILITIES = {
@@ -186,6 +186,7 @@ export const useConfigurator = create(temporal((set, get) => ({
 
     language: 'ru',
     theme: 'dark',
+    guestApprovalEnabled: true,
 
     cartItems: _initialCartItems,
     cartRestoredFromCookie: _initialCartItems.length > 0,
@@ -206,6 +207,7 @@ export const useConfigurator = create(temporal((set, get) => ({
     },
 
     setLanguage: (lang) => set({ language: lang }),
+    setGuestApprovalEnabled: (enabled) => set({ guestApprovalEnabled: Boolean(enabled) }),
     toggleTheme: () => set((state) => {
         if (!THEME_SWITCHING_ENABLED) {
             document.documentElement.classList.add('dark');

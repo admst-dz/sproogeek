@@ -3,6 +3,7 @@ import { ALL_PRODUCT_DEFAULTS, THEME_SWITCHING_ENABLED, getNotebookBindingCapabi
 import { t } from './i18n'
 import { CookieBanner } from './components/shared/CookieBanner'
 import { getInitialRouteState, getPathForRouteState } from './config/routes'
+import { fetchPublicSettings } from './api'
 
 const Home = lazy(() => import('./components/home/Home').then((module) => ({ default: module.Home })));
 const Order = lazy(() => import('./components/order/Order').then((module) => ({ default: module.Order })));
@@ -13,6 +14,7 @@ const ClientDashboard = lazy(() => import('./components/dashboard/ClientDashboar
 const AdminAuth = lazy(() => import('./components/auth/AdminAuth').then((module) => ({ default: module.AdminAuth })));
 const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard').then((module) => ({ default: module.AdminDashboard })));
 const CookiePolicy = lazy(() => import('./components/shared/CookiePolicy').then((module) => ({ default: module.CookiePolicy })));
+const MobileLogoUpload = lazy(() => import('./components/shared/MobileLogoUpload').then((module) => ({ default: module.MobileLogoUpload })));
 const ConfiguratorScreen = lazy(() => import('./components/configurator/ConfiguratorScreen').then((module) => ({ default: module.ConfiguratorScreen })));
 const RenderModeView = lazy(() => import('./components/configurator/RenderModeView').then((module) => ({ default: module.RenderModeView })));
 const CommandPalette = lazy(() => import('./components/shared/CommandPalette').then((module) => ({ default: module.CommandPalette })));
@@ -85,11 +87,20 @@ function clearConfiguratorDraft() {
 function App() {
     const urlParams = new URLSearchParams(window.location.search);
     const isRenderMode = urlParams.get('render_mode') === 'true';
+    const mobileLogoMatch = window.location.pathname.match(/^\/mobile-logo\/([^/]+)\/?$/);
 
     if (isRenderMode) {
         return (
             <Suspense fallback={<RouteLoader />}>
                 <RenderModeView configBase64={urlParams.get('config')} />
+            </Suspense>
+        );
+    }
+
+    if (mobileLogoMatch) {
+        return (
+            <Suspense fallback={<RouteLoader />}>
+                <MobileLogoUpload sessionId={mobileLogoMatch[1]} />
             </Suspense>
         );
     }
@@ -313,6 +324,7 @@ function MainApp() {
         cartRestoredFromCookie,
         clearCart,
         language,
+        setGuestApprovalEnabled,
     } = useConfigurator();
 
     const guardedNavigate = (target) => {
@@ -349,6 +361,12 @@ function MainApp() {
             setShowAuth(true);
         }
     };
+
+    useEffect(() => {
+        fetchPublicSettings()
+            .then((settings) => setGuestApprovalEnabled(settings.guest_approval_enabled !== false))
+            .catch(() => setGuestApprovalEnabled(true));
+    }, [setGuestApprovalEnabled]);
 
     useEffect(() => {
         if (!THEME_SWITCHING_ENABLED) {

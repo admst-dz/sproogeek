@@ -18,6 +18,8 @@ from app.database import get_db
 from app.models.order import Order
 from app.models.user import User
 from app.schemas.admin import (
+    AdminSettingsPatch,
+    AdminSettingsResponse,
     AdminStatsResponse,
     OrderAdminUpdate,
     OrderTypeListResponse,
@@ -30,6 +32,7 @@ from app.schemas.admin import (
 )
 from app.schemas.order import OrderResponse
 from app.services import order_type_store
+from app.services.settings_store import read_settings, write_settings
 from app.core.security_utils import safe_filename, safe_path_segment
 from app.services.event_hub import event_hub
 from app.services.techcard_client import fetch_techcard_pdf, generate_techcard
@@ -231,6 +234,32 @@ async def get_admin_stats(db: AsyncSession = Depends(get_db)):
         new_users_last_30d=overview["new_users_last_30d"],
         new_orders_last_30d=overview["new_orders_last_30d"],
     )
+
+
+@router.get("/settings", response_model=AdminSettingsResponse)
+async def get_admin_settings():
+    return read_settings()
+
+
+@router.patch("/settings", response_model=AdminSettingsResponse)
+async def patch_admin_settings(
+    payload: AdminSettingsPatch,
+    current_user=Depends(get_admin_user),
+):
+    updates = payload.model_dump(exclude_unset=True)
+    settings = write_settings(updates)
+    event_logger.log(
+        "ADMIN_SETTINGS_UPDATED",
+        "Admin updated application settings",
+        direction="admin->backend",
+        actor_type=current_user.role,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        entity_type="settings",
+        entity_id="application",
+        details={"fields": sorted(updates.keys())},
+    )
+    return settings
 
 
 @router.get("/orders", response_model=Page[OrderResponse])

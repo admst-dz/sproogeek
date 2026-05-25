@@ -277,7 +277,7 @@ function ProductCard({ children, onClick, glowColor, className = '' }) {
                 '--spotlight-y': '18%',
                 '--spotlight-color': glowColor,
             }}
-            className={`group relative isolate flex flex-col items-center overflow-hidden rounded-[20px] border border-gray-200 bg-white p-5 text-left shadow-xl transition-[transform,box-shadow,border-color,background-color] duration-300 ease-out hover:-translate-y-1 hover:border-gray-300 hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 active:translate-y-0 active:scale-[0.99] md:rounded-[24px] md:p-6 dark:border-white/10 dark:bg-white/[0.03] dark:shadow-none dark:backdrop-blur-xl dark:hover:border-white/20 dark:hover:bg-white/[0.06] ${className}`}
+            className={`home-product-card group relative isolate flex min-h-[17.5rem] flex-col items-center justify-between overflow-hidden rounded-[20px] border border-gray-200 bg-white p-4 text-left shadow-xl transition-[transform,box-shadow,border-color,background-color] duration-300 ease-out hover:-translate-y-1 hover:border-gray-300 hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 active:translate-y-0 active:scale-[0.99] sm:min-h-[18.5rem] sm:p-5 md:rounded-[22px] xl:min-h-[19.5rem] xl:rounded-[24px] xl:p-6 dark:border-white/10 dark:bg-white/[0.03] dark:shadow-none dark:backdrop-blur-xl dark:hover:border-white/20 dark:hover:bg-white/[0.06] ${className}`}
         >
             <span
                 aria-hidden="true"
@@ -291,7 +291,7 @@ function ProductCard({ children, onClick, glowColor, className = '' }) {
 
 function ProductGrid({ children }) {
     return (
-        <div className="grid w-full max-w-5xl grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-3">
+        <div className="home-product-grid grid w-full max-w-[70rem] grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 xl:grid-cols-3 xl:gap-6">
             {children}
         </div>
     );
@@ -336,12 +336,12 @@ export function ConfiguratorProductMenu({ onStart }) {
                     elasticColor: '#1a1a1a',
                 })}
             >
-                <div className="relative z-10 h-40 w-full sm:h-48 lg:h-56">
+                <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
                     <NotebookPreview />
                 </div>
                 <div className="relative z-10 mt-2 text-center">
-                    <h3 className="text-lg font-bold text-gray-900 transition-colors dark:text-white">{t(language, 'notebook')}</h3>
-                    <span className="mt-5 inline-flex rounded-full border border-gray-200 bg-gray-100 px-5 py-2 text-xs font-bold text-gray-600 transition-colors group-hover:bg-blue-50 group-hover:text-blue-600 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
+                    <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'notebook')}</h3>
+                    <span className="mt-4 inline-flex max-w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-center text-[11px] font-bold text-gray-600 transition-colors sm:mt-5 sm:px-5 sm:text-xs group-hover:bg-blue-50 group-hover:text-blue-600 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
                         {t(language, 'openBtn')}
                     </span>
                 </div>
@@ -349,12 +349,12 @@ export function ConfiguratorProductMenu({ onStart }) {
 
             {/* Карточка 2: Термос */}
             <ProductCard glowColor="rgba(100, 116, 139, 0.22)" onClick={() => handleSelect('thermos', {})}>
-                <div className="relative z-10 h-40 w-full sm:h-48 lg:h-56">
+                <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
                     <ThermosPreview />
                 </div>
                 <div className="relative z-10 mt-2 text-center">
-                    <h3 className="text-lg font-bold text-gray-900 transition-colors dark:text-white">{t(language, 'thermos')}</h3>
-                    <span className="mt-5 inline-flex rounded-full border border-gray-200 bg-gray-100 px-5 py-2 text-xs font-bold text-gray-600 transition-colors group-hover:bg-slate-50 group-hover:text-slate-700 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
+                    <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'thermos')}</h3>
+                    <span className="mt-4 inline-flex max-w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-center text-[11px] font-bold text-gray-600 transition-colors sm:mt-5 sm:px-5 sm:text-xs group-hover:bg-slate-50 group-hover:text-slate-700 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
                         {t(language, 'openBtn')}
                     </span>
                 </div>
@@ -363,15 +363,15 @@ export function ConfiguratorProductMenu({ onStart }) {
             {/* Карточка 3: Повербанк */}
             <ProductCard
                 glowColor="rgba(16, 185, 129, 0.2)"
-                className="sm:col-span-2 lg:col-span-1"
+                className="sm:col-span-2 sm:mx-auto sm:w-full sm:max-w-[26rem] xl:col-span-1 xl:max-w-none"
                 onClick={() => handleSelect('powerbank', {})}
             >
-                <div className="relative z-10 h-40 w-full sm:h-48 lg:h-56">
+                <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
                     <PowerbankPreview />
                 </div>
                 <div className="relative z-10 mt-2 text-center">
-                    <h3 className="text-lg font-bold text-gray-900 transition-colors dark:text-white">{t(language, 'powerbank')}</h3>
-                    <span className="mt-5 inline-flex rounded-full border border-gray-200 bg-gray-100 px-5 py-2 text-xs font-bold text-gray-600 transition-colors group-hover:bg-emerald-50 group-hover:text-emerald-700 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
+                    <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'powerbank')}</h3>
+                    <span className="mt-4 inline-flex max-w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-center text-[11px] font-bold text-gray-600 transition-colors sm:mt-5 sm:px-5 sm:text-xs group-hover:bg-emerald-50 group-hover:text-emerald-700 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
                         {t(language, 'openBtn')}
                     </span>
                 </div>
@@ -411,7 +411,7 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
         // поэтому скролл вешаем здесь, а не на body.
         <div className="home-route app-bg h-full w-full flex flex-col font-sans transition-colors duration-500 text-gray-900 dark:text-white overflow-y-auto overflow-x-hidden selection:bg-blue-500/30">
 
-            <header className="relative w-full px-4 sm:px-6 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-3 z-50 shrink-0">
+            <header className="home-header relative w-full px-4 sm:px-6 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-3 z-50 shrink-0">
                 <button
                     type="button"
                     onClick={() => window.location.reload()}
@@ -426,7 +426,7 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
                 <button
                     type="button"
                     onClick={openCommandPalette}
-                    className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-3 bg-white border border-gray-200 dark:bg-white/5 dark:border-white/10 px-4 py-2 rounded-full backdrop-blur-md w-96 max-w-[min(28rem,calc(100vw-28rem))] text-sm text-gray-400 shadow-sm dark:shadow-none transition-colors hover:bg-gray-50 dark:hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/40 text-left"
+                    className="hidden lg:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-3 bg-white border border-gray-200 dark:bg-white/5 dark:border-white/10 px-4 py-2 rounded-full backdrop-blur-md w-80 xl:w-96 text-sm text-gray-400 shadow-sm dark:shadow-none transition-colors hover:bg-gray-50 dark:hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/40 text-left"
                     aria-label={t(language, 'search')}
                 >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -466,11 +466,11 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
                 </div>
             </header>
 
-            <main className="flex-1 flex flex-col items-center pt-6 sm:pt-12 pb-16 sm:pb-24 px-4 z-10">
-                <h1 className="text-[clamp(2.35rem,11vw,4.5rem)] md:text-7xl font-bold text-center leading-[1.05] tracking-tight mb-4 sm:mb-6 text-gray-900 dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-b dark:from-white dark:to-gray-400 drop-shadow-sm dark:drop-shadow-2xl transition-colors">
+            <main className="home-main flex-1 flex w-full flex-col items-center pt-6 sm:pt-10 lg:pt-12 2xl:pt-16 pb-20 sm:pb-24 px-4 sm:px-6 lg:px-8 z-10">
+                <h1 className="home-title max-w-[72rem] break-words px-2 pb-2 text-[2.35rem] font-bold text-center leading-[1.16] tracking-normal mb-3 sm:text-5xl md:text-6xl xl:text-7xl sm:mb-4 text-gray-900 dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-b dark:from-white dark:to-gray-400 drop-shadow-sm dark:drop-shadow-2xl transition-colors">
                     {t(language, 'title1')}<br />{t(language, 'title2')}
                 </h1>
-                <p className="text-gray-500 dark:text-gray-400 text-sm md:text-base text-center max-w-lg mb-8 sm:mb-12 lg:mb-16 font-medium leading-relaxed transition-colors">
+                <p className="home-subtitle text-gray-500 dark:text-gray-400 text-sm md:text-base text-center max-w-xl mb-8 sm:mb-10 lg:mb-12 xl:mb-14 font-medium leading-relaxed transition-colors">
                     {t(language, 'subtitle')}
                 </p>
 

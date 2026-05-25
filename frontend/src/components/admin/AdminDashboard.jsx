@@ -1052,6 +1052,96 @@ function StatCard({ label, value, hint }) {
     );
 }
 
+function AdminSettingsPanel({ language }) {
+    const [settings, setSettings] = useState({ guest_approval_enabled: true });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [msg, setMsg] = useState('');
+    const setGuestApprovalEnabled = useConfigurator((state) => state.setGuestApprovalEnabled);
+
+    useEffect(() => {
+        let alive = true;
+        adminApi.getSettings()
+            .then(({ data }) => {
+                if (!alive) return;
+                const nextSettings = data || { guest_approval_enabled: true };
+                setSettings(nextSettings);
+                setGuestApprovalEnabled(nextSettings.guest_approval_enabled !== false);
+            })
+            .catch((err) => {
+                if (alive) setMsg('✗ ' + formatApiError(err, language));
+            })
+            .finally(() => {
+                if (alive) setLoading(false);
+            });
+        return () => { alive = false; };
+    }, [language, setGuestApprovalEnabled]);
+
+    const toggleGuestApproval = async () => {
+        const nextEnabled = !settings.guest_approval_enabled;
+        setSaving(true);
+        setMsg('');
+        try {
+            const { data } = await adminApi.updateSettings({ guest_approval_enabled: nextEnabled });
+            setSettings(data || { guest_approval_enabled: nextEnabled });
+            setGuestApprovalEnabled((data || { guest_approval_enabled: nextEnabled }).guest_approval_enabled !== false);
+            setMsg(t(language, 'adminSaved'));
+        } catch (err) {
+            setMsg('✗ ' + formatApiError(err, language));
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMsg(''), 2500);
+        }
+    };
+
+    const enabled = settings.guest_approval_enabled !== false;
+
+    return (
+        <div className="mt-6 rounded-[14px] border border-white/10 bg-white/[0.03] p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <h3 className="text-base font-bold">{t(language, 'adminGuestModeTitle')}</h3>
+                        <span className={`text-[10px] font-bold uppercase tracking-widest rounded-full border px-2 py-0.5 ${
+                            enabled
+                                ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25'
+                                : 'text-white/35 bg-white/5 border-white/10'
+                        }`}>
+                            {enabled ? t(language, 'adminGuestModeOn') : t(language, 'adminGuestModeOff')}
+                        </span>
+                    </div>
+                    <p className="mt-1 text-xs leading-relaxed text-white/40">
+                        {t(language, 'adminGuestModeDesc')}
+                    </p>
+                    {msg && (
+                        <p className={`mt-2 text-xs font-bold ${msg.startsWith('✓') ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {msg}
+                        </p>
+                    )}
+                </div>
+                <button
+                    type="button"
+                    onClick={toggleGuestApproval}
+                    disabled={loading || saving}
+                    role="switch"
+                    aria-checked={enabled}
+                    className={`relative h-8 w-14 shrink-0 overflow-hidden rounded-full border transition-colors disabled:opacity-50 ${
+                        enabled
+                            ? 'border-emerald-400/40 bg-emerald-500/30'
+                            : 'border-white/12 bg-white/12'
+                    }`}
+                >
+                    <span
+                        className={`absolute left-1 top-1 h-6 w-6 rounded-full shadow-lg transition-all ${
+                            enabled ? 'translate-x-6 bg-emerald-300' : 'translate-x-0 bg-slate-400'
+                        }`}
+                    />
+                </button>
+            </div>
+        </div>
+    );
+}
+
 function DashboardTab({ onJumpToUsers, language }) {
     const { data, loading, error } = useData(() => adminApi.getStats(), language);
     if (loading) return <Loader language={language} />;
@@ -1069,6 +1159,8 @@ function DashboardTab({ onJumpToUsers, language }) {
                 <StatCard label="Выручка (всего)" value={`${(s.revenue_total ?? 0).toLocaleString('ru')} ${s.revenue_currency || 'BYN'}`} />
                 <StatCard label="Дилеров" value={usersByRole.find(r => r.role === 'dealer')?.count ?? 0} />
             </div>
+
+            <AdminSettingsPanel language={language} />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-6">
                 <div>
@@ -1300,7 +1392,7 @@ export const AdminDashboard = ({ onLogout }) => {
                 </button>
             </header>
 
-            <div className="flex-1 overflow-auto p-4 sm:p-6">
+            <div className="flex-1 overflow-auto p-4 sm:p-6 flex flex-col">
                 {tab === 'dashboard' && <DashboardTab language={language} onJumpToUsers={(role) => setTab(role === 'dealer' ? 'dealers' : role === 'manufacturer' ? 'manufacturers' : role === 'admin' ? 'admins' : 'users')} />}
                 {tab === 'orders' && <OrdersTab language={language} />}
                 {tab === 'users' && <UsersTab key="all" initialFilter={null} />}
@@ -1309,7 +1401,7 @@ export const AdminDashboard = ({ onLogout }) => {
                 {tab === 'admins' && <UsersTab key="admins" initialFilter="admin" />}
                 {tab === 'json' && <JsonTab language={language} />}
                 {tab === 'products' && <ProductsTab language={language} />}
-                <SiteFooter compact className="mt-10 -mx-4 sm:-mx-6" />
+                <SiteFooter compact className="mt-auto -mx-4 pt-10 sm:-mx-6" />
             </div>
         </div>
     );

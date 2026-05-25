@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { LogoUploadModal } from '../shared/LogoUploadModal';
 
 export const ConstructorDock = ({
     tabs = [],
@@ -290,18 +291,22 @@ export const ColorSwatches = ({ colors, currentColor, onSelect }) => (
     </div>
 );
 
-export const FileUploadChip = ({ label, onFile }) => (
-    <label className="inline-flex max-w-full cursor-pointer items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-[12px] font-black uppercase tracking-wider transition hover:bg-white/18">
-        <span className="min-w-0 leading-tight">{label}</span>
-        <span className="text-base leading-none">+</span>
-        <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => { if (e.target.files[0]) { onFile(e.target.files[0]); e.target.value = ''; } }}
-            className="hidden"
-        />
-    </label>
-);
+export const FileUploadChip = ({ label, onFile }) => {
+    const [open, setOpen] = useState(false);
+    return (
+        <>
+            <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="inline-flex max-w-full cursor-pointer items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-[12px] font-black uppercase tracking-wider transition hover:bg-white/18"
+            >
+                <span className="min-w-0 leading-tight">{label}</span>
+                <span className="text-base leading-none">+</span>
+            </button>
+            <LogoUploadModal open={open} onClose={() => setOpen(false)} onFile={onFile} />
+        </>
+    );
+};
 
 export const LogoList = ({ logos, selectedLogoId, selectLogo, removeLogo, metaForLogo }) => {
     if (!logos.length) return null;

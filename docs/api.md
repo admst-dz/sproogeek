@@ -136,7 +136,7 @@ GET /api/v1/products/?dealer_id=user-id
 Ограничения:
 
 - PNG, JPEG, WEBP;
-- до 2 МБ;
+- до 10 МБ;
 - проверяется сигнатура файла, а не только MIME type.
 
 ## Admin
@@ -189,4 +189,3 @@ GET /api/v1/products/?dealer_id=user-id
   "kafka": "connected"
 }
 ```
-

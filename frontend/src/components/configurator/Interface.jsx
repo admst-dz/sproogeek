@@ -50,8 +50,12 @@ export const Interface = ({ onFinish }) => {
         zoomLevel, setZoom,
         addToCart,
         setRenderSnapshot,
-        language
+        language,
+        guestApprovalEnabled,
     } = useConfigurator();
+
+    const [approvalOpen, setApprovalOpen] = useState(false);
+    const [approvalSnapshot, setApprovalSnapshot] = useState(null);
 
     if (activeProduct === 'calendar') {
         return (
@@ -65,9 +69,6 @@ export const Interface = ({ onFinish }) => {
     }
 
     const bindingCaps = getNotebookBindingCapabilities(bindingType);
-
-    const [approvalOpen, setApprovalOpen] = useState(false);
-    const [approvalSnapshot, setApprovalSnapshot] = useState(null);
 
     const buildNotebookItem = (snapshot) => {
         const bindingLabel = bindingType === 'hard' ? t(language, 'bindingHard') : bindingType === 'spiral' ? t(language, 'bindingSpiral') : t(language, 'bindingSoft');
@@ -111,7 +112,7 @@ export const Interface = ({ onFinish }) => {
             title={t(language, 'notebook')}
             onSave={handleAddToCart}
             saveLabel={t(language, 'placeOrder')}
-            onEmailApproval={handleEmailApproval}
+            onEmailApproval={guestApprovalEnabled ? handleEmailApproval : null}
             emailApprovalLabel={t(language, 'emailApproval')}
         >
             <div className="flex justify-center mb-3 md:mb-4">
