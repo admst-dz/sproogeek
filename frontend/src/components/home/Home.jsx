@@ -414,7 +414,7 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas }) {
                 </div>
             </ProductCard>
 
-            {onPrintCanvas && (
+            {/* {onPrintCanvas && (
                 <ProductCard glowColor="rgba(245, 158, 11, 0.2)" onClick={onPrintCanvas}>
                     <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
                         <PrintCanvasPreview />
@@ -426,7 +426,7 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas }) {
                         </span>
                     </div>
                 </ProductCard>
-            )}
+            )} */}
         </ProductGrid>
     );
 }
