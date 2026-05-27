@@ -359,9 +359,10 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas }) {
     };
 
     return (
-        // <ProductGrid four={Boolean(onPrintCanvas)}>
-            <ProductGrid four={Boolean(onPrintCanvas)}>
-                {/* Карточка 1: Ежедневник */}
+        <ProductGrid four={false}>
+        {/* <ProductGrid four={Boolean(onPrintCanvas)}> */}
+            
+            {/* Карточка 1: Ежедневник */}
             <ProductCard
                 glowColor="rgba(59, 130, 246, 0.22)"
                 onClick={() => handleSelect('notebook', {
