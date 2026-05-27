@@ -2,6 +2,7 @@ import { useConfigurator } from '../store';
 
 export const SCREEN_TO_PATH = {
     home: '/',
+    print_canvas: '/print-canvas',
     configurator: '/configurator',
     order: '/order',
     dealer: '/dealer',

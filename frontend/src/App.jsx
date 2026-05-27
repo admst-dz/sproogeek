@@ -6,6 +6,7 @@ import { getInitialRouteState, getPathForRouteState } from './config/routes'
 import { fetchPublicSettings } from './api'
 
 const Home = lazy(() => import('./components/home/Home').then((module) => ({ default: module.Home })));
+const PrintCanvas = lazy(() => import('./components/print/PrintCanvas').then((module) => ({ default: module.PrintCanvas })));
 const Order = lazy(() => import('./components/order/Order').then((module) => ({ default: module.Order })));
 const DealerDashboard = lazy(() => import('./components/dashboard/DealerDashboard').then((module) => ({ default: module.DealerDashboard })));
 const ManufacturerDashboard = lazy(() => import('./components/dashboard/ManufacturerDashboard').then((module) => ({ default: module.ManufacturerDashboard })));
@@ -123,6 +124,7 @@ function HomeFallbackCard({ title, actionLabel, tone, onClick }) {
         blue: 'bg-blue-500/10 dark:bg-blue-400/15',
         slate: 'bg-slate-500/10 dark:bg-slate-400/15',
         emerald: 'bg-emerald-500/10 dark:bg-emerald-400/15',
+        amber: 'bg-amber-500/10 dark:bg-amber-400/15',
     }[tone] || 'bg-gray-500/10 dark:bg-white/10';
 
     return (
@@ -145,7 +147,7 @@ function HomeFallbackCard({ title, actionLabel, tone, onClick }) {
     );
 }
 
-function HomeRouteFallback({ onStart, onAuth, user, logout, openCommandPalette }) {
+function HomeRouteFallback({ onStart, onPrintCanvas, onAuth, user, logout, openCommandPalette }) {
     const {
         language,
         setLanguage,
@@ -227,7 +229,7 @@ function HomeRouteFallback({ onStart, onAuth, user, logout, openCommandPalette }
                     {t(language, 'subtitle')}
                 </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full max-w-5xl">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6 w-full max-w-6xl">
                     <HomeFallbackCard
                         title={t(language, 'notebook')}
                         actionLabel={t(language, 'openBtn')}
@@ -245,6 +247,12 @@ function HomeRouteFallback({ onStart, onAuth, user, logout, openCommandPalette }
                         actionLabel={t(language, 'openBtn')}
                         tone="emerald"
                         onClick={() => handleSelect('powerbank')}
+                    />
+                    <HomeFallbackCard
+                        title={t(language, 'printCanvasHomeButton')}
+                        actionLabel={t(language, 'printCanvasOpenBtn')}
+                        tone="amber"
+                        onClick={onPrintCanvas}
                     />
                 </div>
             </main>
@@ -609,6 +617,7 @@ function MainApp() {
                                 setClientTab(null);
                                 setScreen('configurator');
                             }}
+                            onPrintCanvas={() => setScreen('print_canvas')}
                             onAuth={() => setShowAuth(true)}
                             user={currentUser}
                             logout={logout}
@@ -621,10 +630,18 @@ function MainApp() {
                             setClientTab(null);
                             setScreen('configurator');
                         }}
+                        onPrintCanvas={() => setScreen('print_canvas')}
                         onAuth={() => setShowAuth(true)}
                         user={currentUser}
                         logout={logout}
                     />
+                </RouteSuspense>
+            )}
+
+            {/* --- ЭКРАН: ПОЛОТНО НА ПЕЧАТЬ --- */}
+            {screen === 'print_canvas' && (
+                <RouteSuspense>
+                    <PrintCanvas onBack={() => setScreen('home')} />
                 </RouteSuspense>
             )}
 

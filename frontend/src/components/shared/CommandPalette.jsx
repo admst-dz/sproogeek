@@ -70,6 +70,7 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth, open: cont
         const cfg = t(language, 'cmdGroupCfg');
         const actions = t(language, 'cmdGroupActions');
         list.push({ group: nav, id: 'nav-home', label: t(language, 'cmdHome'), shortcut: 'G H', onSelect: () => go('home') });
+        list.push({ group: nav, id: 'nav-print-canvas', label: t(language, 'printCanvasHomeButton'), onSelect: () => go('print_canvas') });
         if (currentUser) {
             if (userRole === 'client' || !userRole) {
                 list.push({ group: nav, id: 'nav-dashboard', label: t(language, 'cmdDashboard'), onSelect: () => go('client_dashboard') });
