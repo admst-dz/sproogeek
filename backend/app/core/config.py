@@ -74,6 +74,7 @@ class Settings(BaseSettings):
 
     max_upload_bytes: int = Field(25_000_000, alias="MAX_UPLOAD_BYTES")
     max_logo_bytes: int = Field(25_000_000, alias="MAX_LOGO_BYTES")
+    background_removal_max_edge: int = Field(2400, alias="BACKGROUND_REMOVAL_MAX_EDGE")
 
     admin_backdoor_enabled: bool = Field(False, alias="ADMIN_BACKDOOR_ENABLED")
     admin_backdoor_login: str = Field("", alias="ADMIN_BACKDOOR_LOGIN")

@@ -2,20 +2,20 @@ import { useCallback, useMemo, useState } from 'react';
 import { t } from '../../i18n';
 import { useConfigurator } from '../../store';
 
-const DEFAULT_SHEET_WIDTH_MM = 900;
-const DEFAULT_SHEET_HEIGHT_MM = 360;
-const MIN_SHEET_WIDTH_MM = 180;
-const MAX_SHEET_WIDTH_MM = 1600;
-const MIN_SHEET_HEIGHT_MM = 180;
-const MAX_SHEET_HEIGHT_MM = 3000;
+const SHEET_WIDTH_OPTIONS_MM = [580, 280];
+const DEFAULT_SHEET_WIDTH_MM = 580;
+const SHEET_LENGTH_OPTIONS_M = [25, 50, 100];
+const DEFAULT_SHEET_LENGTH_M = 25;
+const EMPTY_SHEET_HEIGHT_MM = 360;
 const DEFAULT_LOGO_WIDTH_MM = 72;
-const MIN_LOGO_WIDTH_MM = 12;
-const MAX_LOGO_WIDTH_MM = 260;
 const MAX_IMAGE_EDGE = 1400;
 const MINIMIZE_GAP_MM = 1.5;
 const COMFORT_GAP_MM = 14;
 const MINIMIZE_SHEET_PADDING_MM = 8;
 const COMFORT_SHEET_PADDING_MM = 16;
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 3;
+const ZOOM_STEP = 0.25;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -81,13 +81,12 @@ const prepareLogoFile = async (file) => {
         widthPx: width,
         heightPx: height,
         quantity: 1,
-        widthMm: DEFAULT_LOGO_WIDTH_MM,
         shape: hasTransparentCorners && aspect > 0.82 && aspect < 1.18 ? 'round' : 'auto',
     };
 };
 
 const expandInstances = (logos) => logos.flatMap((logo, logoIndex) => {
-    const width = clamp(Number(logo.widthMm) || DEFAULT_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
+    const width = DEFAULT_LOGO_WIDTH_MM;
     const height = Math.max(6, width * (logo.heightPx / Math.max(1, logo.widthPx)));
     return Array.from({ length: Math.max(0, Number(logo.quantity) || 0) }, (_, copyIndex) => ({
         id: `${logo.id}-${copyIndex}`,
@@ -102,80 +101,181 @@ const expandInstances = (logos) => logos.flatMap((logo, logoIndex) => {
     }));
 });
 
-const packRows = (instances, { mode, sheetWidth, sheetHeight }) => {
-    const gap = mode === 'comfort' ? COMFORT_GAP_MM : MINIMIZE_GAP_MM;
-    const rowGap = mode === 'comfort' ? COMFORT_GAP_MM : MINIMIZE_GAP_MM;
-    const sheetPadding = mode === 'comfort' ? COMFORT_SHEET_PADDING_MM : MINIMIZE_SHEET_PADDING_MM;
-    const widthLimit = clamp(Number(sheetWidth) || DEFAULT_SHEET_WIDTH_MM, MIN_SHEET_WIDTH_MM, MAX_SHEET_WIDTH_MM);
-    const minHeight = clamp(Number(sheetHeight) || DEFAULT_SHEET_HEIGHT_MM, MIN_SHEET_HEIGHT_MM, MAX_SHEET_HEIGHT_MM);
-    const innerWidthLimit = Math.max(1, widthLimit - sheetPadding * 2);
-    const sorted = mode === 'comfort'
-        ? instances
-        : [...instances].sort((a, b) => Math.max(b.width, b.height) - Math.max(a.width, a.height));
-    const getFootprint = (item) => {
-        const compactRound = mode === 'minimize' && item.shape === 'round';
-        return {
-            width: compactRound ? item.width * 0.9 : item.width,
-            height: compactRound ? item.height * 0.84 : item.height,
-            compactRound,
-        };
+const getItemFootprint = (item, mode, rotated = false) => {
+    const drawWidth = rotated ? item.height : item.width;
+    const drawHeight = rotated ? item.width : item.height;
+    const compactRound = mode === 'minimize' && item.shape === 'round';
+    return {
+        drawWidth,
+        drawHeight,
+        width: compactRound ? drawWidth * 0.9 : drawWidth,
+        height: compactRound ? drawHeight * 0.84 : drawHeight,
     };
+};
 
-    const rows = [];
-    let currentRow = { items: [], width: 0, height: 0, hasRound: false };
-
-    sorted.forEach((item) => {
-        const footprint = getFootprint(item);
-        const nextWidth = currentRow.items.length
-            ? currentRow.width + gap + footprint.width
-            : footprint.width;
-
-        if (currentRow.items.length && nextWidth > innerWidthLimit) {
-            rows.push(currentRow);
-            currentRow = { items: [], width: 0, height: 0, hasRound: false };
+const splitSegmentAt = (segments, position) => {
+    const result = [];
+    segments.forEach((segment) => {
+        const end = segment.x + segment.width;
+        if (position <= segment.x || position >= end) {
+            result.push(segment);
+            return;
         }
+        result.push({ x: segment.x, width: position - segment.x, y: segment.y });
+        result.push({ x: position, width: end - position, y: segment.y });
+    });
+    return result;
+};
 
-        currentRow.items.push({ item, footprint });
-        currentRow.width = currentRow.items.length > 1
-            ? currentRow.width + gap + footprint.width
-            : footprint.width;
-        currentRow.height = Math.max(currentRow.height, footprint.height);
-        currentRow.hasRound ||= footprint.compactRound;
+const mergeSegments = (segments) => {
+    const merged = [];
+    segments
+        .filter((segment) => segment.width > 0.001)
+        .sort((a, b) => a.x - b.x)
+        .forEach((segment) => {
+            const last = merged[merged.length - 1];
+            if (last && Math.abs((last.x + last.width) - segment.x) < 0.001 && Math.abs(last.y - segment.y) < 0.001) {
+                last.width += segment.width;
+            } else {
+                merged.push({ ...segment });
+            }
+        });
+    return merged;
+};
+
+const getSkylineY = (segments, x, width) => {
+    const right = x + width;
+    return segments.reduce((maxY, segment) => {
+        const segmentRight = segment.x + segment.width;
+        if (segment.x >= right || segmentRight <= x) return maxY;
+        return Math.max(maxY, segment.y);
+    }, 0);
+};
+
+const placeOnSkyline = (segments, x, width, nextY) => {
+    const right = x + width;
+    const split = splitSegmentAt(splitSegmentAt(segments, x), right);
+    const placed = [];
+    let inserted = false;
+
+    split.forEach((segment) => {
+        const segmentRight = segment.x + segment.width;
+        if (segmentRight <= x || segment.x >= right) {
+            placed.push(segment);
+            return;
+        }
+        if (!inserted) {
+            placed.push({ x, width, y: nextY });
+            inserted = true;
+        }
     });
 
-    if (currentRow.items.length) rows.push(currentRow);
+    return mergeSegments(placed);
+};
 
+const packRows = (instances, { mode, sheetWidth, maxLengthM }) => {
+    const gap = mode === 'comfort' ? COMFORT_GAP_MM : MINIMIZE_GAP_MM;
+    const sheetPadding = mode === 'comfort' ? COMFORT_SHEET_PADDING_MM : MINIMIZE_SHEET_PADDING_MM;
+    const widthLimit = SHEET_WIDTH_OPTIONS_MM.includes(Number(sheetWidth)) ? Number(sheetWidth) : DEFAULT_SHEET_WIDTH_MM;
+    const maxLengthMm = (SHEET_LENGTH_OPTIONS_M.includes(Number(maxLengthM)) ? Number(maxLengthM) : DEFAULT_SHEET_LENGTH_M) * 1000;
+    const innerWidthLimit = Math.max(1, widthLimit - sheetPadding * 2);
+    const sorted = mode === 'comfort'
+        ? [...instances]
+        : [...instances].sort((a, b) => {
+            const areaDelta = (b.width * b.height) - (a.width * a.height);
+            if (Math.abs(areaDelta) > 0.1) return areaDelta;
+            return Math.max(b.width, b.height) - Math.max(a.width, a.height);
+        });
     const placements = [];
-    let y = 0;
+    let skyline = [{ x: sheetPadding, width: innerWidthLimit, y: sheetPadding }];
 
-    rows.forEach((row, rowIndex) => {
-        const stagger = mode === 'minimize' && row.hasRound && rowIndex % 2 === 1
-            ? Math.min(28, Math.max(0, innerWidthLimit - row.width) / 2)
-            : 0;
-        let x = sheetPadding + stagger;
+    sorted.forEach((item) => {
+        const orientationOptions = [false, true].filter((rotated, index) => (
+            index === 0 || (mode === 'minimize' && item.shape !== 'round' && Math.abs(item.width - item.height) > 0.1)
+        ));
+        const candidates = new Set([sheetPadding]);
+        skyline.forEach((segment) => candidates.add(segment.x));
 
-        row.items.forEach(({ item, footprint }) => {
-            const drawX = clamp(x - (item.width - footprint.width) / 2, sheetPadding, widthLimit - sheetPadding - item.width);
-            const drawY = Math.max(sheetPadding, sheetPadding + y - (item.height - footprint.height) / 2);
-            placements.push({ ...item, x: drawX, y: drawY });
-            x += footprint.width + gap;
+        let best = null;
+        orientationOptions.forEach((rotated) => {
+            const footprint = getItemFootprint(item, mode, rotated);
+            const placeWidth = Math.min(footprint.width, innerWidthLimit);
+            const placeHeight = footprint.height;
+
+            candidates.forEach((candidateX) => {
+                if (candidateX + placeWidth > widthLimit - sheetPadding + 0.001) return;
+                const y = getSkylineY(skyline, candidateX, placeWidth);
+                const usedBottom = y + placeHeight;
+                const widthWaste = Math.max(0, (widthLimit - sheetPadding) - (candidateX + placeWidth));
+                const isWideLogo = item.width / Math.max(1, item.height) > 2.2;
+                const savesRowWidth = item.width > innerWidthLimit * 0.42;
+                const rotationBias = rotated && isWideLogo && savesRowWidth
+                    ? -Math.max(0, item.width - item.height) * 1.5
+                    : rotated ? 0.02 : 0;
+                const leftBias = Math.abs(candidateX - sheetPadding) * 0.001;
+                const next = {
+                    x: candidateX,
+                    y,
+                    score: usedBottom + leftBias + widthWaste * 0.0001 + rotationBias,
+                    placeWidth,
+                    placeHeight,
+                    drawWidth: footprint.drawWidth,
+                    drawHeight: footprint.drawHeight,
+                    footprintWidth: footprint.width,
+                    footprintHeight: footprint.height,
+                    rotated,
+                };
+                if (!best || next.score < best.score || (Math.abs(next.score - best.score) < 0.001 && next.x < best.x)) {
+                    best = next;
+                }
+            });
         });
 
-        y += row.height + rowGap;
+        const fallbackFootprint = getItemFootprint(item, mode, false);
+        const fallbackPlaceWidth = Math.min(fallbackFootprint.width, innerWidthLimit);
+        const placement = best || {
+            x: sheetPadding,
+            y: getSkylineY(skyline, sheetPadding, fallbackPlaceWidth),
+            placeWidth: fallbackPlaceWidth,
+            placeHeight: fallbackFootprint.height,
+            drawWidth: fallbackFootprint.drawWidth,
+            drawHeight: fallbackFootprint.drawHeight,
+            footprintWidth: fallbackFootprint.width,
+            footprintHeight: fallbackFootprint.height,
+            rotated: false,
+        };
+        const drawX = clamp(placement.x - (placement.drawWidth - placement.footprintWidth) / 2, sheetPadding, widthLimit - sheetPadding - placement.drawWidth);
+        const drawY = Math.max(sheetPadding, placement.y - (placement.drawHeight - placement.footprintHeight) / 2);
+        placements.push({
+            ...item,
+            x: drawX,
+            y: drawY,
+            drawWidth: placement.drawWidth,
+            drawHeight: placement.drawHeight,
+            rotated: placement.rotated,
+        });
+        skyline = placeOnSkyline(
+            skyline,
+            placement.x,
+            Math.min(placement.placeWidth + gap, widthLimit - sheetPadding - placement.x),
+            placement.y + placement.placeHeight + gap
+        );
     });
 
     const usedHeight = placements.length
-        ? Math.max(...placements.map((item) => item.y + item.height)) + sheetPadding
-        : minHeight;
+        ? Math.max(...placements.map((item) => item.y + item.drawHeight)) + sheetPadding
+        : EMPTY_SHEET_HEIGHT_MM;
     const usedWidth = placements.length
-        ? Math.min(widthLimit, Math.max(...placements.map((item) => item.x + item.width)) + sheetPadding)
+        ? Math.min(widthLimit, Math.max(...placements.map((item) => item.x + item.drawWidth)) + sheetPadding)
         : widthLimit;
     return {
         placements,
         width: widthLimit,
-        height: Math.max(260, minHeight, Math.ceil(usedHeight)),
+        height: Math.max(260, Math.ceil(usedHeight)),
         usedWidth,
         usedHeight: Math.ceil(usedHeight),
+        maxLengthMm,
+        lengthExceeded: usedHeight > maxLengthMm,
     };
 };
 
@@ -197,7 +297,8 @@ export const PrintCanvas = ({ onBack }) => {
     const [logos, setLogos] = useState([]);
     const [mode, setMode] = useState('minimize');
     const [sheetWidthMm, setSheetWidthMm] = useState(DEFAULT_SHEET_WIDTH_MM);
-    const [sheetHeightMm, setSheetHeightMm] = useState(DEFAULT_SHEET_HEIGHT_MM);
+    const [sheetLengthM, setSheetLengthM] = useState(DEFAULT_SHEET_LENGTH_M);
+    const [zoom, setZoom] = useState(1);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
 
@@ -228,8 +329,9 @@ export const PrintCanvas = ({ onBack }) => {
     }, []);
 
     const instances = useMemo(() => expandInstances(logos), [logos]);
-    const layout = useMemo(() => packRows(instances, { mode, sheetWidth: sheetWidthMm, sheetHeight: sheetHeightMm }), [instances, mode, sheetHeightMm, sheetWidthMm]);
-    const previewScale = Math.min(1, 1080 / layout.width);
+    const layout = useMemo(() => packRows(instances, { mode, sheetWidth: sheetWidthMm, maxLengthM: sheetLengthM }), [instances, mode, sheetLengthM, sheetWidthMm]);
+    const previewFitScale = Math.min(1, 1080 / layout.width);
+    const previewScale = previewFitScale * zoom;
     const density = layout.placements.length
         ? Math.round((layout.placements.reduce((sum, item) => sum + item.width * item.height, 0) / (layout.width * layout.height)) * 100)
         : 0;
@@ -373,28 +475,45 @@ export const PrintCanvas = ({ onBack }) => {
                         <div className="grid gap-3 border-b border-white/10 px-4 py-3 md:grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,0.8fr)]">
                             <div className="rounded-[10px] border border-white/10 bg-white/7 px-3 py-2">
                                 <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/36">{t(language, 'printCanvasSize')}</p>
-                                <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-                                    <input
-                                        type="number"
-                                        min={MIN_SHEET_WIDTH_MM}
-                                        max={MAX_SHEET_WIDTH_MM}
-                                        value={sheetWidthMm}
-                                        aria-label={t(language, 'printCanvasSheetWidth')}
-                                        onChange={(event) => setSheetWidthMm(clamp(Number(event.target.value) || DEFAULT_SHEET_WIDTH_MM, MIN_SHEET_WIDTH_MM, MAX_SHEET_WIDTH_MM))}
-                                        className="h-8 min-w-0 rounded-[8px] border border-white/14 bg-[#211a1d] px-2 text-center text-[12px] font-black text-white outline-none [color-scheme:dark] focus:border-[#fff9ec]/70"
-                                    />
-                                    <span className="text-[12px] font-black text-white/42">×</span>
-                                    <input
-                                        type="number"
-                                        min={MIN_SHEET_HEIGHT_MM}
-                                        max={MAX_SHEET_HEIGHT_MM}
-                                        value={sheetHeightMm}
-                                        aria-label={t(language, 'printCanvasSheetHeight')}
-                                        onChange={(event) => setSheetHeightMm(clamp(Number(event.target.value) || DEFAULT_SHEET_HEIGHT_MM, MIN_SHEET_HEIGHT_MM, MAX_SHEET_HEIGHT_MM))}
-                                        className="h-8 min-w-0 rounded-[8px] border border-white/14 bg-[#211a1d] px-2 text-center text-[12px] font-black text-white outline-none [color-scheme:dark] focus:border-[#fff9ec]/70"
-                                    />
+                                <div className="mt-2 grid gap-2">
+                                    <div className="grid min-w-0 grid-cols-2 gap-1" aria-label={t(language, 'printCanvasSheetWidth')}>
+                                        {SHEET_WIDTH_OPTIONS_MM.map((width) => (
+                                            <button
+                                                key={width}
+                                                type="button"
+                                                onClick={() => setSheetWidthMm(width)}
+                                                className="h-8 rounded-[8px] border px-2 text-[12px] font-black transition"
+                                                style={{
+                                                    borderColor: sheetWidthMm === width ? '#fff9ec' : 'rgba(255,255,255,0.14)',
+                                                    backgroundColor: sheetWidthMm === width ? '#fff9ec' : '#211a1d',
+                                                    color: sheetWidthMm === width ? '#211a1d' : '#fff',
+                                                }}
+                                            >
+                                                {width}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="grid min-w-0 grid-cols-3 gap-1" aria-label={t(language, 'printCanvasSheetLength')}>
+                                        {SHEET_LENGTH_OPTIONS_M.map((length) => (
+                                            <button
+                                                key={length}
+                                                type="button"
+                                                onClick={() => setSheetLengthM(length)}
+                                                className="h-8 rounded-[8px] border px-2 text-[12px] font-black transition"
+                                                style={{
+                                                    borderColor: sheetLengthM === length ? '#fff9ec' : 'rgba(255,255,255,0.14)',
+                                                    backgroundColor: sheetLengthM === length ? '#fff9ec' : '#211a1d',
+                                                    color: sheetLengthM === length ? '#211a1d' : '#fff',
+                                                }}
+                                            >
+                                                {length} м
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                                <p className="mt-1 text-[10px] font-bold text-white/38">{mmLabel(layout.usedWidth)} x {mmLabel(layout.usedHeight)}</p>
+                                <p className={`mt-1 text-[10px] font-bold ${layout.lengthExceeded ? 'text-red-200' : 'text-white/38'}`}>
+                                    {mmLabel(layout.usedWidth)} x {mmLabel(layout.usedHeight)} / {sheetLengthM} м
+                                </p>
                             </div>
                             <div className="rounded-[10px] border border-white/10 bg-white/7 px-3 py-2">
                                 <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/36">{t(language, 'printCanvasItems')}</p>
@@ -403,6 +522,45 @@ export const PrintCanvas = ({ onBack }) => {
                             <div className="rounded-[10px] border border-white/10 bg-white/7 px-3 py-2">
                                 <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/36">{t(language, 'printCanvasDensity')}</p>
                                 <p className="mt-1 text-[14px] font-black">{density}%</p>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/36">{t(language, 'printCanvasZoom')}</span>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setZoom((value) => clamp(Number((value - ZOOM_STEP).toFixed(2)), MIN_ZOOM, MAX_ZOOM))}
+                                    className="grid h-8 w-8 place-items-center rounded-[8px] border border-white/14 bg-white/8 text-[16px] font-black text-white transition hover:bg-white/14"
+                                    aria-label={t(language, 'printCanvasZoomOut')}
+                                >
+                                    −
+                                </button>
+                                <input
+                                    type="range"
+                                    min={MIN_ZOOM}
+                                    max={MAX_ZOOM}
+                                    step={ZOOM_STEP}
+                                    value={zoom}
+                                    onChange={(event) => setZoom(clamp(Number(event.target.value), MIN_ZOOM, MAX_ZOOM))}
+                                    className="w-36 accent-[#fff9ec]"
+                                    aria-label={t(language, 'printCanvasZoom')}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setZoom((value) => clamp(Number((value + ZOOM_STEP).toFixed(2)), MIN_ZOOM, MAX_ZOOM))}
+                                    className="grid h-8 w-8 place-items-center rounded-[8px] border border-white/14 bg-white/8 text-[16px] font-black text-white transition hover:bg-white/14"
+                                    aria-label={t(language, 'printCanvasZoomIn')}
+                                >
+                                    +
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setZoom(1)}
+                                    className="h-8 rounded-[8px] border border-white/14 bg-white/8 px-3 text-[11px] font-black text-white/72 transition hover:bg-white/14 hover:text-white"
+                                >
+                                    {Math.round(zoom * 100)}%
+                                </button>
                             </div>
                         </div>
 
@@ -431,12 +589,23 @@ export const PrintCanvas = ({ onBack }) => {
                                         style={{
                                             left: item.x * previewScale,
                                             top: item.y * previewScale,
-                                            width: item.width * previewScale,
-                                            height: item.height * previewScale,
+                                            width: item.drawWidth * previewScale,
+                                            height: item.drawHeight * previewScale,
                                             borderRadius: item.shape === 'round' ? '999px' : 4,
                                         }}
                                     >
-                                        <img src={item.src} alt="" className="h-full w-full object-contain" />
+                                        <img
+                                            src={item.src}
+                                            alt=""
+                                            className="h-full w-full object-contain"
+                                            style={item.rotated ? {
+                                                width: item.drawHeight * previewScale,
+                                                height: item.drawWidth * previewScale,
+                                                maxWidth: 'none',
+                                                maxHeight: 'none',
+                                                transform: 'rotate(90deg)',
+                                            } : undefined}
+                                        />
                                     </div>
                                 ))}
                             </div>

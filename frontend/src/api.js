@@ -173,6 +173,20 @@ export const logoTransferApi = {
     },
 };
 
+export const mediaApi = {
+    removeLogoBackground: (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return apiClient.post('/files/remove-logo-background', formData, { responseType: 'blob' });
+    },
+};
+
+export const removeLogoBackground = async (file) => {
+    const { data } = await mediaApi.removeLogoBackground(file);
+    const baseName = (file?.name || 'logo').replace(/\.[^.]+$/, '') || 'logo';
+    return new File([data], `${baseName}-no-bg.png`, { type: 'image/png' });
+};
+
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
 
 const saveAuthToken = (token) => {
