@@ -337,6 +337,18 @@ export const useConfigurator = create(temporal((set, get) => ({
             }
         }
     },
+    replaceLogoFile: async (id, file) => {
+        if (!id || !(file instanceof File)) return;
+        try {
+            const texture = await normalizeImageFile(file);
+            set((state) => ({
+                logos: state.logos.map(l => l.id === id ? { ...l, texture, filename: file.name || l.filename } : l)
+            }));
+        } catch (error) {
+            console.error('Failed to replace logo image', error);
+            throw error;
+        }
+    },
     selectLogo: (id) => set({ selectedLogoId: id }),
     setLogoPosition: (x, y) => set((state) => ({
         logos: state.logos.map(l => l.id === state.selectedLogoId ? { ...l, position: [x, y] } : l)
@@ -378,6 +390,18 @@ export const useConfigurator = create(temporal((set, get) => ({
             } catch (error) {
                 console.error('Failed to prepare thermos logo image', error);
             }
+        }
+    },
+    replaceThermosLogoFile: async (id, file) => {
+        if (!id || !(file instanceof File)) return;
+        try {
+            const texture = await normalizeImageFile(file);
+            set((state) => ({
+                thermosLogos: state.thermosLogos.map(l => l.id === id ? { ...l, texture, filename: file.name || l.filename, mode: l.mode === 'wrap' ? 'decal' : l.mode } : l)
+            }));
+        } catch (error) {
+            console.error('Failed to replace thermos logo image', error);
+            throw error;
         }
     },
     addGeneratedThermosLogo: (texture, filename = 'AI дизайн.png', target = 'body') => {
@@ -430,6 +454,18 @@ export const useConfigurator = create(temporal((set, get) => ({
             } catch (error) {
                 console.error('Failed to prepare powerbank logo image', error);
             }
+        }
+    },
+    replacePowerbankLogoFile: async (id, file) => {
+        if (!id || !(file instanceof File)) return;
+        try {
+            const texture = await normalizeImageFile(file);
+            set((state) => ({
+                powerbankLogos: state.powerbankLogos.map(l => l.id === id ? { ...l, texture, filename: file.name || l.filename } : l)
+            }));
+        } catch (error) {
+            console.error('Failed to replace powerbank logo image', error);
+            throw error;
         }
     },
     selectPowerbankLogo: (id) => set({ selectedPowerbankLogoId: id }),

@@ -26,6 +26,7 @@ import patternGrid   from '../../assets/icons/pattern-grid.svg';
 import patternDotted from '../../assets/icons/pattern-dotted.svg';
 import { NOTEBOOK_COLOR_PALETTE } from '../../config/productPalettes';
 import { GuestApprovalModal } from '../shared/GuestApprovalModal';
+import { LogoBackgroundRemovalButton } from '../shared/LogoBackgroundRemovalButton';
 
 const PATTERN_IDS = ['blank', 'lined', 'tlined', 'grid', 'dotted'];
 const PATTERN_ICONS = { blank: patternBlank, lined: patternLined, tlined: patternTlined, grid: patternGrid, dotted: patternDotted };
@@ -45,7 +46,7 @@ export const Interface = ({ onFinish }) => {
         setNotebookOpen,
         paperPattern, setPaperPattern,
         blockPages, paperType,
-        logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide,
+        logos, selectedLogoId, addLogo, replaceLogoFile, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide,
         activeProduct,
         zoomLevel, setZoom,
         addToCart,
@@ -197,6 +198,7 @@ export const Interface = ({ onFinish }) => {
                         logos={logos}
                         selectedLogoId={selectedLogoId}
                         addLogo={addLogo}
+                        replaceLogoFile={replaceLogoFile}
                         selectLogo={selectLogo}
                         removeLogo={removeLogo}
                         resetLogoTransform={resetLogoTransform}
@@ -292,7 +294,7 @@ const FormatGlassTable = ({ value, onChange }) => (
     </div>
 );
 
-const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide, language, compact = false }) => {
+const LogoPanel = ({ logos, selectedLogoId, addLogo, replaceLogoFile, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide, language, compact = false }) => {
     const selected = logos.find(l => l.id === selectedLogoId) || null;
     const [uploadSide, setUploadSide] = useState('front');
     const activeSide = selected?.side ?? uploadSide;
@@ -327,11 +329,13 @@ const LogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, res
             {selected && (
                 <>
                     <div className="mt-3 space-y-3 xl:hidden">
+                        <LogoBackgroundRemovalButton logo={selected} language={language} onApply={(file) => replaceLogoFile(selected.id, file)} />
                         <TransformPad label={t(language, 'position')} value={selected.position} onChange={setLogoPosition} onReset={resetLogoTransform} />
                         <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setLogoRotation} />
                         <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.2} max={4.0} step={0.05} onChange={setLogoScale} />
                     </div>
                     <FloatingLogoSettings title={t(language, 'logoLabel')} subtitle={selected.filename}>
+                    <LogoBackgroundRemovalButton logo={selected} language={language} onApply={(file) => replaceLogoFile(selected.id, file)} />
                     <TransformPad label={t(language, 'position')} value={selected.position} onChange={setLogoPosition} onReset={resetLogoTransform} />
                     <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setLogoRotation} />
                     <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.2} max={4.0} step={0.05} onChange={setLogoScale} />

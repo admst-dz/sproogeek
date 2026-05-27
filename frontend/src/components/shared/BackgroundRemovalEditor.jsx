@@ -49,6 +49,7 @@ export const BackgroundRemovalEditor = ({
     const [strength, setStrength] = useState(DEFAULT_BACKGROUND_STRENGTH);
     const [brushSize, setBrushSize] = useState(34);
     const [version, setVersion] = useState(0);
+    const [cursorMarker, setCursorMarker] = useState({ visible: false, x: 0, y: 0, size: 22 });
 
     const progressLabel = useMemo(() => (
         fileCount > 1 ? `${fileIndex + 1}/${fileCount}` : ''
@@ -70,6 +71,7 @@ export const BackgroundRemovalEditor = ({
             setMode('pick');
             setStrength(DEFAULT_BACKGROUND_STRENGTH);
             setBrushSize(34);
+            setCursorMarker({ visible: false, x: 0, y: 0, size: 22 });
         }, 0);
 
         loadLogoImageData(file)
@@ -111,11 +113,20 @@ export const BackgroundRemovalEditor = ({
         const imageData = imageDataRef.current;
         if (!canvas || !imageData) return null;
         const rect = canvas.getBoundingClientRect();
+        const nx = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+        const ny = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+        const brushDiameter = brushSize * 2 * (rect.width / imageData.width);
+        setCursorMarker({
+            visible: status === 'ready',
+            x: nx,
+            y: ny,
+            size: mode === 'pick' ? 22 : Math.max(22, Math.min(160, brushDiameter)),
+        });
         return {
-            x: ((event.clientX - rect.left) / rect.width) * imageData.width,
-            y: ((event.clientY - rect.top) / rect.height) * imageData.height,
+            x: nx * imageData.width,
+            y: ny * imageData.height,
         };
-    }, []);
+    }, [brushSize, mode, status]);
 
     const updateMask = useCallback((nextMask) => {
         maskRef.current = nextMask;
@@ -183,10 +194,11 @@ export const BackgroundRemovalEditor = ({
     }, [applySeed, mode, paintAt, status]);
 
     const handlePointerMove = useCallback((event) => {
+        if (status === 'ready') pointFromEvent(event);
         if (!drawingRef.current || mode === 'pick' || status !== 'ready') return;
         event.preventDefault();
         paintAt(event);
-    }, [mode, paintAt, status]);
+    }, [mode, paintAt, pointFromEvent, status]);
 
     const stopDrawing = useCallback((event) => {
         drawingRef.current = false;
@@ -215,6 +227,7 @@ export const BackgroundRemovalEditor = ({
     if (!open || !file || typeof document === 'undefined') return null;
 
     const busy = status === 'loading' || status === 'working' || status === 'exporting';
+    const markerColor = mode === 'restore' ? '#86efac' : mode === 'erase' ? '#fca5a5' : '#fff9ec';
 
     return createPortal(
         <div className="fixed inset-0 z-[10020] flex items-end justify-center bg-black/70 px-3 py-4 font-zen text-white backdrop-blur-sm sm:items-center">
@@ -253,15 +266,39 @@ export const BackgroundRemovalEditor = ({
                                     {status === 'exporting' ? t(language, 'logoBackgroundExporting') : t(language, 'logoBackgroundPreparing')}
                                 </div>
                             )}
-                            <canvas
-                                ref={canvasRef}
-                                className={`max-h-[58vh] max-w-full touch-none select-none object-contain ${mode === 'pick' ? 'cursor-crosshair' : 'cursor-none'}`}
-                                onPointerDown={handlePointerDown}
-                                onPointerMove={handlePointerMove}
-                                onPointerUp={stopDrawing}
-                                onPointerCancel={stopDrawing}
-                                onPointerLeave={(event) => { if (drawingRef.current) stopDrawing(event); }}
-                            />
+                            <div className="relative max-h-[58vh] max-w-full">
+                                <canvas
+                                    ref={canvasRef}
+                                    className={`block max-h-[58vh] max-w-full touch-none select-none object-contain ${mode === 'pick' ? 'cursor-crosshair' : 'cursor-none'}`}
+                                    onPointerDown={handlePointerDown}
+                                    onPointerMove={handlePointerMove}
+                                    onPointerEnter={handlePointerMove}
+                                    onPointerUp={stopDrawing}
+                                    onPointerCancel={stopDrawing}
+                                    onPointerLeave={(event) => {
+                                        setCursorMarker((current) => ({ ...current, visible: false }));
+                                        if (drawingRef.current) stopDrawing(event);
+                                    }}
+                                />
+                                {cursorMarker.visible && (
+                                    <span
+                                        className="pointer-events-none absolute z-20 rounded-full border-2 shadow-[0_0_0_1px_rgba(0,0,0,0.45),0_0_18px_rgba(0,0,0,0.35)]"
+                                        style={{
+                                            left: `${cursorMarker.x * 100}%`,
+                                            top: `${cursorMarker.y * 100}%`,
+                                            width: cursorMarker.size,
+                                            height: cursorMarker.size,
+                                            borderColor: markerColor,
+                                            transform: 'translate(-50%, -50%)',
+                                        }}
+                                    >
+                                        <span
+                                            className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                                            style={{ backgroundColor: markerColor }}
+                                        />
+                                    </span>
+                                )}
+                            </div>
                         </div>
                         <p className="mt-2 truncate text-[11px] font-bold text-white/45">{file.name}</p>
                     </div>
