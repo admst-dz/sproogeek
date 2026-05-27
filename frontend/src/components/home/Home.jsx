@@ -359,7 +359,7 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas }) {
     };
 
     return (
-        <ProductGrid four={Boolean(onPrintCanvas)}>
+<ProductGrid four={false}>
             {/* Карточка 1: Ежедневник */}
             <ProductCard
                 glowColor="rgba(59, 130, 246, 0.22)"
