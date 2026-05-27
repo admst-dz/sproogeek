@@ -4,6 +4,7 @@ import { logoTransferApi, resolveApiUrl } from '../../api';
 import { t } from '../../i18n';
 import { useConfigurator } from '../../store';
 import { isLogoFileTooLarge, isSupportedLogoFile, LOGO_ACCEPT } from '../../utils/logoUpload';
+import { BackgroundRemovalEditor } from './BackgroundRemovalEditor';
 
 const SESSION_POLL_MS = 2200;
 
@@ -24,21 +25,15 @@ export const LogoUploadModal = ({ open, onClose, onFile }) => {
     const [status, setStatus] = useState('idle');
     const [error, setError] = useState('');
     const [dragging, setDragging] = useState(false);
+    const [editQueue, setEditQueue] = useState(null);
 
     const close = useCallback(() => {
         setDragging(false);
+        setEditQueue(null);
         onClose?.();
     }, [onClose]);
 
-    const ingestFiles = useCallback(async (files, nextStatus = 'ready') => {
-        const uploadFiles = toFiles(files);
-        const message = uploadFiles.length
-            ? uploadFiles.map((file) => fileError(file, language)).find(Boolean)
-            : t(language, 'logoUploadNoFile');
-        if (message) {
-            setError(message);
-            return;
-        }
+    const commitFiles = useCallback(async (uploadFiles, nextStatus = 'ready') => {
         setError('');
         setStatus('processing');
         try {
@@ -53,12 +48,38 @@ export const LogoUploadModal = ({ open, onClose, onFile }) => {
         }
     }, [close, language, onFile]);
 
+    const startEditQueue = useCallback((files, nextStatus = 'ready', source = 'local') => {
+        const uploadFiles = toFiles(files);
+        const message = uploadFiles.length
+            ? uploadFiles.map((file) => fileError(file, language)).find(Boolean)
+            : t(language, 'logoUploadNoFile');
+        if (message) {
+            setError(message);
+            return;
+        }
+        setError('');
+        setStatus('editing');
+        setEditQueue({ files: uploadFiles, processed: [], index: 0, nextStatus, source });
+    }, [language]);
+
+    const finishEditorFile = useCallback((file) => {
+        if (!editQueue) return;
+        const processed = [...editQueue.processed, file || editQueue.files[editQueue.index]];
+        const nextIndex = editQueue.index + 1;
+        if (nextIndex < editQueue.files.length) {
+            setEditQueue({ ...editQueue, processed, index: nextIndex });
+            return;
+        }
+        setEditQueue(null);
+        commitFiles(processed, editQueue.nextStatus);
+    }, [commitFiles, editQueue]);
+
     const handlePickedFiles = useCallback((files) => {
         const uploadFiles = toFiles(files);
         if (!uploadFiles.length) return;
         consumedRemoteRef.current = true;
-        ingestFiles(uploadFiles);
-    }, [ingestFiles]);
+        startEditQueue(uploadFiles);
+    }, [startEditQueue]);
 
     const handleRemoteReady = useCallback(async (payload) => {
         const remoteFiles = Array.isArray(payload?.files) && payload.files.length
@@ -80,13 +101,13 @@ export const LogoUploadModal = ({ open, onClose, onFile }) => {
                     { type: blob.type || item.content_type || 'image/png' }
                 ));
             }
-            await ingestFiles(files, 'uploaded');
+            startEditQueue(files, 'uploaded', 'remote');
         } catch {
             consumedRemoteRef.current = false;
             setStatus('error');
             setError(t(language, 'logoUploadFailed'));
         }
-    }, [ingestFiles, language]);
+    }, [language, startEditQueue]);
 
     useEffect(() => {
         if (!open) return undefined;
@@ -158,6 +179,7 @@ export const LogoUploadModal = ({ open, onClose, onFile }) => {
     const uploadUrl = session?.upload_url || '';
     const waitingForPhone = ['loading', 'pending'].includes(status);
     const processing = status === 'processing';
+    const editorFile = editQueue?.files?.[editQueue.index] || null;
 
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/62 px-3 py-4 font-zen text-white backdrop-blur-sm sm:items-center">
@@ -277,6 +299,20 @@ export const LogoUploadModal = ({ open, onClose, onFile }) => {
                     )}
                 </div>
             </section>
+            <BackgroundRemovalEditor
+                open={Boolean(editorFile)}
+                file={editorFile}
+                fileIndex={editQueue?.index || 0}
+                fileCount={editQueue?.files?.length || 1}
+                language={language}
+                onApply={finishEditorFile}
+                onSkip={finishEditorFile}
+                onCancel={() => {
+                    if (editQueue?.source === 'local') consumedRemoteRef.current = false;
+                    setEditQueue(null);
+                    setStatus(session?.status || 'pending');
+                }}
+            />
         </div>,
         document.body
     );
