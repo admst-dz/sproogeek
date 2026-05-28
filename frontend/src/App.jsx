@@ -466,7 +466,7 @@ function MainApp() {
             targetScreen = 'dealer';
         } else if (userRole === 'manufacturer') {
             targetScreen = 'manufacturer';
-        } else if (userRole === 'client' && screen !== 'configurator') {
+        } else if (userRole === 'client' && screen !== 'configurator' && screen !== 'print_canvas') {
             targetScreen = 'client_dashboard';
         } else if (!userRole && ['dealer', 'manufacturer', 'client_dashboard', 'admin_dashboard'].includes(screen)) {
             targetScreen = 'home';

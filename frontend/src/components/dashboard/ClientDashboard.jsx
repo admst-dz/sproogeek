@@ -312,7 +312,9 @@ export const ClientDashboard = ({ onBack, onEdit, onPrintCanvas, showSuccessToas
             </header>
 
             {/* MAIN */}
-            <main className="flex-1 min-h-0 overflow-y-auto custom-scrollbar max-w-6xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-8 pb-24 flex flex-col">
+            <main className={`flex-1 min-h-0 overflow-y-auto custom-scrollbar mx-auto w-full px-4 sm:px-6 py-5 sm:py-8 pb-24 flex flex-col ${
+                activeTab === 'catalog' ? 'max-w-[1500px]' : 'max-w-6xl'
+            }`}>
 
                 {/* CATALOG TAB */}
                 {activeTab === 'catalog' && (
