@@ -131,6 +131,7 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET: ${S3_BUCKET:-techcards}
       BACKGROUND_REMOVAL_MAX_EDGE: ${BACKGROUND_REMOVAL_MAX_EDGE:-2400}
+      REMBG_MODEL: ${REMBG_MODEL:-isnet-general-use}
     depends_on:
       pgbouncer:
         condition: service_healthy

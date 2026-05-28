@@ -8,11 +8,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tini \
+    && apt-get install -y --no-install-recommends tini libgomp1 \
     && rm -rf /var/lib/apt/lists/*
+
+# rembg downloads its ONNX model to U2NET_HOME on first use; bake it into the
+# image so runtime needs no network and every worker shares the same path.
+ENV U2NET_HOME=/app/.u2net \
+    REMBG_MODEL=isnet-general-use
 
 COPY requirements.txt .
 RUN pip install -r requirements.txt
+RUN python -c "from rembg import new_session; new_session('${REMBG_MODEL}')"
 
 COPY . .
 

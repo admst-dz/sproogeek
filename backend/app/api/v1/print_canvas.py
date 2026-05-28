@@ -1,4 +1,6 @@
+import io
 import json
+import logging
 import os
 import uuid
 from datetime import datetime
@@ -9,8 +11,11 @@ import aiofiles
 import sentry_sdk
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
+from PIL import Image, ImageCms
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import get_settings
 from app.core.deps import get_current_user, request_id
@@ -40,6 +45,42 @@ def _ensure_can_use_print_canvas(current_user) -> None:
 
 def _is_tiff(content: bytes) -> bool:
     return len(content) >= 4 and content[:4] in TIFF_SIGNATURES
+
+
+def _to_cmyk_tiff(content: bytes) -> bytes:
+    """Convert the RGB export to CMYK for print. Returns original bytes on
+    failure or when the sheet is too large to transcode safely (avoids OOM)."""
+    try:
+        with Image.open(io.BytesIO(content)) as img:
+            width, height = img.size
+            if width * height > settings.print_canvas_cmyk_max_pixels:
+                logger.warning("print canvas too large for CMYK conversion: %sx%s", width, height)
+                return content
+
+            previous_limit = Image.MAX_IMAGE_PIXELS
+            Image.MAX_IMAGE_PIXELS = max(previous_limit or 0, width * height + 1)
+            try:
+                rgb = img.convert("RGB")
+                profile_path = settings.cmyk_icc_profile
+                if profile_path and os.path.exists(profile_path):
+                    cmyk = ImageCms.profileToProfile(
+                        rgb,
+                        ImageCms.createProfile("sRGB"),
+                        ImageCms.getOpenProfile(profile_path),
+                        outputMode="CMYK",
+                    )
+                else:
+                    cmyk = rgb.convert("CMYK")
+            finally:
+                Image.MAX_IMAGE_PIXELS = previous_limit
+
+        out = io.BytesIO()
+        cmyk.save(out, format="TIFF", compression="tiff_lzw")
+        return out.getvalue()
+    except Exception as exc:  # noqa: BLE001 - never let color conversion break export
+        logger.exception("CMYK conversion failed, keeping RGB export")
+        sentry_sdk.capture_exception(exc)
+        return content
 
 
 def _number(value: Any, default: float = 0) -> float:
@@ -72,9 +113,12 @@ def _email_body(item, metadata: dict) -> str:
     for logo in logos[:30]:
         if not isinstance(logo, dict):
             continue
+        size_mm = ""
+        if logo.get("width_mm") and logo.get("height_mm"):
+            size_mm = f" — {logo.get('width_mm')} x {logo.get('height_mm')} мм"
         logo_lines.append(
             f"- {logo.get('name') or 'logo'}: {logo.get('quantity', 0)} шт., "
-            f"{logo.get('width_px', 0)} x {logo.get('height_px', 0)} px"
+            f"{logo.get('width_px', 0)} x {logo.get('height_px', 0)} px{size_mm}"
         )
     if len(logos) > 30:
         logo_lines.append(f"- ...и ещё {len(logos) - 30}")
@@ -150,6 +194,9 @@ async def create_print_canvas_export(
         raise HTTPException(status_code=400, detail="File content is not TIFF")
     if len(content) > settings.max_print_canvas_tiff_bytes:
         raise HTTPException(status_code=413, detail="TIFF export is too large")
+
+    # Print is produced in CMYK — transcode the uploaded RGB sheet on the backend.
+    content = await run_in_threadpool(_to_cmyk_tiff, content)
 
     export_id = uuid.uuid4()
     filename = f"print-canvas-{export_id.hex}.tiff"

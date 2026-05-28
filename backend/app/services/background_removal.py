@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+import os
+import threading
 from dataclasses import dataclass
 from io import BytesIO
 
@@ -7,11 +10,21 @@ import numpy as np
 from PIL import Image, ImageFilter, ImageOps, UnidentifiedImageError
 
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_STRENGTH = 0.62
 DEFAULT_MAX_EDGE = 2400
 MAX_PIXELS = 18_000_000
 
+# U2Net-family model used by rembg. "isnet-general-use" gives the sharpest,
+# cutout-quality mattes; "u2net" is the lighter default. Override via env.
+REMBG_MODEL = os.getenv("REMBG_MODEL", "isnet-general-use")
+
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
+
+_session = None
+_session_lock = threading.Lock()
+_session_failed = False
 
 
 class BackgroundRemovalError(ValueError):
@@ -27,13 +40,72 @@ class BackgroundRemovalResult:
     engine: str = "edge-matte"
 
 
+def _get_session():
+    """Lazily build and cache the rembg session (loads the ONNX model once)."""
+    global _session, _session_failed
+    if _session is not None or _session_failed:
+        return _session
+    with _session_lock:
+        if _session is None and not _session_failed:
+            try:
+                from rembg import new_session
+
+                _session = new_session(REMBG_MODEL)
+            except Exception:  # pragma: no cover - import/model load failure
+                logger.exception("rembg session unavailable, using heuristic fallback")
+                _session_failed = True
+    return _session
+
+
 def remove_logo_background(
     content: bytes,
     *,
     max_edge: int = DEFAULT_MAX_EDGE,
     strength: float = DEFAULT_STRENGTH,
+    trim: bool = True,
 ) -> BackgroundRemovalResult:
     image = _decode_image(content, max_edge=max_edge)
+
+    session = _get_session()
+    if session is not None:
+        try:
+            return _remove_with_model(image, session, trim=trim)
+        except BackgroundRemovalError:
+            raise
+        except Exception:  # pragma: no cover - inference failure
+            logger.exception("model background removal failed, using heuristic")
+
+    return _remove_with_heuristic(image, strength)
+
+
+def _remove_with_model(image: Image.Image, session, *, trim: bool = True) -> BackgroundRemovalResult:
+    from rembg import remove
+
+    cutout = remove(image, session=session, post_process_mask=True)
+    if cutout.mode != "RGBA":
+        cutout = cutout.convert("RGBA")
+
+    alpha = np.asarray(cutout)[..., 3].astype(np.float32) / 255.0
+    if float(alpha.mean()) < 0.002:
+        # Model removed almost everything (e.g. very low contrast): keep original.
+        return _encode_png(image, removed_ratio=0.0, engine=REMBG_MODEL)
+
+    removed_ratio = float(1.0 - alpha.mean())
+    # The interactive editor needs a mask aligned with the source, so trimming
+    # transparent margins is optional (trim=False keeps the original frame).
+    result = _trim_transparent(cutout) if trim else cutout
+    return _encode_png(result, removed_ratio=removed_ratio, engine=REMBG_MODEL)
+
+
+def _trim_transparent(image: Image.Image) -> Image.Image:
+    """Crop fully transparent margins so the logo footprint is tight."""
+    bbox = image.getchannel("A").getbbox()
+    if bbox and bbox != (0, 0, image.width, image.height):
+        return image.crop(bbox)
+    return image
+
+
+def _remove_with_heuristic(image: Image.Image, strength: float) -> BackgroundRemovalResult:
     rgba = np.array(image, dtype=np.uint8)
     height, width = rgba.shape[:2]
     if not width or not height:
@@ -265,7 +337,12 @@ def _compose_output(
     return np.clip(output, 0, 255).astype(np.uint8)
 
 
-def _encode_png(image: Image.Image, *, removed_ratio: float) -> BackgroundRemovalResult:
+def _encode_png(
+    image: Image.Image,
+    *,
+    removed_ratio: float,
+    engine: str = "edge-matte",
+) -> BackgroundRemovalResult:
     out = BytesIO()
     image.save(out, format="PNG", optimize=True)
     width, height = image.size
@@ -274,4 +351,5 @@ def _encode_png(image: Image.Image, *, removed_ratio: float) -> BackgroundRemova
         width=width,
         height=height,
         removed_ratio=removed_ratio,
+        engine=engine,
     )

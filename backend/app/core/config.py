@@ -74,8 +74,13 @@ class Settings(BaseSettings):
 
     max_upload_bytes: int = Field(25_000_000, alias="MAX_UPLOAD_BYTES")
     max_logo_bytes: int = Field(25_000_000, alias="MAX_LOGO_BYTES")
-    max_print_canvas_tiff_bytes: int = Field(150_000_000, alias="MAX_PRINT_CANVAS_TIFF_BYTES")
+    max_print_canvas_tiff_bytes: int = Field(600_000_000, alias="MAX_PRINT_CANVAS_TIFF_BYTES")
     background_removal_max_edge: int = Field(2400, alias="BACKGROUND_REMOVAL_MAX_EDGE")
+    # Print export is delivered in CMYK. Conversion runs on the backend; an
+    # optional ICC profile gives color-accurate output, otherwise Pillow's
+    # built-in transform is used. Sheets above the pixel cap stay RGB to avoid OOM.
+    cmyk_icc_profile: str = Field("", alias="CMYK_ICC_PROFILE")
+    print_canvas_cmyk_max_pixels: int = Field(250_000_000, alias="PRINT_CANVAS_CMYK_MAX_PIXELS")
 
     admin_backdoor_enabled: bool = Field(False, alias="ADMIN_BACKDOOR_ENABLED")
     admin_backdoor_login: str = Field("", alias="ADMIN_BACKDOOR_LOGIN")

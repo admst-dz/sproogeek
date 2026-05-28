@@ -1,10 +1,11 @@
-export const LOGO_ACCEPT = 'image/*';
+export const LOGO_ACCEPT = 'image/*,application/pdf';
 export const LOGO_MAX_BYTES = 25_000_000;
 export const LOGO_SOURCE_MAX_BYTES = 25_000_000;
 
-const ACCEPTED_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
-const CONVERTIBLE_TYPES = new Set([...ACCEPTED_TYPES, 'image/heic', 'image/heif']);
-const ACCEPTED_EXTENSIONS = /\.(png|jpe?g|webp)$/i;
+// PDF is uploaded untouched — the backend rasterizes the first page to PNG.
+const ACCEPTED_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'application/pdf']);
+const CONVERTIBLE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif']);
+const ACCEPTED_EXTENSIONS = /\.(png|jpe?g|webp|pdf)$/i;
 const CONVERTIBLE_EXTENSIONS = /\.(png|jpe?g|webp|heic|heif)$/i;
 
 export class LogoUploadPreparationError extends Error {
@@ -45,7 +46,8 @@ export const isConvertibleLogoFile = (file) => {
     if (!file) return false;
     return (file.type || '').startsWith('image/')
         || CONVERTIBLE_TYPES.has(file.type)
-        || CONVERTIBLE_EXTENSIONS.test(file.name || '');
+        || CONVERTIBLE_EXTENSIONS.test(file.name || '')
+        || isSupportedLogoFile(file); // PDF passes through untouched to the backend
 };
 
 export const isLogoFileTooLarge = (file) => Boolean(file && file.size > LOGO_MAX_BYTES);

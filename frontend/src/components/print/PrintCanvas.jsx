@@ -9,6 +9,8 @@ const SHEET_LENGTH_OPTIONS_M = [25, 50, 100];
 const DEFAULT_SHEET_LENGTH_M = 25;
 const EMPTY_SHEET_HEIGHT_MM = 360;
 const DEFAULT_LOGO_WIDTH_MM = 72;
+const MIN_LOGO_WIDTH_MM = 10;
+const MAX_LOGO_WIDTH_MM = 560;
 const MAX_IMAGE_EDGE = 1400;
 const LOGO_GAP_OPTIONS_MM = [3, 5];
 const DEFAULT_LOGO_GAP_MM = 3;
@@ -19,6 +21,8 @@ const ZOOM_STEP = 0.25;
 const RECT_EPSILON = 0.001;
 const TIFF_EXPORT_DPI = 150;
 const MM_PER_INCH = 25.4;
+// Kept well under browser per-canvas area/dimension caps (Safari ~16.7M px).
+const TIFF_STRIP_ROWS = 2048;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -65,21 +69,106 @@ const writeTiffEntry = (view, offset, tag, type, count, value) => {
     }
 };
 
-const canvasToTiffBlob = (canvas, dpi = TIFF_EXPORT_DPI) => {
-    const { width, height } = canvas;
-    const image = canvas.getContext('2d').getImageData(0, 0, width, height).data;
-    const entryCount = 12;
+// PackBits run-length encodes a single scanline (TIFF compression 32773).
+// Encoding is flushed per row, as required by the TIFF spec.
+const packBitsRow = (src) => {
+    const out = [];
+    const n = src.length;
+    let i = 0;
+    while (i < n) {
+        let runLength = 1;
+        while (i + runLength < n && src[i + runLength] === src[i] && runLength < 128) runLength += 1;
+        if (runLength >= 2) {
+            out.push(257 - runLength, src[i]);
+            i += runLength;
+        } else {
+            const litStart = i;
+            let litLen = 0;
+            while (i < n && litLen < 128) {
+                if (i + 2 < n && src[i] === src[i + 1] && src[i + 1] === src[i + 2]) break;
+                i += 1;
+                litLen += 1;
+            }
+            out.push(litLen - 1);
+            for (let j = litStart; j < litStart + litLen; j += 1) out.push(src[j]);
+        }
+    }
+    return Uint8Array.from(out);
+};
+
+// Builds a PackBits-compressed, multi-strip RGB TIFF without ever holding the
+// full raster in memory. renderStrip(ctx, topPx, rows) paints absolute-coord
+// content into a strip-sized canvas (origin already translated to the strip top).
+const buildStripedTiff = ({ width, height, dpi, rowsPerStrip, renderStrip }) => {
+    const stripCount = Math.ceil(height / rowsPerStrip);
+    const strips = [];
+    const stripByteCounts = [];
+    const rgbRow = new Uint8Array(width * 3);
+
+    for (let strip = 0; strip < stripCount; strip += 1) {
+        const topPx = strip * rowsPerStrip;
+        const rows = Math.min(rowsPerStrip, height - topPx);
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = rows;
+        const ctx = canvas.getContext('2d', { alpha: false, colorSpace: 'srgb' });
+        if (!ctx) throw new Error('canvas-unavailable');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, rows);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        renderStrip(ctx, topPx, rows);
+
+        const data = ctx.getImageData(0, 0, width, rows).data;
+        const stripChunks = [];
+        let stripSize = 0;
+        for (let row = 0; row < rows; row += 1) {
+            const base = row * width * 4;
+            for (let x = 0, dst = 0; x < width; x += 1, dst += 3) {
+                const src = base + x * 4;
+                rgbRow[dst] = data[src];
+                rgbRow[dst + 1] = data[src + 1];
+                rgbRow[dst + 2] = data[src + 2];
+            }
+            const encoded = packBitsRow(rgbRow);
+            stripChunks.push(encoded);
+            stripSize += encoded.length;
+        }
+        const stripData = new Uint8Array(stripSize);
+        let cursor = 0;
+        for (const chunk of stripChunks) {
+            stripData.set(chunk, cursor);
+            cursor += chunk.length;
+        }
+        strips.push(stripData);
+        stripByteCounts.push(stripSize);
+    }
+
+    const software = 'Sproogeek Print Canvas';
+    const entryCount = 13;
     const ifdOffset = 8;
     const ifdSize = 2 + entryCount * 12 + 4;
-    const bitsOffset = ifdOffset + ifdSize;
-    const xResolutionOffset = bitsOffset + 6;
-    const yResolutionOffset = xResolutionOffset + 8;
-    const software = 'Sproogeek Print Canvas';
-    const softwareOffset = yResolutionOffset + 8;
-    const imageOffset = softwareOffset + software.length + 1;
-    const pixelBytes = width * height * 3;
-    const buffer = new ArrayBuffer(imageOffset + pixelBytes);
+    let cursor = ifdOffset + ifdSize;
+    const bitsOffset = cursor; cursor += 6;
+    const xResolutionOffset = cursor; cursor += 8;
+    const yResolutionOffset = cursor; cursor += 8;
+    const softwareOffset = cursor; cursor += software.length + 1;
+    if (cursor % 2 === 1) cursor += 1;
+    const stripOffsetsArrayOffset = cursor; cursor += stripCount * 4;
+    const stripByteCountsArrayOffset = cursor; cursor += stripCount * 4;
+    const stripDataStart = cursor;
+
+    const stripOffsets = [];
+    let dataCursor = stripDataStart;
+    for (let strip = 0; strip < stripCount; strip += 1) {
+        stripOffsets.push(dataCursor);
+        dataCursor += stripByteCounts[strip];
+    }
+    const totalSize = dataCursor;
+
+    const buffer = new ArrayBuffer(totalSize);
     const view = new DataView(buffer);
+    const bytes = new Uint8Array(buffer);
 
     writeAscii(view, 0, 'II');
     view.setUint16(2, 42, true);
@@ -90,15 +179,16 @@ const canvasToTiffBlob = (canvas, dpi = TIFF_EXPORT_DPI) => {
     writeTiffEntry(view, entryOffset, 256, 4, 1, width); entryOffset += 12;
     writeTiffEntry(view, entryOffset, 257, 4, 1, height); entryOffset += 12;
     writeTiffEntry(view, entryOffset, 258, 3, 3, bitsOffset); entryOffset += 12;
-    writeTiffEntry(view, entryOffset, 259, 3, 1, 1); entryOffset += 12;
+    writeTiffEntry(view, entryOffset, 259, 3, 1, 32773); entryOffset += 12;
     writeTiffEntry(view, entryOffset, 262, 3, 1, 2); entryOffset += 12;
-    writeTiffEntry(view, entryOffset, 273, 4, 1, imageOffset); entryOffset += 12;
+    writeTiffEntry(view, entryOffset, 273, 4, stripCount, stripCount === 1 ? stripOffsets[0] : stripOffsetsArrayOffset); entryOffset += 12;
     writeTiffEntry(view, entryOffset, 277, 3, 1, 3); entryOffset += 12;
-    writeTiffEntry(view, entryOffset, 278, 4, 1, height); entryOffset += 12;
-    writeTiffEntry(view, entryOffset, 279, 4, 1, pixelBytes); entryOffset += 12;
+    writeTiffEntry(view, entryOffset, 278, 4, 1, rowsPerStrip); entryOffset += 12;
+    writeTiffEntry(view, entryOffset, 279, 4, stripCount, stripCount === 1 ? stripByteCounts[0] : stripByteCountsArrayOffset); entryOffset += 12;
     writeTiffEntry(view, entryOffset, 282, 5, 1, xResolutionOffset); entryOffset += 12;
     writeTiffEntry(view, entryOffset, 283, 5, 1, yResolutionOffset); entryOffset += 12;
     writeTiffEntry(view, entryOffset, 296, 3, 1, 2); entryOffset += 12;
+    writeTiffEntry(view, entryOffset, 305, 2, software.length + 1, softwareOffset); entryOffset += 12;
     view.setUint32(entryOffset, 0, true);
 
     view.setUint16(bitsOffset, 8, true);
@@ -111,12 +201,14 @@ const canvasToTiffBlob = (canvas, dpi = TIFF_EXPORT_DPI) => {
     writeAscii(view, softwareOffset, software);
     view.setUint8(softwareOffset + software.length, 0);
 
-    const output = new Uint8Array(buffer, imageOffset, pixelBytes);
-    for (let src = 0, dst = 0; src < image.length; src += 4, dst += 3) {
-        const alpha = image[src + 3] / 255;
-        output[dst] = Math.round(image[src] * alpha + 255 * (1 - alpha));
-        output[dst + 1] = Math.round(image[src + 1] * alpha + 255 * (1 - alpha));
-        output[dst + 2] = Math.round(image[src + 2] * alpha + 255 * (1 - alpha));
+    if (stripCount > 1) {
+        for (let strip = 0; strip < stripCount; strip += 1) {
+            view.setUint32(stripOffsetsArrayOffset + strip * 4, stripOffsets[strip], true);
+            view.setUint32(stripByteCountsArrayOffset + strip * 4, stripByteCounts[strip], true);
+        }
+    }
+    for (let strip = 0; strip < stripCount; strip += 1) {
+        bytes.set(strips[strip], stripOffsets[strip]);
     }
 
     return new Blob([buffer], { type: 'image/tiff' });
@@ -170,13 +262,16 @@ const prepareLogoFile = async (file) => {
         widthPx: width,
         heightPx: height,
         quantity: 1,
+        widthMm: DEFAULT_LOGO_WIDTH_MM,
         shape: hasTransparentCorners && aspect > 0.82 && aspect < 1.18 ? 'round' : 'auto',
     };
 };
 
+const logoHeightMm = (logo, widthMm) => Math.max(6, widthMm * (logo.heightPx / Math.max(1, logo.widthPx)));
+
 const expandInstances = (logos) => logos.flatMap((logo, logoIndex) => {
-    const width = DEFAULT_LOGO_WIDTH_MM;
-    const height = Math.max(6, width * (logo.heightPx / Math.max(1, logo.widthPx)));
+    const width = clamp(Number(logo.widthMm) || DEFAULT_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
+    const height = logoHeightMm(logo, width);
     return Array.from({ length: Math.max(0, Number(logo.quantity) || 0) }, (_, copyIndex) => ({
         id: `${logo.id}-${copyIndex}`,
         logoId: logo.id,
@@ -526,40 +621,50 @@ export const PrintCanvas = ({ onBack }) => {
         const pxPerMm = TIFF_EXPORT_DPI / MM_PER_INCH;
         const widthPx = Math.max(1, Math.ceil(layout.width * pxPerMm));
         const heightPx = Math.max(1, Math.ceil(layout.usedHeight * pxPerMm));
-        const canvas = document.createElement('canvas');
-        canvas.width = widthPx;
-        canvas.height = heightPx;
-        const ctx = canvas.getContext('2d', { alpha: true, colorSpace: 'srgb' });
-        if (!ctx) throw new Error('canvas-unavailable');
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, widthPx, heightPx);
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
 
         const imageCache = new Map();
-        for (const item of layout.placements) {
-            let image = imageCache.get(item.logoId);
-            if (!image) {
-                image = await loadImage(item.src);
-                imageCache.set(item.logoId, image);
-            }
-
-            const x = Math.round(item.x * pxPerMm);
-            const y = Math.round(item.y * pxPerMm);
-            const width = Math.round(item.drawWidth * pxPerMm);
-            const height = Math.round(item.drawHeight * pxPerMm);
-            if (item.rotated) {
-                ctx.save();
-                ctx.translate(x + width / 2, y + height / 2);
-                ctx.rotate(Math.PI / 2);
-                ctx.drawImage(image, -height / 2, -width / 2, height, width);
-                ctx.restore();
-            } else {
-                ctx.drawImage(image, x, y, width, height);
+        const drawItems = layout.placements.map((item) => ({
+            ...item,
+            px: {
+                x: Math.round(item.x * pxPerMm),
+                y: Math.round(item.y * pxPerMm),
+                width: Math.round(item.drawWidth * pxPerMm),
+                height: Math.round(item.drawHeight * pxPerMm),
+            },
+        }));
+        for (const item of drawItems) {
+            if (!imageCache.has(item.logoId)) {
+                imageCache.set(item.logoId, await loadImage(item.src));
             }
         }
 
-        const blob = canvasToTiffBlob(canvas, TIFF_EXPORT_DPI);
+        const renderStrip = (ctx, topPx, rows) => {
+            const bottomPx = topPx + rows;
+            ctx.save();
+            ctx.translate(0, -topPx);
+            for (const item of drawItems) {
+                const { x, y, width, height } = item.px;
+                if (y >= bottomPx || y + height <= topPx) continue;
+                if (item.rotated) {
+                    ctx.save();
+                    ctx.translate(x + width / 2, y + height / 2);
+                    ctx.rotate(Math.PI / 2);
+                    ctx.drawImage(imageCache.get(item.logoId), -height / 2, -width / 2, height, width);
+                    ctx.restore();
+                } else {
+                    ctx.drawImage(imageCache.get(item.logoId), x, y, width, height);
+                }
+            }
+            ctx.restore();
+        };
+
+        const blob = buildStripedTiff({
+            width: widthPx,
+            height: heightPx,
+            dpi: TIFF_EXPORT_DPI,
+            rowsPerStrip: TIFF_STRIP_ROWS,
+            renderStrip,
+        });
         const metadata = {
             sheet_width_mm: layout.width,
             used_width_mm: layout.usedWidth,
@@ -571,13 +676,18 @@ export const PrintCanvas = ({ onBack }) => {
             export_dpi: TIFF_EXPORT_DPI,
             pixel_width: widthPx,
             pixel_height: heightPx,
-            logos: logos.map((logo) => ({
-                id: logo.id,
-                name: logo.name,
-                quantity: logo.quantity,
-                width_px: logo.widthPx,
-                height_px: logo.heightPx,
-            })),
+            logos: logos.map((logo) => {
+                const widthMm = clamp(Number(logo.widthMm) || DEFAULT_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
+                return {
+                    id: logo.id,
+                    name: logo.name,
+                    quantity: logo.quantity,
+                    width_px: logo.widthPx,
+                    height_px: logo.heightPx,
+                    width_mm: Math.round(widthMm),
+                    height_mm: Math.round(logoHeightMm(logo, widthMm)),
+                };
+            }),
             placements: layout.placements.map((item) => ({
                 logo_id: item.logoId,
                 name: item.name,
@@ -602,8 +712,14 @@ export const PrintCanvas = ({ onBack }) => {
             const stamp = new Date().toISOString().replace(/[:.]/g, '-');
             const filename = `print-canvas-${stamp}.tiff`;
             const file = new File([blob], filename, { type: 'image/tiff' });
-            await printCanvasApi.createExport(file, metadata);
-            downloadBlob(blob, filename);
+            const { data: item } = await printCanvasApi.createExport(file, metadata);
+            // Backend stores the print-ready CMYK TIFF — download that, not the local RGB raster.
+            try {
+                const { data: cmykBlob } = await printCanvasApi.downloadExport(item.id);
+                downloadBlob(cmykBlob, filename);
+            } catch {
+                downloadBlob(blob, filename);
+            }
             setExportMsg(t(language, 'printCanvasExportSaved'));
         } catch (err) {
             console.error(err);
@@ -707,6 +823,22 @@ export const PrintCanvas = ({ onBack }) => {
                                             >
                                                 ×
                                             </button>
+                                        </div>
+                                        <div className="mt-2 flex items-center justify-between gap-2 border-t border-white/8 pt-2">
+                                            <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-white/42">
+                                                {t(language, 'printCanvasLogoSize')}
+                                                <input
+                                                    type="number"
+                                                    min={MIN_LOGO_WIDTH_MM}
+                                                    max={MAX_LOGO_WIDTH_MM}
+                                                    value={Math.round(logo.widthMm ?? DEFAULT_LOGO_WIDTH_MM)}
+                                                    onChange={(event) => updateLogo(logo.id, { widthMm: clamp(Number(event.target.value) || DEFAULT_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM) })}
+                                                    className="h-8 w-16 rounded-[8px] border border-white/14 bg-[#211a1d] text-center text-[12px] font-black text-white outline-none [color-scheme:dark] focus:border-[#fff9ec]/70"
+                                                />
+                                            </label>
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-white/38">
+                                                {Math.round(clamp(Number(logo.widthMm) || DEFAULT_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM))} × {Math.round(logoHeightMm(logo, clamp(Number(logo.widthMm) || DEFAULT_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM)))} мм
+                                            </span>
                                         </div>
                                     </div>
                                 ))}

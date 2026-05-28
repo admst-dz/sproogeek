@@ -20,6 +20,7 @@ import base64
 import io
 import json
 import logging
+import os
 import uuid
 import zipfile
 from datetime import datetime, timezone
@@ -28,15 +29,19 @@ from typing import Any, Optional
 
 import httpx
 import sentry_sdk
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 from slowapi import Limiter
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.client_ip import get_client_ip, slowapi_key
 from app.core.config import get_settings
 from app.core.deps import request_id
 from app.core.email import is_email_configured, send_email
 from app.core.event_logger import event_logger
+from app.crud import order as crud_order
+from app.database import get_db
+from app.schemas.order import OrderCreate
 from app.services.imposition import qr_png_bytes
 from app.services.settings_store import read_settings
 from app.services.unwrap_client import fetch_block_pdf, fetch_unwrap_zip
@@ -51,6 +56,10 @@ limiter = Limiter(key_func=slowapi_key)
 # (12 МБ) уже не пройдёт большее, но добавим явный sanity-check здесь.
 _MAX_RENDER_BYTES = 12_000_000
 _PRINT_ARCHIVE_TO = "info@sproogeek.com"
+_RENDER_DIR = "uploads/renders"
+GUEST_ARCHIVE_DIR = "uploads/guest_archives"
+os.makedirs(_RENDER_DIR, exist_ok=True)
+os.makedirs(GUEST_ARCHIVE_DIR, exist_ok=True)
 _RENDER_MIME_EXTENSIONS = {
     "image/png": "png",
     "image/jpeg": "jpg",
@@ -204,7 +213,8 @@ def _short_id() -> str:
     return f"guest-{uuid.uuid4().hex[:12]}"
 
 
-def _guest_order_like(payload: GuestApprovalRequest, guest_order_id: str) -> SimpleNamespace:
+def _guest_configuration(payload: GuestApprovalRequest) -> dict[str, Any]:
+    """Конфиг в форме, которую понимает админка (productConfig + contact)."""
     configuration = dict(payload.configuration or {})
     if isinstance(configuration.get("productConfig"), dict):
         product_config = dict(configuration["productConfig"])
@@ -222,6 +232,11 @@ def _guest_order_like(payload: GuestApprovalRequest, guest_order_id: str) -> Sim
     }
     configuration["comment"] = payload.comment or configuration.get("comment") or ""
     configuration["notes"] = payload.comment or configuration.get("notes") or ""
+    return configuration
+
+
+def _guest_order_like(payload: GuestApprovalRequest, guest_order_id: str) -> SimpleNamespace:
+    configuration = _guest_configuration(payload)
 
     return SimpleNamespace(
         id=guest_order_id,
@@ -323,6 +338,7 @@ async def _deliver_guest_print_archive(
     render_image: dict[str, Any] | None,
     ip: str,
     req_id: str,
+    order_id: str | None = None,
 ) -> None:
     try:
         archive_bytes = await _build_guest_print_archive(
@@ -331,6 +347,12 @@ async def _deliver_guest_print_archive(
             approval_pdf=approval_pdf,
             render_image=render_image,
         )
+        if order_id:
+            try:
+                with open(os.path.join(GUEST_ARCHIVE_DIR, f"{order_id}.zip"), "wb") as archive_file:
+                    archive_file.write(archive_bytes)
+            except OSError as exc:
+                sentry_sdk.capture_exception(exc)
         subject = f"[Spruzhyk] Гостевой архив для печати — {payload.product_name} — {guest_order_id}"
         body = "\n".join([
             "Гостевой пользователь запросил макет на email без авторизации.",
@@ -395,6 +417,7 @@ async def request_guest_approval(
     request: Request,
     payload: GuestApprovalRequest,
     background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
 ):
     """Сгенерировать PDF-согласование и отправить на указанный email.
 
@@ -421,6 +444,49 @@ async def request_guest_approval(
         raise HTTPException(status_code=502, detail=f"approval render failed: {exc}") from exc
 
     render_image = _decode_render_image(payload.render_data_url)
+    ip = get_client_ip(request)
+
+    # Сохраняем гостевую заявку как заказ (is_guest=True), чтобы она была видна
+    # в админке (вкладка Orders), а не только в почте. Падение персиста не должно
+    # ломать основной сценарий — письмо клиенту важнее записи в БД.
+    order_id: str | None = None
+    try:
+        configuration = _guest_configuration(payload)
+        configuration["_guest"] = {"ip": ip, "is_guest_lead": True}
+        order = await crud_order.create_order(
+            db,
+            OrderCreate(
+                user_id=None,
+                user_email=str(payload.email),
+                product_name=payload.product_name,
+                configuration=configuration,
+                quantity=int(payload.quantity or 1),
+                total_price=payload.total_price,
+                currency=(payload.currency or "BYN")[:3].upper(),
+                is_guest=True,
+            ),
+        )
+        order_id = str(order.id)
+
+        render_url = None
+        if render_image:
+            render_name = f"guest-{order_id}.{render_image['extension']}"
+            try:
+                with open(os.path.join(_RENDER_DIR, render_name), "wb") as render_file:
+                    render_file.write(render_image["content"])
+                render_url = f"/uploads/renders/{render_name}"
+            except OSError as exc:
+                sentry_sdk.capture_exception(exc)
+
+        order.configuration = {
+            **configuration,
+            "_guest": {**configuration["_guest"], "render_url": render_url, "archive_available": True},
+        }
+        await db.commit()
+    except Exception as exc:  # noqa: BLE001
+        await db.rollback()
+        log.exception("guest order persistence failed")
+        sentry_sdk.capture_exception(exc)
 
     subject = f"[Spruzhyk] Согласование макета — {payload.product_name}"
     body_lines = [
@@ -452,7 +518,6 @@ async def request_guest_approval(
             "mime_type": render_image["mime_type"],
         })
 
-    ip = get_client_ip(request)
     event_logger.log(
         "GUEST_APPROVAL_REQUESTED",
         "Guest requested design approval PDF by email",
@@ -498,9 +563,11 @@ async def request_guest_approval(
         render_image=render_image,
         ip=ip,
         req_id=request_id(request),
+        order_id=order_id,
     )
     return {
         "status": "accepted",
         "guest_order_id": guest_order_id,
+        "order_id": order_id,
         "pdf_bytes": len(pdf_bytes),
     }

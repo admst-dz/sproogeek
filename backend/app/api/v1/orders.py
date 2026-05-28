@@ -1,3 +1,4 @@
+import glob
 import io
 import os
 import uuid
@@ -18,7 +19,7 @@ from app.core.event_logger import event_logger
 from app.core.kafka import kafka_producer
 from datetime import datetime, timezone
 
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field as PField
 
 from app.core.security_utils import safe_filename, safe_path_segment
@@ -38,8 +39,10 @@ settings = get_settings()
 
 RENDER_DIR = "uploads/renders"
 SIGNED_APPROVAL_DIR = "uploads/approvals"
+GUEST_ARCHIVE_DIR = "uploads/guest_archives"
 os.makedirs(RENDER_DIR, exist_ok=True)
 os.makedirs(SIGNED_APPROVAL_DIR, exist_ok=True)
+os.makedirs(GUEST_ARCHIVE_DIR, exist_ok=True)
 
 SIGNED_APPROVAL_TYPES = {
     "application/pdf": ("pdf", lambda content: content.startswith(b"%PDF")),
@@ -406,6 +409,55 @@ async def download_production_package(
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/{order_id}/guest-archive.zip")
+async def download_guest_archive(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Download the production archive captured when a guest requested approval."""
+    safe_path_segment(order_id)
+    order = await crud_order.get_order(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if not _can_view_order(order, current_user):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    archive_path = os.path.join(GUEST_ARCHIVE_DIR, f"{order_id}.zip")
+    if not os.path.exists(archive_path):
+        raise HTTPException(status_code=404, detail="Guest archive is not ready yet")
+    return FileResponse(
+        archive_path,
+        media_type="application/zip",
+        filename=f"guest-archive-{order_id}.zip",
+    )
+
+
+_RENDER_MEDIA_TYPES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}
+
+
+@router.get("/{order_id}/guest-render")
+async def download_guest_render(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Serve the design preview captured for a guest order (staff-gated)."""
+    safe_path_segment(order_id)
+    order = await crud_order.get_order(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if not _can_view_order(order, current_user):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    matches = sorted(glob.glob(os.path.join(RENDER_DIR, f"guest-{order_id}.*")))
+    if not matches:
+        raise HTTPException(status_code=404, detail="Render not found")
+    path = matches[0]
+    ext = path.rsplit(".", 1)[-1].lower()
+    return FileResponse(path, media_type=_RENDER_MEDIA_TYPES.get(ext, "application/octet-stream"))
 
 
 @router.get("/{order_id}/qr.png")
