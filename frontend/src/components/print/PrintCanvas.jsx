@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { t } from '../../i18n';
 import { useConfigurator } from '../../store';
 
@@ -11,11 +11,11 @@ const DEFAULT_LOGO_WIDTH_MM = 72;
 const MAX_IMAGE_EDGE = 1400;
 const LOGO_GAP_OPTIONS_MM = [3, 5];
 const DEFAULT_LOGO_GAP_MM = 3;
-const MINIMIZE_SHEET_PADDING_MM = 8;
-const COMFORT_SHEET_PADDING_MM = 16;
+const SHEET_PADDING_MM = 8;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
+const RECT_EPSILON = 0.001;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -112,170 +112,222 @@ const getItemFootprint = (item, rotated = false) => {
     };
 };
 
-const splitSegmentAt = (segments, position) => {
-    const result = [];
-    segments.forEach((segment) => {
-        const end = segment.x + segment.width;
-        if (position <= segment.x || position >= end) {
-            result.push(segment);
-            return;
-        }
-        result.push({ x: segment.x, width: position - segment.x, y: segment.y });
-        result.push({ x: position, width: end - position, y: segment.y });
-    });
-    return result;
-};
+const rectsIntersect = (a, b) => (
+    a.x < b.x + b.width - RECT_EPSILON
+    && a.x + a.width > b.x + RECT_EPSILON
+    && a.y < b.y + b.height - RECT_EPSILON
+    && a.y + a.height > b.y + RECT_EPSILON
+);
 
-const mergeSegments = (segments) => {
-    const merged = [];
-    segments
-        .filter((segment) => segment.width > 0.001)
-        .sort((a, b) => a.x - b.x)
-        .forEach((segment) => {
-            const last = merged[merged.length - 1];
-            if (last && Math.abs((last.x + last.width) - segment.x) < 0.001 && Math.abs(last.y - segment.y) < 0.001) {
-                last.width += segment.width;
-            } else {
-                merged.push({ ...segment });
-            }
+const isRectContained = (a, b) => (
+    a.x >= b.x - RECT_EPSILON
+    && a.y >= b.y - RECT_EPSILON
+    && a.x + a.width <= b.x + b.width + RECT_EPSILON
+    && a.y + a.height <= b.y + b.height + RECT_EPSILON
+);
+
+const splitFreeRect = (freeRect, usedRect) => {
+    if (!rectsIntersect(freeRect, usedRect)) return [freeRect];
+
+    const next = [];
+    const freeRight = freeRect.x + freeRect.width;
+    const freeBottom = freeRect.y + freeRect.height;
+    const usedRight = usedRect.x + usedRect.width;
+    const usedBottom = usedRect.y + usedRect.height;
+
+    if (usedRect.y > freeRect.y + RECT_EPSILON) {
+        next.push({
+            x: freeRect.x,
+            y: freeRect.y,
+            width: freeRect.width,
+            height: usedRect.y - freeRect.y,
         });
-    return merged;
+    }
+
+    if (usedBottom < freeBottom - RECT_EPSILON) {
+        next.push({
+            x: freeRect.x,
+            y: usedBottom,
+            width: freeRect.width,
+            height: freeBottom - usedBottom,
+        });
+    }
+
+    if (usedRect.x > freeRect.x + RECT_EPSILON) {
+        next.push({
+            x: freeRect.x,
+            y: freeRect.y,
+            width: usedRect.x - freeRect.x,
+            height: freeRect.height,
+        });
+    }
+
+    if (usedRight < freeRight - RECT_EPSILON) {
+        next.push({
+            x: usedRight,
+            y: freeRect.y,
+            width: freeRight - usedRight,
+            height: freeRect.height,
+        });
+    }
+
+    return next.filter((rect) => rect.width > RECT_EPSILON && rect.height > RECT_EPSILON);
 };
 
-const getSkylineY = (segments, x, width) => {
-    const right = x + width;
-    return segments.reduce((maxY, segment) => {
-        const segmentRight = segment.x + segment.width;
-        if (segment.x >= right || segmentRight <= x) return maxY;
-        return Math.max(maxY, segment.y);
-    }, 0);
-};
-
-const placeOnSkyline = (segments, x, width, nextY) => {
-    const right = x + width;
-    const split = splitSegmentAt(splitSegmentAt(segments, x), right);
-    const placed = [];
-    let inserted = false;
-
-    split.forEach((segment) => {
-        const segmentRight = segment.x + segment.width;
-        if (segmentRight <= x || segment.x >= right) {
-            placed.push(segment);
-            return;
-        }
-        if (!inserted) {
-            placed.push({ x, width, y: nextY });
-            inserted = true;
-        }
+const pruneFreeRects = (rects) => {
+    const pruned = [];
+    rects.forEach((rect, index) => {
+        const contained = rects.some((other, otherIndex) => (
+            index !== otherIndex && isRectContained(rect, other)
+        ));
+        if (!contained) pruned.push(rect);
     });
-
-    return mergeSegments(placed);
+    return pruned;
 };
 
-const packRows = (instances, { mode, sheetWidth, maxLengthM, logoGapMm }) => {
+const applyPlacementToFreeRects = (freeRects, usedRect) => {
+    const splitRects = freeRects.flatMap((rect) => splitFreeRect(rect, usedRect));
+    return pruneFreeRects(splitRects);
+};
+
+const packRows = (instances, { sheetWidth, maxLengthM, logoGapMm }) => {
     const gap = LOGO_GAP_OPTIONS_MM.includes(Number(logoGapMm)) ? Number(logoGapMm) : DEFAULT_LOGO_GAP_MM;
-    const sheetPadding = mode === 'comfort' ? COMFORT_SHEET_PADDING_MM : MINIMIZE_SHEET_PADDING_MM;
+    const sheetPadding = SHEET_PADDING_MM;
     const widthLimit = SHEET_WIDTH_OPTIONS_MM.includes(Number(sheetWidth)) ? Number(sheetWidth) : DEFAULT_SHEET_WIDTH_MM;
     const maxLengthMm = (SHEET_LENGTH_OPTIONS_M.includes(Number(maxLengthM)) ? Number(maxLengthM) : DEFAULT_SHEET_LENGTH_M) * 1000;
     const innerWidthLimit = Math.max(1, widthLimit - sheetPadding * 2);
-    const sorted = mode === 'comfort'
-        ? [...instances]
-        : [...instances].sort((a, b) => {
-            const areaDelta = (b.width * b.height) - (a.width * a.height);
-            if (Math.abs(areaDelta) > 0.1) return areaDelta;
-            return Math.max(b.width, b.height) - Math.max(a.width, a.height);
-        });
-    const placements = [];
-    let skyline = [{ x: sheetPadding, width: innerWidthLimit, y: sheetPadding }];
+    const byArea = (a, b) => {
+        const areaDelta = (b.width * b.height) - (a.width * a.height);
+        if (Math.abs(areaDelta) > 0.1) return areaDelta;
+        return Math.max(b.width, b.height) - Math.max(a.width, a.height);
+    };
+    const byHeight = (a, b) => (b.height - a.height) || byArea(a, b);
+    const byWidth = (a, b) => (b.width - a.width) || byArea(a, b);
+    const byAspect = (a, b) => (b.width / Math.max(1, b.height)) - (a.width / Math.max(1, a.height)) || byArea(a, b);
+    const packingOrders = [
+        [...instances].sort(byArea),
+        [...instances].sort(byHeight),
+        [...instances].sort(byWidth),
+        [...instances].sort(byAspect),
+        [...instances],
+    ];
 
-    sorted.forEach((item) => {
-        const orientationOptions = [false, true].filter((rotated, index) => (
-            index === 0 || (mode === 'minimize' && item.shape !== 'round' && Math.abs(item.width - item.height) > 0.1)
-        ));
-        const candidates = new Set([sheetPadding]);
-        skyline.forEach((segment) => candidates.add(segment.x));
+    const packOrder = (sorted) => {
+        const placements = [];
+        let freeRects = [{
+            x: sheetPadding,
+            y: sheetPadding,
+            width: innerWidthLimit,
+            height: Math.max(1, maxLengthMm - sheetPadding * 2),
+        }];
 
-        let best = null;
-        orientationOptions.forEach((rotated) => {
-            const footprint = getItemFootprint(item, rotated);
-            const placeWidth = Math.min(footprint.width, innerWidthLimit);
-            const placeHeight = footprint.height;
+        sorted.forEach((item) => {
+            const orientationOptions = [false, true].filter((rotated, index) => (
+                index === 0 || (item.shape !== 'round' && Math.abs(item.width - item.height) > 0.1)
+            ));
 
-            candidates.forEach((candidateX) => {
-                if (candidateX + placeWidth > widthLimit - sheetPadding + 0.001) return;
-                const y = getSkylineY(skyline, candidateX, placeWidth);
-                const usedBottom = y + placeHeight;
-                const widthWaste = Math.max(0, (widthLimit - sheetPadding) - (candidateX + placeWidth));
-                const isWideLogo = item.width / Math.max(1, item.height) > 2.2;
-                const savesRowWidth = item.width > innerWidthLimit * 0.42;
-                const rotationBias = rotated && isWideLogo && savesRowWidth
-                    ? -Math.max(0, item.width - item.height) * 1.5
-                    : rotated ? 0.02 : 0;
-                const leftBias = Math.abs(candidateX - sheetPadding) * 0.001;
-                const next = {
-                    x: candidateX,
-                    y,
-                    score: usedBottom + leftBias + widthWaste * 0.0001 + rotationBias,
-                    placeWidth,
-                    placeHeight,
-                    drawWidth: footprint.drawWidth,
-                    drawHeight: footprint.drawHeight,
-                    footprintWidth: footprint.width,
-                    footprintHeight: footprint.height,
-                    rotated,
-                };
-                if (!best || next.score < best.score || (Math.abs(next.score - best.score) < 0.001 && next.x < best.x)) {
-                    best = next;
-                }
+            let best = null;
+            orientationOptions.forEach((rotated) => {
+                const footprint = getItemFootprint(item, rotated);
+                const drawWidth = Math.min(footprint.drawWidth, innerWidthLimit);
+                const drawHeight = footprint.drawHeight;
+
+                freeRects.forEach((rect) => {
+                    if (drawWidth > rect.width + RECT_EPSILON || drawHeight > rect.height + RECT_EPSILON) return;
+
+                    const maxRight = widthLimit - sheetPadding;
+                    const maxBottom = maxLengthMm - sheetPadding;
+                    const placeWidth = Math.min(drawWidth + gap, maxRight - rect.x);
+                    const placeHeight = Math.min(drawHeight + gap, maxBottom - rect.y);
+                    if (placeWidth > rect.width + RECT_EPSILON || placeHeight > rect.height + RECT_EPSILON) return;
+
+                    const usedBottom = rect.y + drawHeight;
+                    const shortSideWaste = Math.min(rect.width - placeWidth, rect.height - placeHeight);
+                    const longSideWaste = Math.max(rect.width - placeWidth, rect.height - placeHeight);
+                    const areaWaste = (rect.width * rect.height) - (placeWidth * placeHeight);
+                    const rotationBias = rotated && item.width / Math.max(1, item.height) > 2.2
+                        ? -Math.max(0, item.width - item.height) * 0.08
+                        : rotated ? 0.04 : 0;
+                    const next = {
+                        x: rect.x,
+                        y: rect.y,
+                        score: usedBottom + rotationBias,
+                        shortSideWaste,
+                        longSideWaste,
+                        areaWaste,
+                        placeWidth,
+                        placeHeight,
+                        drawWidth: footprint.drawWidth,
+                        drawHeight: footprint.drawHeight,
+                        rotated,
+                    };
+                    const isBetter = !best
+                        || next.score < best.score - RECT_EPSILON
+                        || (Math.abs(next.score - best.score) < RECT_EPSILON && next.shortSideWaste < best.shortSideWaste - RECT_EPSILON)
+                        || (Math.abs(next.score - best.score) < RECT_EPSILON && Math.abs(next.shortSideWaste - best.shortSideWaste) < RECT_EPSILON && next.longSideWaste < best.longSideWaste - RECT_EPSILON)
+                        || (Math.abs(next.score - best.score) < RECT_EPSILON && Math.abs(next.shortSideWaste - best.shortSideWaste) < RECT_EPSILON && Math.abs(next.longSideWaste - best.longSideWaste) < RECT_EPSILON && next.areaWaste < best.areaWaste - RECT_EPSILON)
+                        || (Math.abs(next.score - best.score) < RECT_EPSILON && Math.abs(next.shortSideWaste - best.shortSideWaste) < RECT_EPSILON && Math.abs(next.longSideWaste - best.longSideWaste) < RECT_EPSILON && Math.abs(next.areaWaste - best.areaWaste) < RECT_EPSILON && next.x < best.x);
+                    if (isBetter) {
+                        best = next;
+                    }
+                });
+            });
+
+            const fallbackFootprint = getItemFootprint(item, false);
+            const placement = best || {
+                x: sheetPadding,
+                y: placements.length
+                    ? Math.max(...placements.map((placed) => placed.y + placed.drawHeight + gap))
+                    : sheetPadding,
+                placeWidth: Math.min(fallbackFootprint.width + gap, innerWidthLimit),
+                placeHeight: fallbackFootprint.height + gap,
+                drawWidth: fallbackFootprint.drawWidth,
+                drawHeight: fallbackFootprint.drawHeight,
+                rotated: false,
+            };
+            const drawX = clamp(placement.x, sheetPadding, widthLimit - sheetPadding - placement.drawWidth);
+            const drawY = Math.max(sheetPadding, placement.y);
+            placements.push({
+                ...item,
+                x: drawX,
+                y: drawY,
+                drawWidth: placement.drawWidth,
+                drawHeight: placement.drawHeight,
+                rotated: placement.rotated,
+            });
+            freeRects = applyPlacementToFreeRects(freeRects, {
+                x: placement.x,
+                y: placement.y,
+                width: placement.placeWidth,
+                height: placement.placeHeight,
             });
         });
 
-        const fallbackFootprint = getItemFootprint(item, false);
-        const fallbackPlaceWidth = Math.min(fallbackFootprint.width, innerWidthLimit);
-        const placement = best || {
-            x: sheetPadding,
-            y: getSkylineY(skyline, sheetPadding, fallbackPlaceWidth),
-            placeWidth: fallbackPlaceWidth,
-            placeHeight: fallbackFootprint.height,
-            drawWidth: fallbackFootprint.drawWidth,
-            drawHeight: fallbackFootprint.drawHeight,
-            footprintWidth: fallbackFootprint.width,
-            footprintHeight: fallbackFootprint.height,
-            rotated: false,
+        const usedHeight = placements.length
+            ? Math.max(...placements.map((item) => item.y + item.drawHeight)) + sheetPadding
+            : EMPTY_SHEET_HEIGHT_MM;
+        const usedWidth = placements.length
+            ? Math.min(widthLimit, Math.max(...placements.map((item) => item.x + item.drawWidth)) + sheetPadding)
+            : widthLimit;
+        return {
+            placements,
+            width: widthLimit,
+            height: Math.max(260, Math.ceil(usedHeight)),
+            usedWidth,
+            usedHeight: Math.ceil(usedHeight),
+            maxLengthMm,
+            lengthExceeded: usedHeight > maxLengthMm,
         };
-        const drawX = clamp(placement.x - (placement.drawWidth - placement.footprintWidth) / 2, sheetPadding, widthLimit - sheetPadding - placement.drawWidth);
-        const drawY = Math.max(sheetPadding, placement.y - (placement.drawHeight - placement.footprintHeight) / 2);
-        placements.push({
-            ...item,
-            x: drawX,
-            y: drawY,
-            drawWidth: placement.drawWidth,
-            drawHeight: placement.drawHeight,
-            rotated: placement.rotated,
-        });
-        skyline = placeOnSkyline(
-            skyline,
-            placement.x,
-            Math.min(placement.placeWidth + gap, widthLimit - sheetPadding - placement.x),
-            placement.y + placement.placeHeight + gap
-        );
-    });
-
-    const usedHeight = placements.length
-        ? Math.max(...placements.map((item) => item.y + item.drawHeight)) + sheetPadding
-        : EMPTY_SHEET_HEIGHT_MM;
-    const usedWidth = placements.length
-        ? Math.min(widthLimit, Math.max(...placements.map((item) => item.x + item.drawWidth)) + sheetPadding)
-        : widthLimit;
-    return {
-        placements,
-        width: widthLimit,
-        height: Math.max(260, Math.ceil(usedHeight)),
-        usedWidth,
-        usedHeight: Math.ceil(usedHeight),
-        maxLengthMm,
-        lengthExceeded: usedHeight > maxLengthMm,
     };
+
+    return packingOrders
+        .map(packOrder)
+        .reduce((best, next) => {
+            if (!best) return next;
+            if (next.usedHeight < best.usedHeight) return next;
+            if (next.usedHeight === best.usedHeight && next.usedWidth > best.usedWidth) return next;
+            return best;
+        }, null);
 };
 
 const mmLabel = (value) => `${Math.round(value)} мм`;
@@ -293,14 +345,16 @@ const QuantityButton = ({ children, onClick, disabled }) => (
 
 export const PrintCanvas = ({ onBack }) => {
     const language = useConfigurator((state) => state.language);
+    const previewScrollRef = useRef(null);
+    const dragStateRef = useRef(null);
     const [logos, setLogos] = useState([]);
-    const [mode, setMode] = useState('minimize');
     const [logoGapMm, setLogoGapMm] = useState(DEFAULT_LOGO_GAP_MM);
     const [sheetWidthMm, setSheetWidthMm] = useState(DEFAULT_SHEET_WIDTH_MM);
     const [sheetLengthM, setSheetLengthM] = useState(DEFAULT_SHEET_LENGTH_M);
     const [zoom, setZoom] = useState(1);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
+    const [isDraggingPreview, setIsDraggingPreview] = useState(false);
 
     const addFiles = useCallback(async (fileList) => {
         const files = Array.from(fileList || []).filter((file) => file?.type?.startsWith('image/'));
@@ -328,10 +382,44 @@ export const PrintCanvas = ({ onBack }) => {
         setLogos((current) => current.filter((logo) => logo.id !== id));
     }, []);
 
+    const startPreviewDrag = useCallback((event) => {
+        if (event.button !== undefined && event.button !== 0) return;
+        const target = previewScrollRef.current;
+        if (!target) return;
+        dragStateRef.current = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            scrollLeft: target.scrollLeft,
+            scrollTop: target.scrollTop,
+        };
+        target.setPointerCapture?.(event.pointerId);
+        setIsDraggingPreview(true);
+        event.preventDefault();
+    }, []);
+
+    const movePreviewDrag = useCallback((event) => {
+        const target = previewScrollRef.current;
+        const drag = dragStateRef.current;
+        if (!target || !drag || drag.pointerId !== event.pointerId) return;
+        target.scrollLeft = drag.scrollLeft - (event.clientX - drag.startX);
+        target.scrollTop = drag.scrollTop - (event.clientY - drag.startY);
+        event.preventDefault();
+    }, []);
+
+    const stopPreviewDrag = useCallback((event) => {
+        const target = previewScrollRef.current;
+        const drag = dragStateRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        target?.releasePointerCapture?.(event.pointerId);
+        dragStateRef.current = null;
+        setIsDraggingPreview(false);
+    }, []);
+
     const instances = useMemo(() => expandInstances(logos), [logos]);
     const layout = useMemo(
-        () => packRows(instances, { mode, sheetWidth: sheetWidthMm, maxLengthM: sheetLengthM, logoGapMm }),
-        [instances, logoGapMm, mode, sheetLengthM, sheetWidthMm]
+        () => packRows(instances, { sheetWidth: sheetWidthMm, maxLengthM: sheetLengthM, logoGapMm }),
+        [instances, logoGapMm, sheetLengthM, sheetWidthMm]
     );
     const previewFitScale = Math.min(1, 1080 / layout.width);
     const previewScale = previewFitScale * zoom;
@@ -440,38 +528,10 @@ export const PrintCanvas = ({ onBack }) => {
                     </aside>
 
                     <section className="min-w-0 rounded-[14px] border border-white/14 bg-[#2b2428]/78 shadow-[0_24px_70px_rgba(0,0,0,0.25)] backdrop-blur-xl">
-                        <div className="flex flex-col gap-3 border-b border-white/12 px-4 py-4 xl:flex-row xl:items-center xl:justify-between">
+                        <div className="border-b border-white/12 px-4 py-4">
                             <div className="min-w-0">
                                 <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/42">{t(language, 'printCanvasPreview')}</p>
-                                <h2 className="mt-1 text-[20px] font-black leading-tight">{t(language, mode === 'minimize' ? 'printCanvasMinimize' : 'printCanvasComfort')}</h2>
-                            </div>
-                            <div className="grid gap-2 sm:grid-cols-2">
-                                <button
-                                    type="button"
-                                    aria-pressed={mode === 'minimize'}
-                                    onClick={() => setMode('minimize')}
-                                    className="rounded-full border px-4 py-2 text-[11px] font-black uppercase tracking-wider transition hover:text-white"
-                                    style={{
-                                        borderColor: mode === 'minimize' ? '#fff9ec' : 'rgba(255,255,255,0.16)',
-                                        backgroundColor: mode === 'minimize' ? '#fff9ec' : 'rgba(255,255,255,0.08)',
-                                        color: mode === 'minimize' ? '#211a1d' : 'rgba(255,255,255,0.68)',
-                                    }}
-                                >
-                                    {t(language, 'printCanvasMinimize')}
-                                </button>
-                                <button
-                                    type="button"
-                                    aria-pressed={mode === 'comfort'}
-                                    onClick={() => setMode('comfort')}
-                                    className="rounded-full border px-4 py-2 text-[11px] font-black uppercase tracking-wider transition hover:text-white"
-                                    style={{
-                                        borderColor: mode === 'comfort' ? '#fff9ec' : 'rgba(255,255,255,0.16)',
-                                        backgroundColor: mode === 'comfort' ? '#fff9ec' : 'rgba(255,255,255,0.08)',
-                                        color: mode === 'comfort' ? '#211a1d' : 'rgba(255,255,255,0.68)',
-                                    }}
-                                >
-                                    {t(language, 'printCanvasComfort')}
-                                </button>
+                                <h2 className="mt-1 text-[20px] font-black leading-tight">{t(language, 'printCanvasTitle')}</h2>
                             </div>
                         </div>
 
@@ -587,9 +647,18 @@ export const PrintCanvas = ({ onBack }) => {
                             </div>
                         </div>
 
-                        <div className="min-h-[520px] overflow-auto p-4 custom-scrollbar">
+                        <div
+                            ref={previewScrollRef}
+                            onPointerDown={startPreviewDrag}
+                            onPointerMove={movePreviewDrag}
+                            onPointerUp={stopPreviewDrag}
+                            onPointerCancel={stopPreviewDrag}
+                            className={`min-h-[520px] overflow-auto p-4 custom-scrollbar select-none ${
+                                isDraggingPreview ? 'cursor-grabbing' : 'cursor-grab'
+                            }`}
+                        >
                             <div
-                                className="relative mx-auto rounded-[8px] border border-[#fff9ec]/55 bg-[#fff9ec]/8 shadow-[0_0_0_1px_rgba(255,249,236,0.16),0_18px_60px_rgba(0,0,0,0.32)] backdrop-blur-[2px]"
+                                className="relative mx-auto rounded-[8px] border border-[#fff9ec]/55 bg-[#fff9ec]/8 shadow-[0_0_0_1px_rgba(255,249,236,0.16),0_18px_60px_rgba(0,0,0,0.32)] backdrop-blur-[2px] pointer-events-none"
                                 style={{
                                     width: layout.width * previewScale,
                                     height: layout.height * previewScale,
@@ -632,10 +701,6 @@ export const PrintCanvas = ({ onBack }) => {
                                     </div>
                                 ))}
                             </div>
-                        </div>
-
-                        <div className="border-t border-white/10 px-4 py-3 text-[11px] font-bold leading-relaxed text-white/44">
-                            {t(language, 'printCanvasNoCheckout')}
                         </div>
                     </section>
                 </section>
