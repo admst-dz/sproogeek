@@ -1393,7 +1393,7 @@ export const AdminDashboard = ({ onLogout }) => {
     const [tab, setTab] = useState('dashboard');
 
     return (
-        <div className="app-bg fixed inset-0 text-gray-900 dark:text-white flex flex-col font-sans overflow-hidden">
+        <div className="app-bg h-[100dvh] min-h-0 text-gray-900 dark:text-white flex flex-col font-sans overflow-hidden">
             <LiveOrderToasts />
             <header className="flex flex-wrap items-center gap-2 px-4 sm:px-6 py-3 border-b border-white/8 bg-[#0A0E1A] shrink-0">
                 <span className="text-[11px] font-black tracking-[0.18em] sm:tracking-[0.25em] uppercase text-white/20">SPRUZHYK</span>
@@ -1422,7 +1422,7 @@ export const AdminDashboard = ({ onLogout }) => {
                 </button>
             </header>
 
-            <div className="flex-1 overflow-auto p-4 sm:p-6 flex flex-col">
+            <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar p-4 sm:p-6 pb-28 sm:pb-32 flex flex-col">
                 {tab === 'dashboard' && <DashboardTab language={language} onJumpToUsers={(role) => setTab(role === 'dealer' ? 'dealers' : role === 'manufacturer' ? 'manufacturers' : role === 'admin' ? 'admins' : 'users')} />}
                 {tab === 'orders' && <OrdersTab language={language} />}
                 {tab === 'users' && <UsersTab key="all" initialFilter={null} />}
@@ -1432,7 +1432,7 @@ export const AdminDashboard = ({ onLogout }) => {
                 {tab === 'json' && <JsonTab language={language} />}
                 {tab === 'products' && <ProductsTab language={language} />}
                 <SiteFooter compact className="mt-auto -mx-4 pt-10 sm:-mx-6" />
-            </div>
+            </main>
         </div>
     );
 };

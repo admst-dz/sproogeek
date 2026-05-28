@@ -289,9 +289,9 @@ function ProductCard({ children, onClick, glowColor, className = '' }) {
     );
 }
 
-function ProductGrid({ children, four = false }) {
+function ProductGrid({ children }) {
     return (
-        <div className={`home-product-grid grid w-full grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 xl:gap-6 ${four ? 'max-w-[88rem] xl:grid-cols-4' : 'max-w-[70rem] xl:grid-cols-3'}`}>
+        <div className="home-product-grid grid w-full grid-cols-[repeat(auto-fit,minmax(min(18rem,100%),1fr))] gap-4 md:gap-5 xl:gap-6">
             {children}
         </div>
     );
@@ -359,9 +359,7 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas }) {
     };
 
     return (
-        <ProductGrid four={false}>
-        {/* <ProductGrid four={Boolean(onPrintCanvas)}> */}
-            
+        <ProductGrid>
             {/* Карточка 1: Ежедневник */}
             <ProductCard
                 glowColor="rgba(59, 130, 246, 0.22)"
