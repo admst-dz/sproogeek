@@ -20,6 +20,7 @@ class UserAdminResponse(BaseModel):
     sub_role: Optional[str] = None
     token_balance: float = 0.0
     company_name: Optional[str] = None
+    print_canvas_enabled: bool = False
     has_password: bool = False
     orders_count: int = 0
     last_order_at: Optional[datetime] = None
@@ -37,6 +38,7 @@ class UserAdminCreate(BaseModel):
     sub_role: Optional[str] = Field(None, max_length=20)
     company_name: Optional[str] = Field(None, max_length=120)
     token_balance: float = Field(0.0, ge=0, le=1_000_000_000)
+    print_canvas_enabled: bool = False
 
     @field_validator("password")
     @classmethod
@@ -68,6 +70,7 @@ class UserAdminPatch(BaseModel):
     sub_role: Optional[str] = Field(None, max_length=20)
     company_name: Optional[str] = Field(None, max_length=120)
     token_balance: Optional[float] = Field(None, ge=0, le=1_000_000_000)
+    print_canvas_enabled: Optional[bool] = None
 
     @field_validator("role")
     @classmethod

@@ -491,6 +491,7 @@ function CreateUserDialog({ initialRole = 'dealer', onClose, onCreated }) {
         sub_role: '',
         company_name: '',
         token_balance: 0,
+        print_canvas_enabled: false,
     });
     const [showPassword, setShowPassword] = useState(true);
     const [busy, setBusy] = useState(false);
@@ -521,6 +522,7 @@ function CreateUserDialog({ initialRole = 'dealer', onClose, onCreated }) {
                 sub_role: form.sub_role || null,
                 company_name: form.company_name || null,
                 token_balance: Number(form.token_balance) || 0,
+                print_canvas_enabled: Boolean(form.print_canvas_enabled),
             };
             const { data } = await adminApi.createUser(payload);
             onCreated(data, form.password);
@@ -571,6 +573,15 @@ function CreateUserDialog({ initialRole = 'dealer', onClose, onCreated }) {
                     </label>
                     <AdminInput label="Компания" value={form.company_name} onChange={v => update('company_name', v)} />
                     <AdminInput label="Баланс токенов" type="number" value={form.token_balance} onChange={v => update('token_balance', v)} />
+                    <label className="md:col-span-2 flex items-center gap-3 rounded-[10px] border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                        <input
+                            type="checkbox"
+                            checked={form.print_canvas_enabled}
+                            onChange={e => update('print_canvas_enabled', e.target.checked)}
+                            className="h-4 w-4 accent-white"
+                        />
+                        <span className="text-sm font-bold text-white/75">Включить полотно на печать</span>
+                    </label>
                 </div>
 
                 <div>
@@ -718,6 +729,7 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
         sub_role: user.sub_role || '',
         company_name: user.company_name || '',
         token_balance: user.token_balance ?? 0,
+        print_canvas_enabled: Boolean(user.print_canvas_enabled),
     }));
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState('');
@@ -731,6 +743,7 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
             sub_role: user.sub_role || '',
             company_name: user.company_name || '',
             token_balance: user.token_balance ?? 0,
+            print_canvas_enabled: Boolean(user.print_canvas_enabled),
         });
     }, [
         user.company_name,
@@ -739,6 +752,7 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
         user.role,
         user.sub_role,
         user.token_balance,
+        user.print_canvas_enabled,
     ]);
 
     const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
@@ -753,6 +767,7 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
                 sub_role: form.sub_role || null,
                 company_name: form.company_name || null,
                 token_balance: Number(form.token_balance) || 0,
+                print_canvas_enabled: Boolean(form.print_canvas_enabled),
             };
             const { data } = await adminApi.updateUser(user.id, payload);
             onSaved(data);
@@ -839,6 +854,15 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
                         </label>
                         <AdminInput label="Компания" value={form.company_name} onChange={v => update('company_name', v)} />
                         <AdminInput label="Баланс токенов" type="number" value={form.token_balance} onChange={v => update('token_balance', v)} />
+                        <label className="md:col-span-2 flex items-center gap-3 rounded-[10px] border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                            <input
+                                type="checkbox"
+                                checked={form.print_canvas_enabled}
+                                onChange={e => update('print_canvas_enabled', e.target.checked)}
+                                className="h-4 w-4 accent-white"
+                            />
+                            <span className="text-sm font-bold text-white/75">Полотно на печать включено</span>
+                        </label>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -848,6 +872,7 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
                         <ValueRow label="Sub-роль" value={user.sub_role ? (SUB_ROLE_LABEL[user.sub_role] || user.sub_role) : null} />
                         <ValueRow label="Компания" value={user.company_name} />
                         <ValueRow label="Баланс" value={`${user.token_balance ?? 0}`} />
+                        <ValueRow label="Полотно на печать" value={user.print_canvas_enabled ? 'Включено' : 'Выключено'} />
                         <ValueRow label="Заказов" value={`${user.orders_count ?? 0}`} />
                         <ValueRow label="Последний заказ" value={user.last_order_at ? new Date(user.last_order_at).toLocaleString('ru') : '—'} />
                         <ValueRow label="Пароль установлен" value={user.has_password ? 'Да' : 'Нет (только OAuth)'} />
@@ -970,7 +995,7 @@ function UsersTab({ initialFilter = null }) {
 
             {gatedLoading ? <Loader /> : error ? <ErrBox msg={error} /> : (
                 <Table
-                    headers={['Email', 'Имя', 'Роль', 'Sub-роль', 'Компания', 'Заказов', 'Пароль', 'Создан']}
+                    headers={['Email', 'Имя', 'Роль', 'Sub-роль', 'Компания', 'Полотно', 'Заказов', 'Пароль', 'Создан']}
                     empty={users.length === 0 ? 'Нет пользователей' : null}
                 >
                     {users.map(u => (
@@ -988,6 +1013,11 @@ function UsersTab({ initialFilter = null }) {
                                 </td>
                                 <td className="px-4 py-2.5 text-xs text-white/45">{u.sub_role ? (SUB_ROLE_LABEL[u.sub_role] || u.sub_role) : '—'}</td>
                                 <td className="px-4 py-2.5 text-sm text-white/45">{u.company_name || '—'}</td>
+                                <td className="px-4 py-2.5 text-xs">
+                                    {u.print_canvas_enabled
+                                        ? <span className="text-emerald-400">✓ да</span>
+                                        : <span className="text-white/30">нет</span>}
+                                </td>
                                 <td className="px-4 py-2.5 text-sm text-white/60">{u.orders_count ?? 0}</td>
                                 <td className="px-4 py-2.5 text-xs">
                                     {u.has_password
@@ -1000,7 +1030,7 @@ function UsersTab({ initialFilter = null }) {
                             </tr>
                             {expanded === u.id && (
                                 <tr className="bg-black/20">
-                                    <td colSpan={8} className="px-5 py-5">
+                                    <td colSpan={9} className="px-5 py-5">
                                         <UserDetails
                                             user={u}
                                             onSaved={onSaved}

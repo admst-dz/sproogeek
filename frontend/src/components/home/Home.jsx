@@ -433,7 +433,7 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas }) {
     );
 }
 
-export const Home = ({ onStart, onPrintCanvas, onAuth, user, logout }) => {
+export const Home = ({ onStart, onAuth, user, logout }) => {
     const {
         language, setLanguage, theme, toggleTheme
     } = useConfigurator();
@@ -527,7 +527,7 @@ export const Home = ({ onStart, onPrintCanvas, onAuth, user, logout }) => {
                     {t(language, 'subtitle')}
                 </p>
 
-                <ConfiguratorProductMenu onStart={onStart} onPrintCanvas={onPrintCanvas} />
+                <ConfiguratorProductMenu onStart={onStart} />
 
                 <FeedbackPanel language={language} />
             </main>

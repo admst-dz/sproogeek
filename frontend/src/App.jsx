@@ -147,7 +147,7 @@ function HomeFallbackCard({ title, actionLabel, tone, onClick }) {
     );
 }
 
-function HomeRouteFallback({ onStart, onPrintCanvas, onAuth, user, logout, openCommandPalette }) {
+function HomeRouteFallback({ onStart, onAuth, user, logout, openCommandPalette }) {
     const {
         language,
         setLanguage,
@@ -229,7 +229,7 @@ function HomeRouteFallback({ onStart, onPrintCanvas, onAuth, user, logout, openC
                     {t(language, 'subtitle')}
                 </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6 w-full max-w-6xl">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6 w-full max-w-5xl">
                     <HomeFallbackCard
                         title={t(language, 'notebook')}
                         actionLabel={t(language, 'openBtn')}
@@ -247,12 +247,6 @@ function HomeRouteFallback({ onStart, onPrintCanvas, onAuth, user, logout, openC
                         actionLabel={t(language, 'openBtn')}
                         tone="emerald"
                         onClick={() => handleSelect('powerbank')}
-                    />
-                    <HomeFallbackCard
-                        title={t(language, 'printCanvasHomeButton')}
-                        actionLabel={t(language, 'printCanvasOpenBtn')}
-                        tone="amber"
-                        onClick={onPrintCanvas}
                     />
                 </div>
             </main>
@@ -324,6 +318,7 @@ function MainApp() {
         setUserRole,
         setClientSubRole,
         setAuthLoading,
+        authLoading,
         currentUser,
         userRole,
         logout,
@@ -418,6 +413,16 @@ function MainApp() {
             unsubscribe();
         };
     }, [screen]);
+
+    useEffect(() => {
+        if (authLoading || screen !== 'print_canvas') return undefined;
+        if (currentUser?.role === 'client' && currentUser?.print_canvas_enabled) return undefined;
+        const frame = window.requestAnimationFrame(() => {
+            setScreen(currentUser ? 'client_dashboard' : 'home');
+            if (currentUser) setClientTab('catalog');
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, [authLoading, currentUser, screen]);
 
     useEffect(() => {
         const path = getPathForRouteState(screen, activeProduct, clientTab, dealerTab, manufacturerTab);
@@ -617,7 +622,6 @@ function MainApp() {
                                 setClientTab(null);
                                 setScreen('configurator');
                             }}
-                            onPrintCanvas={() => setScreen('print_canvas')}
                             onAuth={() => setShowAuth(true)}
                             user={currentUser}
                             logout={logout}
@@ -630,7 +634,6 @@ function MainApp() {
                             setClientTab(null);
                             setScreen('configurator');
                         }}
-                        onPrintCanvas={() => setScreen('print_canvas')}
                         onAuth={() => setShowAuth(true)}
                         user={currentUser}
                         logout={logout}
@@ -639,9 +642,12 @@ function MainApp() {
             )}
 
             {/* --- ЭКРАН: ПОЛОТНО НА ПЕЧАТЬ --- */}
-            {screen === 'print_canvas' && (
+            {screen === 'print_canvas' && currentUser?.role === 'client' && currentUser?.print_canvas_enabled && (
                 <RouteSuspense>
-                    <PrintCanvas onBack={() => setScreen('home')} />
+                    <PrintCanvas onBack={() => {
+                        setClientTab('catalog');
+                        setScreen('client_dashboard');
+                    }} />
                 </RouteSuspense>
             )}
 
@@ -703,6 +709,7 @@ function MainApp() {
                         onSuccessToastShown={() => setPendingSuccessToast(false)}
                         initialTab={clientTab}
                         onTabChange={setClientTab}
+                        onPrintCanvas={() => setScreen('print_canvas')}
                     />
                 </RouteSuspense>
             )}

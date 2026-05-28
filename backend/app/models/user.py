@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, DateTime, JSON
+from sqlalchemy import Boolean, Column, String, Float, DateTime, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -22,6 +22,7 @@ class User(Base):
     sub_role = Column(String, nullable=True)
     token_balance = Column(Float, default=0.0, nullable=True)
     company_name = Column(String, nullable=True)
+    print_canvas_enabled = Column(Boolean, default=False, nullable=False)
 
     orders = relationship("Order", back_populates="user", foreign_keys="Order.user_id", cascade="all, delete-orphan")
 

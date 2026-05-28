@@ -112,7 +112,7 @@ const getNotebookBindingLabel = (bindingType, language) => ({
     spiral: t(language, 'bindingSpiral'),
 })[bindingType] || bindingType;
 
-export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToastShown, initialTab, onTabChange }) => {
+export const ClientDashboard = ({ onBack, onEdit, onPrintCanvas, showSuccessToast, onSuccessToastShown, initialTab, onTabChange }) => {
     const {
         currentUser, logout, cartItems, clearCart, removeFromCart, updateCartItem, startEditingCartItem,
         language,
@@ -317,7 +317,10 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                 {/* CATALOG TAB */}
                 {activeTab === 'catalog' && (
                     <div className="flex flex-col items-center">
-                        <ConfiguratorProductMenu onStart={onEdit} />
+                        <ConfiguratorProductMenu
+                            onStart={onEdit}
+                            onPrintCanvas={currentUser?.print_canvas_enabled ? onPrintCanvas : null}
+                        />
                     </div>
                 )}
 
