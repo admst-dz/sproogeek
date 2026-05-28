@@ -31,7 +31,32 @@ ALLOWED_IMAGE_TYPES = {
     "image/png": ("png", lambda content: content.startswith(b"\x89PNG\r\n\x1a\n")),
     "image/jpeg": ("jpg", lambda content: content.startswith(b"\xff\xd8\xff")),
     "image/webp": ("webp", lambda content: content.startswith(b"RIFF") and content[8:12] == b"WEBP"),
+    "application/pdf": ("pdf", lambda content: content[:5] == b"%PDF-"),
 }
+
+PDF_RASTER_MAX_EDGE_PX = 2500
+PDF_RASTER_MAX_DPI = 300
+
+
+def _pdf_first_page_png(content: bytes) -> bytes:
+    """Rasterize the first PDF page to a PNG (vector logos arrive as PDF)."""
+    try:
+        import fitz  # PyMuPDF
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail="PDF support is not available") from exc
+    try:
+        with fitz.open(stream=content, filetype="pdf") as doc:
+            if doc.page_count == 0:
+                raise HTTPException(status_code=400, detail="PDF has no pages")
+            page = doc.load_page(0)
+            longest_pt = max(page.rect.width, page.rect.height) or 1.0
+            zoom = min(PDF_RASTER_MAX_DPI / 72.0, PDF_RASTER_MAX_EDGE_PX / longest_pt)
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=True)
+            return pixmap.tobytes("png")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Could not rasterize PDF") from exc
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(SESSION_DIR, exist_ok=True)
@@ -239,6 +264,13 @@ async def _read_logo_upload(file: UploadFile) -> dict:
     if not validate_signature(content):
         raise HTTPException(status_code=400, detail="File content does not match declared type")
     original_filename = os.path.basename(file.filename or f"logo.{extension}")[:160]
+
+    if content_type == "application/pdf":
+        content = await run_in_threadpool(_pdf_first_page_png, content)
+        extension = "png"
+        content_type = "image/png"
+        original_filename = f"{os.path.splitext(original_filename)[0] or 'logo'}.png"
+
     return {
         "extension": extension,
         "filename": original_filename or f"logo.{extension}",
@@ -299,6 +331,7 @@ async def upload_logo(
 async def remove_uploaded_logo_background(
     request: Request,
     file: UploadFile = File(...),
+    trim: bool = True,
 ):
     upload = await _read_logo_upload(file)
     try:
@@ -306,6 +339,7 @@ async def remove_uploaded_logo_background(
             remove_logo_background,
             upload["content"],
             max_edge=settings.background_removal_max_edge,
+            trim=trim,
         )
     except BackgroundRemovalError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

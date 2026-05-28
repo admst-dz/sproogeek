@@ -108,6 +108,14 @@ export const adminApi = {
         `/admin/orders/${encodeURIComponent(orderId)}/techcard.pdf`,
         { params: { filename }, responseType: 'blob' }
     ),
+    downloadGuestArchive: (orderId) => apiClient.get(
+        `/orders/${encodeURIComponent(orderId)}/guest-archive.zip`,
+        { responseType: 'blob' }
+    ),
+    downloadGuestRender: (orderId) => apiClient.get(
+        `/orders/${encodeURIComponent(orderId)}/guest-render`,
+        { responseType: 'blob' }
+    ),
     listOrderTypes: () => apiClient.get('/admin/order-types'),
     getOrderType: (typeId) => apiClient.get(`/admin/order-types/${encodeURIComponent(typeId)}`),
     updateOrderType: (typeId, data) => apiClient.put(`/admin/order-types/${encodeURIComponent(typeId)}`, { data }),
@@ -174,10 +182,11 @@ export const logoTransferApi = {
 };
 
 export const mediaApi = {
-    removeLogoBackground: (file) => {
+    removeLogoBackground: (file, { trim = true } = {}) => {
         const formData = new FormData();
         formData.append('file', file);
-        return apiClient.post('/files/remove-logo-background', formData, { responseType: 'blob' });
+        const query = trim ? '' : '?trim=false';
+        return apiClient.post(`/files/remove-logo-background${query}`, formData, { responseType: 'blob' });
     },
 };
 
@@ -195,8 +204,8 @@ export const printCanvasApi = {
     ),
 };
 
-export const removeLogoBackground = async (file) => {
-    const { data } = await mediaApi.removeLogoBackground(file);
+export const removeLogoBackground = async (file, options) => {
+    const { data } = await mediaApi.removeLogoBackground(file, options);
     const baseName = (file?.name || 'logo').replace(/\.[^.]+$/, '') || 'logo';
     return new File([data], `${baseName}-no-bg.png`, { type: 'image/png' });
 };

@@ -214,6 +214,43 @@ function OrderDetails({ order, onSaved, language }) {
             setTcBusy(false);
         }
     };
+    const [archiveBusy, setArchiveBusy] = useState(false);
+    const [renderSrc, setRenderSrc] = useState(null);
+    useEffect(() => {
+        if (!order.is_guest || !order.configuration?._guest?.render_url) {
+            setRenderSrc(null);
+            return undefined;
+        }
+        let active = true;
+        let objectUrl = null;
+        adminApi.downloadGuestRender(order.id)
+            .then(({ data }) => {
+                if (!active) return;
+                objectUrl = window.URL.createObjectURL(data);
+                setRenderSrc(objectUrl);
+            })
+            .catch(() => { if (active) setRenderSrc(null); });
+        return () => {
+            active = false;
+            if (objectUrl) window.URL.revokeObjectURL(objectUrl);
+        };
+    }, [order.id, order.is_guest, order.configuration]);
+    const downloadGuestArchive = async () => {
+        try {
+            setArchiveBusy(true);
+            setMsg('');
+            const { data: blob } = await adminApi.downloadGuestArchive(order.id);
+            const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/zip' }));
+            const a = document.createElement('a');
+            a.href = url; a.download = `guest-archive-${order.id}.zip`;
+            document.body.appendChild(a); a.click(); a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (e) {
+            setMsg('✗ ' + formatApiError(e, language));
+        } finally {
+            setArchiveBusy(false);
+        }
+    };
     const [form, setForm] = useState(() => ({
         product_name: order.product_name || '',
         user_email: order.user_email || '',
@@ -353,6 +390,27 @@ function OrderDetails({ order, onSaved, language }) {
             </div>
 
             <div className="space-y-4">
+                {order.is_guest && (
+                    <div className="rounded-[10px] border border-amber-400/20 bg-amber-400/[0.04] p-3 space-y-3">
+                        <p className="text-[10px] font-bold text-amber-300/80 uppercase tracking-widest">
+                            {t(language, 'adminGuestLead')}
+                        </p>
+                        {renderSrc && (
+                            <img
+                                src={renderSrc}
+                                alt=""
+                                className="w-full max-h-64 rounded-[8px] border border-white/10 bg-black/30 object-contain"
+                            />
+                        )}
+                        <button
+                            onClick={downloadGuestArchive}
+                            disabled={archiveBusy}
+                            className="w-full px-3 py-1.5 rounded-[8px] bg-white/10 hover:bg-white/15 text-xs font-bold transition disabled:opacity-50"
+                        >
+                            {archiveBusy ? t(language, 'adminTechcardGenerating') : t(language, 'adminGuestDownloadArchive')}
+                        </button>
+                    </div>
+                )}
                 <div>
                     <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-2">
                         {t(language, 'adminStageHistory')}
@@ -441,7 +499,14 @@ function OrdersTab({ language }) {
                             className="border-b border-white/5 hover:bg-white/[0.03] cursor-pointer transition-colors select-none"
                         >
                             <td className="px-4 py-2.5 font-mono text-xs text-white/35">{String(o.id).slice(0, 8)}…</td>
-                            <td className="px-4 py-2.5 text-sm text-white/75">{o.user_email || '—'}</td>
+                            <td className="px-4 py-2.5 text-sm text-white/75">
+                                {o.user_email || '—'}
+                                {o.is_guest && (
+                                    <span className="ml-2 align-middle text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/30">
+                                        {t(language, 'adminGuestLead')}
+                                    </span>
+                                )}
+                            </td>
                             <td className="px-4 py-2.5 text-sm text-white/65">{o.product_name || '—'}</td>
                             <td className="px-4 py-2.5">
                                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${STATUS_CLS[o.status] ?? 'text-white/40 bg-white/5 border-white/10'}`}>
