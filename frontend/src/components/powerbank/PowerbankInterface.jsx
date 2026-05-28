@@ -17,13 +17,14 @@ import {
 } from '../configurator/ConstructorDock';
 import { POWERBANK_COLOR_PALETTE } from '../../config/productPalettes';
 import { GuestApprovalModal } from '../shared/GuestApprovalModal';
+import { LogoBackgroundRemovalButton } from '../shared/LogoBackgroundRemovalButton';
 
 export const PowerbankInterface = ({ onFinish }) => {
     const {
         powerbankBodyColor,
         setColor,
         powerbankLogos, selectedPowerbankLogoId,
-        addPowerbankLogo, selectPowerbankLogo, removePowerbankLogo,
+        addPowerbankLogo, replacePowerbankLogoFile, selectPowerbankLogo, removePowerbankLogo,
         resetPowerbankLogoTransform,
         setPowerbankLogoPosition, setPowerbankLogoRotation, setPowerbankLogoScale, setPowerbankLogoSide,
         addToCart, setRenderSnapshot, language,
@@ -81,6 +82,7 @@ export const PowerbankInterface = ({ onFinish }) => {
                     logos={powerbankLogos}
                     selectedLogoId={selectedPowerbankLogoId}
                     addLogo={addPowerbankLogo}
+                    replaceLogoFile={replacePowerbankLogoFile}
                     selectLogo={selectPowerbankLogo}
                     removeLogo={removePowerbankLogo}
                     resetLogoTransform={resetPowerbankLogoTransform}
@@ -113,7 +115,7 @@ export const PowerbankInterface = ({ onFinish }) => {
     );
 };
 
-const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide, language }) => {
+const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, replaceLogoFile, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, setLogoSide, language }) => {
     const selected = logos.find(l => l.id === selectedLogoId) || null;
 
     return (
@@ -132,6 +134,7 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
             {selected && (
                 <>
                     <div className="mt-3 space-y-3 xl:hidden">
+                        <LogoBackgroundRemovalButton logo={selected} language={language} onApply={(file) => replaceLogoFile(selected.id, file)} />
                         <SettingRow label={t(language, 'applicationSide')}>
                             <MiniSegment
                                 value={selected.side ?? 'outer'}
@@ -150,6 +153,7 @@ const PowerbankLogoPanel = ({ logos, selectedLogoId, addLogo, selectLogo, remove
                         <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.6} min={0.2} max={4.0} step={0.05} onChange={setLogoScale} />
                     </div>
                     <FloatingLogoSettings title={t(language, 'logoLabel')} subtitle={selected.filename}>
+                    <LogoBackgroundRemovalButton logo={selected} language={language} onApply={(file) => replaceLogoFile(selected.id, file)} />
                     <SettingRow label={t(language, 'applicationSide')}>
                         <MiniSegment
                             value={selected.side ?? 'outer'}

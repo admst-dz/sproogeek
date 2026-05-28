@@ -6,6 +6,7 @@ import { getInitialRouteState, getPathForRouteState } from './config/routes'
 import { fetchPublicSettings } from './api'
 
 const Home = lazy(() => import('./components/home/Home').then((module) => ({ default: module.Home })));
+const PrintCanvas = lazy(() => import('./components/print/PrintCanvas').then((module) => ({ default: module.PrintCanvas })));
 const Order = lazy(() => import('./components/order/Order').then((module) => ({ default: module.Order })));
 const DealerDashboard = lazy(() => import('./components/dashboard/DealerDashboard').then((module) => ({ default: module.DealerDashboard })));
 const ManufacturerDashboard = lazy(() => import('./components/dashboard/ManufacturerDashboard').then((module) => ({ default: module.ManufacturerDashboard })));
@@ -123,6 +124,7 @@ function HomeFallbackCard({ title, actionLabel, tone, onClick }) {
         blue: 'bg-blue-500/10 dark:bg-blue-400/15',
         slate: 'bg-slate-500/10 dark:bg-slate-400/15',
         emerald: 'bg-emerald-500/10 dark:bg-emerald-400/15',
+        amber: 'bg-amber-500/10 dark:bg-amber-400/15',
     }[tone] || 'bg-gray-500/10 dark:bg-white/10';
 
     return (
@@ -227,7 +229,7 @@ function HomeRouteFallback({ onStart, onAuth, user, logout, openCommandPalette }
                     {t(language, 'subtitle')}
                 </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full max-w-5xl">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6 w-full max-w-5xl">
                     <HomeFallbackCard
                         title={t(language, 'notebook')}
                         actionLabel={t(language, 'openBtn')}
@@ -316,6 +318,7 @@ function MainApp() {
         setUserRole,
         setClientSubRole,
         setAuthLoading,
+        authLoading,
         currentUser,
         userRole,
         logout,
@@ -412,6 +415,16 @@ function MainApp() {
     }, [screen]);
 
     useEffect(() => {
+        if (authLoading || screen !== 'print_canvas') return undefined;
+        if (currentUser?.role === 'client' && currentUser?.print_canvas_enabled) return undefined;
+        const frame = window.requestAnimationFrame(() => {
+            setScreen(currentUser ? 'client_dashboard' : 'home');
+            if (currentUser) setClientTab('catalog');
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, [authLoading, currentUser, screen]);
+
+    useEffect(() => {
         const path = getPathForRouteState(screen, activeProduct, clientTab, dealerTab, manufacturerTab);
         if (path && window.location.pathname !== path) {
             window.history.pushState({}, '', path);
@@ -453,7 +466,7 @@ function MainApp() {
             targetScreen = 'dealer';
         } else if (userRole === 'manufacturer') {
             targetScreen = 'manufacturer';
-        } else if (userRole === 'client' && screen !== 'configurator') {
+        } else if (userRole === 'client' && screen !== 'configurator' && screen !== 'print_canvas') {
             targetScreen = 'client_dashboard';
         } else if (!userRole && ['dealer', 'manufacturer', 'client_dashboard', 'admin_dashboard'].includes(screen)) {
             targetScreen = 'home';
@@ -628,6 +641,16 @@ function MainApp() {
                 </RouteSuspense>
             )}
 
+            {/* --- ЭКРАН: ПОЛОТНО НА ПЕЧАТЬ --- */}
+            {screen === 'print_canvas' && currentUser?.role === 'client' && currentUser?.print_canvas_enabled && (
+                <RouteSuspense>
+                    <PrintCanvas onBack={() => {
+                        setClientTab('catalog');
+                        setScreen('client_dashboard');
+                    }} />
+                </RouteSuspense>
+            )}
+
 
             {/* --- ЭКРАН: ПОЛИТИКА COOKIE --- */}
             {screen === 'cookie_policy' && (
@@ -686,6 +709,7 @@ function MainApp() {
                         onSuccessToastShown={() => setPendingSuccessToast(false)}
                         initialTab={clientTab}
                         onTabChange={setClientTab}
+                        onPrintCanvas={() => setScreen('print_canvas')}
                     />
                 </RouteSuspense>
             )}

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api.v1 import admin, approval, auth, bitrix as bitrix_api, dealer, drafts, events, feedback, files, manufacturer, orders, pricing, products, users
+from app.api.v1 import admin, approval, auth, bitrix as bitrix_api, dealer, drafts, events, feedback, files, manufacturer, orders, pricing, print_canvas, products, users
 from app.core.cache import close_cache
 from app.core.client_ip import slowapi_key
 from app.core.config import get_settings
@@ -172,6 +172,7 @@ app.include_router(dealer.router, prefix="/api/v1/dealer", tags=["Dealer"])
 app.include_router(manufacturer.router, prefix="/api/v1/manufacturer", tags=["Manufacturer"])
 app.include_router(events.router, prefix="/api/v1/events", tags=["Events"])
 app.include_router(pricing.router, prefix="/api/v1/pricing", tags=["Pricing"])
+app.include_router(print_canvas.router, prefix="/api/v1/print-canvas", tags=["Print Canvas"])
 app.include_router(drafts.router, prefix="/api/v1/drafts", tags=["Drafts"])
 app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["Feedback"])
 app.include_router(bitrix_api.router, prefix="/api/v1/bitrix", tags=["Bitrix"])

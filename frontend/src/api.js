@@ -173,6 +173,34 @@ export const logoTransferApi = {
     },
 };
 
+export const mediaApi = {
+    removeLogoBackground: (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return apiClient.post('/files/remove-logo-background', formData, { responseType: 'blob' });
+    },
+};
+
+export const printCanvasApi = {
+    createExport: (file, metadata) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('metadata', JSON.stringify(metadata || {}));
+        return apiClient.post('/print-canvas/exports', formData);
+    },
+    listExports: () => apiClient.get('/print-canvas/exports'),
+    downloadExport: (exportId) => apiClient.get(
+        `/print-canvas/exports/${encodeURIComponent(exportId)}/download`,
+        { responseType: 'blob' }
+    ),
+};
+
+export const removeLogoBackground = async (file) => {
+    const { data } = await mediaApi.removeLogoBackground(file);
+    const baseName = (file?.name || 'logo').replace(/\.[^.]+$/, '') || 'logo';
+    return new File([data], `${baseName}-no-bg.png`, { type: 'image/png' });
+};
+
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
 
 const saveAuthToken = (token) => {
@@ -283,6 +311,16 @@ export const createOrderInDB = async (orderData) => {
 export const fetchUserOrders = async (userId) => {
     const { data } = await orderApi.getUserOrders(userId);
     return (data || []).map(normalizeOrder);
+};
+
+export const fetchPrintCanvasExports = async () => {
+    const { data } = await printCanvasApi.listExports();
+    return data || [];
+};
+
+export const downloadPrintCanvasExport = async (exportId) => {
+    const { data } = await printCanvasApi.downloadExport(exportId);
+    return data;
 };
 
 export const fetchAllOrders = async (dealerId = null) => {

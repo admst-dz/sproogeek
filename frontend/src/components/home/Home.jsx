@@ -291,14 +291,52 @@ function ProductCard({ children, onClick, glowColor, className = '' }) {
 
 function ProductGrid({ children }) {
     return (
-        <div className="home-product-grid grid w-full max-w-[70rem] grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 xl:grid-cols-3 xl:gap-6">
+        <div className="home-product-grid grid w-full grid-cols-[repeat(auto-fit,minmax(min(18rem,100%),1fr))] gap-4 md:gap-5 xl:gap-6">
             {children}
         </div>
     );
 }
 
+function PrintCanvasPreview() {
+    const dots = [
+        [9, 18], [27, 18], [45, 18], [63, 18],
+        [18, 37], [36, 37], [54, 37], [72, 37],
+        [9, 58], [27, 58], [45, 58], [63, 58],
+    ];
 
-export function ConfiguratorProductMenu({ onStart }) {
+    return (
+        <div className="relative h-full w-full overflow-hidden rounded-[14px] border border-gray-200/80 bg-[#fffdf8] shadow-inner dark:border-white/10">
+            <div
+                className="absolute inset-0 opacity-90"
+                style={{
+                    backgroundImage: 'linear-gradient(rgba(17,24,39,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(17,24,39,0.07) 1px, transparent 1px)',
+                    backgroundSize: '18px 18px',
+                }}
+            />
+            <div className="absolute left-5 right-5 top-8 h-[68%] rounded-[10px] border border-dashed border-gray-300 bg-white shadow-[0_14px_30px_rgba(15,23,42,0.10)]">
+                {dots.map(([left, top], index) => (
+                    <span
+                        key={`${left}-${top}`}
+                        className="absolute grid h-8 w-8 place-items-center rounded-full border border-blue-100 bg-blue-600 text-[11px] font-black text-white shadow-sm sm:h-9 sm:w-9"
+                        style={{ left: `${left}%`, top: `${top}%` }}
+                    >
+                        {index % 3 === 0 ? 'S' : ''}
+                    </span>
+                ))}
+                <span className="absolute bottom-[14%] right-[13%] rounded-[6px] border-2 border-slate-800 bg-white px-3 py-1 text-[9px] font-black text-slate-800">
+                    LOGO
+                </span>
+            </div>
+            <div className="absolute bottom-4 left-6 right-6 grid grid-cols-3 gap-2">
+                <span className="h-2 rounded-full bg-blue-600/90" />
+                <span className="h-2 rounded-full bg-slate-800/80" />
+                <span className="h-2 rounded-full bg-emerald-500/90" />
+            </div>
+        </div>
+    );
+}
+
+export function ConfiguratorProductMenu({ onStart, onPrintCanvas }) {
     const {
         setProduct, setFormat, setBindingType, setHasElastic,
         setColor,
@@ -363,7 +401,6 @@ export function ConfiguratorProductMenu({ onStart }) {
             {/* Карточка 3: Повербанк */}
             <ProductCard
                 glowColor="rgba(16, 185, 129, 0.2)"
-                className="sm:col-span-2 sm:mx-auto sm:w-full sm:max-w-[26rem] xl:col-span-1 xl:max-w-none"
                 onClick={() => handleSelect('powerbank', {})}
             >
                 <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
@@ -376,6 +413,20 @@ export function ConfiguratorProductMenu({ onStart }) {
                     </span>
                 </div>
             </ProductCard>
+
+            {onPrintCanvas && (
+                <ProductCard glowColor="rgba(245, 158, 11, 0.2)" onClick={onPrintCanvas}>
+                    <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
+                        <PrintCanvasPreview />
+                    </div>
+                    <div className="relative z-10 mt-2 text-center">
+                        <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'printCanvasHomeButton')}</h3>
+                        <span className="mt-4 inline-flex max-w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-center text-[11px] font-bold text-gray-600 transition-colors sm:mt-5 sm:px-5 sm:text-xs group-hover:bg-amber-50 group-hover:text-amber-700 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
+                            {t(language, 'printCanvasOpenBtn')}
+                        </span>
+                    </div>
+                </ProductCard>
+            )}
         </ProductGrid>
     );
 }

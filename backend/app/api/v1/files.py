@@ -3,17 +3,19 @@ import os
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from app.core.cache import get_cache
 from app.core.config import get_settings
 from app.core.deps import get_staff_user, request_id
 from app.core.event_logger import event_logger
+from app.services.background_removal import BackgroundRemovalError, remove_logo_background
 from app.services.imposition import qr_png_bytes
 
 
@@ -224,7 +226,7 @@ def _session_payload(session: dict) -> dict:
     return result
 
 
-async def _save_logo_file(file: UploadFile) -> dict:
+async def _read_logo_upload(file: UploadFile) -> dict:
     content_type = (file.content_type or "").split(";")[0].lower()
     file_meta = ALLOWED_IMAGE_TYPES.get(content_type)
     if not file_meta:
@@ -236,6 +238,20 @@ async def _save_logo_file(file: UploadFile) -> dict:
         raise HTTPException(status_code=413, detail="File is too large")
     if not validate_signature(content):
         raise HTTPException(status_code=400, detail="File content does not match declared type")
+    original_filename = os.path.basename(file.filename or f"logo.{extension}")[:160]
+    return {
+        "extension": extension,
+        "filename": original_filename or f"logo.{extension}",
+        "content_type": content_type,
+        "size": len(content),
+        "content": content,
+    }
+
+
+async def _save_logo_file(file: UploadFile) -> dict:
+    upload = await _read_logo_upload(file)
+    extension = upload["extension"]
+    content = upload["content"]
 
     new_filename = f"{uuid.uuid4().hex}.{extension}"
     file_path = os.path.join(UPLOAD_DIR, new_filename)
@@ -243,13 +259,12 @@ async def _save_logo_file(file: UploadFile) -> dict:
     async with aiofiles.open(file_path, "wb") as out_file:
         await out_file.write(content)
 
-    original_filename = os.path.basename(file.filename or f"logo.{extension}")[:160]
     return {
         "url": f"/uploads/logos/{new_filename}",
         "path": file_path,
-        "filename": original_filename or f"logo.{extension}",
-        "content_type": content_type,
-        "size": len(content),
+        "filename": upload["filename"],
+        "content_type": upload["content_type"],
+        "size": upload["size"],
         "content": content,
     }
 
@@ -278,6 +293,61 @@ async def upload_logo(
         details={"content_type": saved["content_type"], "size": saved["size"], "url": url},
     )
     return {"url": url}
+
+
+@router.post("/remove-logo-background")
+async def remove_uploaded_logo_background(
+    request: Request,
+    file: UploadFile = File(...),
+):
+    upload = await _read_logo_upload(file)
+    try:
+        result = await run_in_threadpool(
+            remove_logo_background,
+            upload["content"],
+            max_edge=settings.background_removal_max_edge,
+        )
+    except BackgroundRemovalError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    base_name = os.path.splitext(upload["filename"])[0] or "logo"
+    output_filename = f"{base_name[:120]}-no-bg.png"
+    ascii_filename = re.sub(r"[^A-Za-z0-9._-]+", "_", output_filename).strip("._") or "logo-no-bg.png"
+    event_logger.log(
+        "LOGO_BACKGROUND_REMOVED",
+        "Logo background removed on backend",
+        direction="user->backend",
+        actor_type="anonymous",
+        actor_id=None,
+        actor_email=None,
+        method=request.method,
+        path=request.url.path,
+        status_code=200,
+        request_id=request_id(request),
+        entity_type="logo_background",
+        entity_id=uuid.uuid4().hex,
+        details={
+            "engine": result.engine,
+            "source_content_type": upload["content_type"],
+            "source_size": upload["size"],
+            "output_size": len(result.content),
+            "width": result.width,
+            "height": result.height,
+            "removed_ratio": round(result.removed_ratio, 4),
+        },
+    )
+    return Response(
+        content=result.content,
+        media_type="image/png",
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": (
+                f'inline; filename="{ascii_filename}"; filename*=UTF-8\'\'{quote(output_filename)}'
+            ),
+            "X-Background-Removal-Engine": result.engine,
+            "X-Background-Removed-Ratio": f"{result.removed_ratio:.4f}",
+        },
+    )
 
 
 @router.post("/logo-upload-sessions")

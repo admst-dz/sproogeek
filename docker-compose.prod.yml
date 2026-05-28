@@ -130,6 +130,7 @@ services:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET: ${S3_BUCKET:-techcards}
+      BACKGROUND_REMOVAL_MAX_EDGE: ${BACKGROUND_REMOVAL_MAX_EDGE:-2400}
     depends_on:
       pgbouncer:
         condition: service_healthy

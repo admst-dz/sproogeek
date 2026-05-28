@@ -120,10 +120,10 @@ function SectionHeader({ title, count }) {
     );
 }
 
-function Table({ headers, children, empty }) {
+function Table({ headers, children, empty, className = '', scrollClassName = 'overflow-x-auto' }) {
     return (
-        <div className="border border-white/8 rounded-[14px] overflow-hidden">
-            <div className="overflow-x-auto">
+        <div className={`border border-white/8 rounded-[14px] overflow-hidden ${className}`}>
+            <div className={scrollClassName}>
                 <table className="w-full min-w-max">
                     <thead>
                         <tr className="border-b border-white/8 bg-white/[0.02]">
@@ -491,6 +491,7 @@ function CreateUserDialog({ initialRole = 'dealer', onClose, onCreated }) {
         sub_role: '',
         company_name: '',
         token_balance: 0,
+        print_canvas_enabled: false,
     });
     const [showPassword, setShowPassword] = useState(true);
     const [busy, setBusy] = useState(false);
@@ -521,6 +522,7 @@ function CreateUserDialog({ initialRole = 'dealer', onClose, onCreated }) {
                 sub_role: form.sub_role || null,
                 company_name: form.company_name || null,
                 token_balance: Number(form.token_balance) || 0,
+                print_canvas_enabled: Boolean(form.print_canvas_enabled),
             };
             const { data } = await adminApi.createUser(payload);
             onCreated(data, form.password);
@@ -571,6 +573,15 @@ function CreateUserDialog({ initialRole = 'dealer', onClose, onCreated }) {
                     </label>
                     <AdminInput label="Компания" value={form.company_name} onChange={v => update('company_name', v)} />
                     <AdminInput label="Баланс токенов" type="number" value={form.token_balance} onChange={v => update('token_balance', v)} />
+                    <label className="md:col-span-2 flex items-center gap-3 rounded-[10px] border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                        <input
+                            type="checkbox"
+                            checked={form.print_canvas_enabled}
+                            onChange={e => update('print_canvas_enabled', e.target.checked)}
+                            className="h-4 w-4 accent-white"
+                        />
+                        <span className="text-sm font-bold text-white/75">Включить полотно на печать</span>
+                    </label>
                 </div>
 
                 <div>
@@ -718,6 +729,7 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
         sub_role: user.sub_role || '',
         company_name: user.company_name || '',
         token_balance: user.token_balance ?? 0,
+        print_canvas_enabled: Boolean(user.print_canvas_enabled),
     }));
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState('');
@@ -731,6 +743,7 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
             sub_role: user.sub_role || '',
             company_name: user.company_name || '',
             token_balance: user.token_balance ?? 0,
+            print_canvas_enabled: Boolean(user.print_canvas_enabled),
         });
     }, [
         user.company_name,
@@ -739,6 +752,7 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
         user.role,
         user.sub_role,
         user.token_balance,
+        user.print_canvas_enabled,
     ]);
 
     const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
@@ -753,6 +767,7 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
                 sub_role: form.sub_role || null,
                 company_name: form.company_name || null,
                 token_balance: Number(form.token_balance) || 0,
+                print_canvas_enabled: Boolean(form.print_canvas_enabled),
             };
             const { data } = await adminApi.updateUser(user.id, payload);
             onSaved(data);
@@ -839,6 +854,15 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
                         </label>
                         <AdminInput label="Компания" value={form.company_name} onChange={v => update('company_name', v)} />
                         <AdminInput label="Баланс токенов" type="number" value={form.token_balance} onChange={v => update('token_balance', v)} />
+                        <label className="md:col-span-2 flex items-center gap-3 rounded-[10px] border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                            <input
+                                type="checkbox"
+                                checked={form.print_canvas_enabled}
+                                onChange={e => update('print_canvas_enabled', e.target.checked)}
+                                className="h-4 w-4 accent-white"
+                            />
+                            <span className="text-sm font-bold text-white/75">Полотно на печать включено</span>
+                        </label>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -848,6 +872,7 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
                         <ValueRow label="Sub-роль" value={user.sub_role ? (SUB_ROLE_LABEL[user.sub_role] || user.sub_role) : null} />
                         <ValueRow label="Компания" value={user.company_name} />
                         <ValueRow label="Баланс" value={`${user.token_balance ?? 0}`} />
+                        <ValueRow label="Полотно на печать" value={user.print_canvas_enabled ? 'Включено' : 'Выключено'} />
                         <ValueRow label="Заказов" value={`${user.orders_count ?? 0}`} />
                         <ValueRow label="Последний заказ" value={user.last_order_at ? new Date(user.last_order_at).toLocaleString('ru') : '—'} />
                         <ValueRow label="Пароль установлен" value={user.has_password ? 'Да' : 'Нет (только OAuth)'} />
@@ -870,12 +895,45 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
     );
 }
 
+function UserDetailsDialog({ user, onClose, onSaved, onDeleted, onResetRequested }) {
+    if (!user) return null;
+
+    return (
+        <div className="fixed inset-0 z-40 bg-black/65 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <div className="w-full sm:max-w-5xl max-h-[92dvh] overflow-y-auto bg-[#151925] border border-white/12 rounded-t-[22px] sm:rounded-[18px] shadow-[0_32px_90px_rgba(0,0,0,0.75)]">
+                <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-white/8 bg-[#151925]/95 backdrop-blur px-5 py-4">
+                    <div className="min-w-0">
+                        <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Пользователь</p>
+                        <h3 className="truncate text-base font-black text-white/85">{user.email}</h3>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="shrink-0 w-9 h-9 rounded-[9px] bg-white/5 hover:bg-white/10 text-white/55 hover:text-white transition"
+                        aria-label="Закрыть"
+                    >
+                        ✕
+                    </button>
+                </div>
+                <div className="p-5">
+                    <UserDetails
+                        user={user}
+                        onSaved={onSaved}
+                        onDeleted={onDeleted}
+                        onResetRequested={onResetRequested}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function UsersTab({ initialFilter = null }) {
     const [filter, setFilter] = useState({ role: initialFilter, search: '' });
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [expanded, setExpanded] = useState(null);
+    const [selectedUser, setSelectedUser] = useState(null);
     const [createOpen, setCreateOpen] = useState(false);
     const [resetTarget, setResetTarget] = useState(null);
     const [showPasswordFor, setShowPasswordFor] = useState(null);
@@ -918,11 +976,12 @@ function UsersTab({ initialFilter = null }) {
 
     const onSaved = (updated) => {
         setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+        setSelectedUser(prev => prev?.id === updated.id ? updated : prev);
     };
 
     const onDeleted = (deletedId) => {
         setUsers(prev => prev.filter(u => u.id !== deletedId));
-        setExpanded(null);
+        setSelectedUser(null);
     };
 
     const tabTitle = initialFilter
@@ -930,8 +989,8 @@ function UsersTab({ initialFilter = null }) {
         : 'Пользователи';
 
     return (
-        <>
-            <div className="flex items-center gap-3 mb-5 flex-wrap">
+        <div className="flex flex-1 min-h-0 flex-col">
+            <div className="flex shrink-0 items-center gap-3 mb-5 flex-wrap">
                 <SectionHeader title={tabTitle} count={users.length} />
                 <input
                     type="search"
@@ -968,51 +1027,59 @@ function UsersTab({ initialFilter = null }) {
                 </button>
             </div>
 
-            {gatedLoading ? <Loader /> : error ? <ErrBox msg={error} /> : (
+            {gatedLoading ? (
+                <div className="flex-1 min-h-0 flex items-center justify-center"><Loader /></div>
+            ) : error ? (
+                <div className="flex-1 min-h-0"><ErrBox msg={error} /></div>
+            ) : (
                 <Table
-                    headers={['Email', 'Имя', 'Роль', 'Sub-роль', 'Компания', 'Заказов', 'Пароль', 'Создан']}
+                    headers={['Email', 'Имя', 'Роль', 'Sub-роль', 'Компания', 'Полотно', 'Заказов', 'Пароль', 'Создан']}
                     empty={users.length === 0 ? 'Нет пользователей' : null}
+                    className="flex-1 min-h-0 bg-black/10"
+                    scrollClassName="h-full overflow-auto custom-scrollbar"
                 >
                     {users.map(u => (
-                        <Fragment key={u.id}>
-                            <tr
-                                onClick={() => setExpanded(expanded === u.id ? null : u.id)}
-                                className="border-b border-white/5 hover:bg-white/[0.03] cursor-pointer transition-colors select-none"
-                            >
-                                <td className="px-4 py-2.5 text-sm text-white/80">{u.email}</td>
-                                <td className="px-4 py-2.5 text-sm text-white/60">{u.display_name || '—'}</td>
-                                <td className="px-4 py-2.5">
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${ROLE_CLS[u.role] ?? 'text-white/40 bg-white/5'}`}>
-                                        {ROLE_LABEL[u.role] || u.role}
-                                    </span>
-                                </td>
-                                <td className="px-4 py-2.5 text-xs text-white/45">{u.sub_role ? (SUB_ROLE_LABEL[u.sub_role] || u.sub_role) : '—'}</td>
-                                <td className="px-4 py-2.5 text-sm text-white/45">{u.company_name || '—'}</td>
-                                <td className="px-4 py-2.5 text-sm text-white/60">{u.orders_count ?? 0}</td>
-                                <td className="px-4 py-2.5 text-xs">
-                                    {u.has_password
-                                        ? <span className="text-emerald-400">✓ задан</span>
-                                        : <span className="text-white/30">OAuth</span>}
-                                </td>
-                                <td className="px-4 py-2.5 font-mono text-xs text-white/30">
-                                    {u.created_at ? new Date(u.created_at).toLocaleDateString('ru') : '—'}
-                                </td>
-                            </tr>
-                            {expanded === u.id && (
-                                <tr className="bg-black/20">
-                                    <td colSpan={8} className="px-5 py-5">
-                                        <UserDetails
-                                            user={u}
-                                            onSaved={onSaved}
-                                            onDeleted={onDeleted}
-                                            onResetRequested={setResetTarget}
-                                        />
-                                    </td>
-                                </tr>
-                            )}
-                        </Fragment>
+                        <tr
+                            key={u.id}
+                            onClick={() => setSelectedUser(u)}
+                            className="border-b border-white/5 hover:bg-white/[0.04] cursor-pointer transition-colors select-none"
+                        >
+                            <td className="px-4 py-2.5 text-sm text-white/80">{u.email}</td>
+                            <td className="px-4 py-2.5 text-sm text-white/60">{u.display_name || '—'}</td>
+                            <td className="px-4 py-2.5">
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${ROLE_CLS[u.role] ?? 'text-white/40 bg-white/5'}`}>
+                                    {ROLE_LABEL[u.role] || u.role}
+                                </span>
+                            </td>
+                            <td className="px-4 py-2.5 text-xs text-white/45">{u.sub_role ? (SUB_ROLE_LABEL[u.sub_role] || u.sub_role) : '—'}</td>
+                            <td className="px-4 py-2.5 text-sm text-white/45">{u.company_name || '—'}</td>
+                            <td className="px-4 py-2.5 text-xs">
+                                {u.print_canvas_enabled
+                                    ? <span className="text-emerald-400">✓ да</span>
+                                    : <span className="text-white/30">нет</span>}
+                            </td>
+                            <td className="px-4 py-2.5 text-sm text-white/60">{u.orders_count ?? 0}</td>
+                            <td className="px-4 py-2.5 text-xs">
+                                {u.has_password
+                                    ? <span className="text-emerald-400">✓ задан</span>
+                                    : <span className="text-white/30">OAuth</span>}
+                            </td>
+                            <td className="px-4 py-2.5 font-mono text-xs text-white/30">
+                                {u.created_at ? new Date(u.created_at).toLocaleDateString('ru') : '—'}
+                            </td>
+                        </tr>
                     ))}
                 </Table>
+            )}
+
+            {selectedUser && (
+                <UserDetailsDialog
+                    user={selectedUser}
+                    onClose={() => setSelectedUser(null)}
+                    onSaved={onSaved}
+                    onDeleted={onDeleted}
+                    onResetRequested={setResetTarget}
+                />
             )}
 
             {createOpen && (
@@ -1036,7 +1103,7 @@ function UsersTab({ initialFilter = null }) {
                     onClose={() => { setShowPasswordFor(null); setShowPassword(''); }}
                 />
             )}
-        </>
+        </div>
     );
 }
 
@@ -1361,9 +1428,11 @@ const TABS = [
 export const AdminDashboard = ({ onLogout }) => {
     const { language } = useConfigurator();
     const [tab, setTab] = useState('dashboard');
+    const userDirectoryTabs = ['users', 'dealers', 'manufacturers', 'admins'];
+    const isUserDirectoryTab = userDirectoryTabs.includes(tab);
 
     return (
-        <div className="app-bg fixed inset-0 text-gray-900 dark:text-white flex flex-col font-sans overflow-hidden">
+        <div className="app-bg h-[100dvh] min-h-0 text-gray-900 dark:text-white flex flex-col font-sans overflow-hidden">
             <LiveOrderToasts />
             <header className="flex flex-wrap items-center gap-2 px-4 sm:px-6 py-3 border-b border-white/8 bg-[#0A0E1A] shrink-0">
                 <span className="text-[11px] font-black tracking-[0.18em] sm:tracking-[0.25em] uppercase text-white/20">SPRUZHYK</span>
@@ -1392,7 +1461,7 @@ export const AdminDashboard = ({ onLogout }) => {
                 </button>
             </header>
 
-            <div className="flex-1 overflow-auto p-4 sm:p-6 flex flex-col">
+            <main className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar p-4 sm:p-6 flex flex-col ${isUserDirectoryTab ? 'pb-4 sm:pb-6' : 'pb-28 sm:pb-32'}`}>
                 {tab === 'dashboard' && <DashboardTab language={language} onJumpToUsers={(role) => setTab(role === 'dealer' ? 'dealers' : role === 'manufacturer' ? 'manufacturers' : role === 'admin' ? 'admins' : 'users')} />}
                 {tab === 'orders' && <OrdersTab language={language} />}
                 {tab === 'users' && <UsersTab key="all" initialFilter={null} />}
@@ -1401,8 +1470,8 @@ export const AdminDashboard = ({ onLogout }) => {
                 {tab === 'admins' && <UsersTab key="admins" initialFilter="admin" />}
                 {tab === 'json' && <JsonTab language={language} />}
                 {tab === 'products' && <ProductsTab language={language} />}
-                <SiteFooter compact className="mt-auto -mx-4 pt-10 sm:-mx-6" />
-            </div>
+                {!isUserDirectoryTab && <SiteFooter compact className="mt-auto -mx-4 pt-10 sm:-mx-6" />}
+            </main>
         </div>
     );
 };

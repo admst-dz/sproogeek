@@ -3,7 +3,7 @@ import { t } from '../../i18n';
 import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { getNotebookBindingCapabilities, useConfigurator } from "../../store";
-import { fetchUserOrders, createOrderInDB } from '../../api';
+import { fetchPrintCanvasExports, fetchUserOrders, createOrderInDB, downloadPrintCanvasExport } from '../../api';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 import { ApprovalPanel } from '../shared/ApprovalPanel';
 import { Notebook } from '../shared/Notebook';
@@ -112,7 +112,12 @@ const getNotebookBindingLabel = (bindingType, language) => ({
     spiral: t(language, 'bindingSpiral'),
 })[bindingType] || bindingType;
 
-export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToastShown, initialTab, onTabChange }) => {
+const formatFileSize = (bytes = 0) => {
+    if (!bytes) return '0 MB';
+    return `${(bytes / 1024 / 1024).toFixed(bytes > 10 * 1024 * 1024 ? 1 : 2)} MB`;
+};
+
+export const ClientDashboard = ({ onBack, onEdit, onPrintCanvas, showSuccessToast, onSuccessToastShown, initialTab, onTabChange }) => {
     const {
         currentUser, logout, cartItems, clearCart, removeFromCart, updateCartItem, startEditingCartItem,
         language,
@@ -134,6 +139,8 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
 
     const [orders, setOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(false);
+    const [printCanvasExports, setPrintCanvasExports] = useState([]);
+    const [printCanvasLoading, setPrintCanvasLoading] = useState(false);
     const [expandedOrders, setExpandedOrders] = useState(new Set());
     const [orderSuccess, setOrderSuccess] = useState(false);
     const [clientType, setClientType] = useState('phys');
@@ -176,6 +183,31 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
             });
         }
     }, [activeTab, currentUser]);
+
+    useEffect(() => {
+        if (activeTab === 'printCanvas' && currentUser?.print_canvas_enabled) {
+            setPrintCanvasLoading(true);
+            fetchPrintCanvasExports()
+                .then((data) => setPrintCanvasExports(data || []))
+                .finally(() => setPrintCanvasLoading(false));
+        }
+    }, [activeTab, currentUser]);
+
+    const downloadPrintCanvasTiff = useCallback(async (exportItem) => {
+        try {
+            const blob = await downloadPrintCanvasExport(exportItem.id);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = exportItem.filename || `print-canvas-${exportItem.id}.tiff`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error(error);
+        }
+    }, []);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -305,19 +337,27 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                             <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-[10px] font-bold text-[#0B0F19] align-middle">
                                 {cartItems.length}
                             </span>
-                        )}
-                    </TabBtn>
+                    )}
+                </TabBtn>
                     <TabBtn active={activeTab === 'orders'} onClick={() => changeTab('orders')}>{t(language, 'tabOrders')}</TabBtn>
+                    {currentUser?.print_canvas_enabled && (
+                        <TabBtn active={activeTab === 'printCanvas'} onClick={() => changeTab('printCanvas')}>{t(language, 'tabPrintCanvas')}</TabBtn>
+                    )}
                 </div>
             </header>
 
             {/* MAIN */}
-            <main className="flex-1 min-h-0 overflow-y-auto custom-scrollbar max-w-6xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-8 pb-24 flex flex-col">
+            <main className={`flex-1 min-h-0 overflow-y-auto custom-scrollbar mx-auto w-full px-4 sm:px-6 py-5 sm:py-8 pb-24 flex flex-col ${
+                activeTab === 'catalog' ? 'max-w-[1500px]' : 'max-w-6xl'
+            }`}>
 
                 {/* CATALOG TAB */}
                 {activeTab === 'catalog' && (
                     <div className="flex flex-col items-center">
-                        <ConfiguratorProductMenu onStart={onEdit} />
+                        <ConfiguratorProductMenu
+                            onStart={onEdit}
+                            onPrintCanvas={currentUser?.print_canvas_enabled ? onPrintCanvas : null}
+                        />
                     </div>
                 )}
 
@@ -581,6 +621,60 @@ export const ClientDashboard = ({ onBack, onEdit, showSuccessToast, onSuccessToa
                                         </div>
                                     );
                                 })
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* PRINT CANVAS EXPORTS TAB */}
+                {activeTab === 'printCanvas' && currentUser?.print_canvas_enabled && (
+                    <div>
+                        <h2 className="text-xl font-bold uppercase tracking-widest mb-6 text-white">{t(language, 'printCanvasHistoryTitle')}</h2>
+                        <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[20px] md:rounded-[24px] overflow-hidden">
+                            {printCanvasLoading ? (
+                                <div className="py-16 flex flex-col items-center gap-3">
+                                    <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">{t(language, 'loading')}</p>
+                                </div>
+                            ) : printCanvasExports.length === 0 ? (
+                                <div className="py-16 flex flex-col items-center gap-4">
+                                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10 text-2xl">TIFF</div>
+                                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">{t(language, 'printCanvasHistoryEmpty')}</p>
+                                </div>
+                            ) : (
+                                printCanvasExports.map((item, index) => (
+                                    <div
+                                        key={item.id}
+                                        className={`px-4 md:px-6 py-4 md:py-5 ${index !== printCanvasExports.length - 1 ? 'border-b border-white/5' : ''}`}
+                                    >
+                                        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{t(language, 'printCanvasExportDate')}</p>
+                                                <p className="mt-1 font-bold text-white">
+                                                    {item.created_at ? new Date(item.created_at).toLocaleString('ru-RU') : '—'}
+                                                </p>
+                                                <p className="mt-1 text-xs text-gray-500 truncate">{item.filename}</p>
+                                            </div>
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 lg:min-w-[560px]">
+                                                <ClientDetailRow label={t(language, 'printCanvasSheetWidth')} value={`${item.sheet_width_mm} мм`} />
+                                                <ClientDetailRow label={t(language, 'printCanvasSize')} value={`${Math.round(item.used_width_mm)} x ${Math.round(item.used_height_mm)} мм`} accent />
+                                                <ClientDetailRow label={t(language, 'printCanvasItems')} value={`${item.items_count}`} />
+                                                <ClientDetailRow label={t(language, 'printCanvasLogoGap')} value={`${item.logo_gap_mm} мм`} />
+                                                <ClientDetailRow label={t(language, 'printCanvasDensity')} value={`${item.density}%`} />
+                                                <ClientDetailRow label="DPI" value={`${item.export_dpi}`} />
+                                                <ClientDetailRow label={t(language, 'printCanvasFileSize')} value={formatFileSize(item.file_size)} />
+                                                <ClientDetailRow label={t(language, 'printCanvasSheetLength')} value={`${item.max_length_m} м`} />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => downloadPrintCanvasTiff(item)}
+                                                className="shrink-0 rounded-[12px] bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-[#0B0F19] transition hover:bg-gray-100 active:scale-[0.98]"
+                                            >
+                                                {t(language, 'printCanvasDownloadTiff')}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))
                             )}
                         </div>
                     </div>

@@ -74,6 +74,8 @@ class Settings(BaseSettings):
 
     max_upload_bytes: int = Field(25_000_000, alias="MAX_UPLOAD_BYTES")
     max_logo_bytes: int = Field(25_000_000, alias="MAX_LOGO_BYTES")
+    max_print_canvas_tiff_bytes: int = Field(150_000_000, alias="MAX_PRINT_CANVAS_TIFF_BYTES")
+    background_removal_max_edge: int = Field(2400, alias="BACKGROUND_REMOVAL_MAX_EDGE")
 
     admin_backdoor_enabled: bool = Field(False, alias="ADMIN_BACKDOOR_ENABLED")
     admin_backdoor_login: str = Field("", alias="ADMIN_BACKDOOR_LOGIN")
@@ -111,6 +113,8 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = Field(True, alias="SMTP_USE_TLS")
     smtp_from: str = Field("", alias="SMTP_FROM")
     feedback_to: str = Field("info@sproogeek.com", alias="FEEDBACK_TO")
+    print_canvas_notify_to: str = Field("info@sproogeek.com", alias="PRINT_CANVAS_NOTIFY_TO")
+    print_canvas_email_attachment_max_bytes: int = Field(18_000_000, alias="PRINT_CANVAS_EMAIL_ATTACHMENT_MAX_BYTES")
 
     @field_validator("allowed_hosts", "allowed_origins", mode="before")
     @classmethod

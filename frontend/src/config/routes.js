@@ -2,6 +2,7 @@ import { useConfigurator } from '../store';
 
 export const SCREEN_TO_PATH = {
     home: '/',
+    print_canvas: '/print-canvas',
     configurator: '/configurator',
     order: '/order',
     dealer: '/dealer',
@@ -22,12 +23,14 @@ export const TAB_TO_PATH = {
     catalog: '/dashboard/catalog',
     cart: '/dashboard/cart',
     orders: '/dashboard/orders',
+    printCanvas: '/dashboard/print-canvas',
 };
 
 export const PATH_TO_TAB = {
     '/dashboard/catalog': 'catalog',
     '/dashboard/cart': 'cart',
     '/dashboard/orders': 'orders',
+    '/dashboard/print-canvas': 'printCanvas',
 };
 
 export const DEALER_TAB_TO_PATH = {

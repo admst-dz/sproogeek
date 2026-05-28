@@ -18,6 +18,7 @@ import {
 } from '../configurator/ConstructorDock';
 import { THERMOS_COLOR_PALETTE } from '../../config/productPalettes';
 import { GuestApprovalModal } from '../shared/GuestApprovalModal';
+import { LogoBackgroundRemovalButton } from '../shared/LogoBackgroundRemovalButton';
 
 export const ThermosInterface = ({ onFinish }) => {
     const [logoArea, setLogoArea] = useState('body');
@@ -26,7 +27,7 @@ export const ThermosInterface = ({ onFinish }) => {
         thermosBodyColor, thermosCapVisible,
         setColor, toggleThermosCap,
         thermosLogos, selectedThermosLogoId,
-        addThermosLogo, selectThermosLogo, removeThermosLogo,
+        addThermosLogo, replaceThermosLogoFile, selectThermosLogo, removeThermosLogo,
         resetThermosLogoTransform, setThermosLogoPosition,
         setThermosLogoRotation, setThermosLogoScale,
         addToCart, setRenderSnapshot, language,
@@ -118,6 +119,7 @@ export const ThermosInterface = ({ onFinish }) => {
                     selectedLogoId={selectedThermosLogoId}
                     activeLogoTarget={activeLogoTarget}
                     addLogo={addThermosLogo}
+                    replaceLogoFile={replaceThermosLogoFile}
                     selectLogo={selectThermosLogo}
                     removeLogo={removeThermosLogo}
                     resetLogoTransform={resetThermosLogoTransform}
@@ -151,7 +153,7 @@ export const ThermosInterface = ({ onFinish }) => {
 
 // --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
 
-const ThermosLogoPanel = ({ logos, selectedLogoId, activeLogoTarget, addLogo, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, language }) => {
+const ThermosLogoPanel = ({ logos, selectedLogoId, activeLogoTarget, addLogo, replaceLogoFile, selectLogo, removeLogo, resetLogoTransform, setLogoPosition, setLogoRotation, setLogoScale, language }) => {
     const visibleLogos = logos.filter(l => (l.target ?? 'body') === activeLogoTarget);
     const selected = visibleLogos.find(l => l.id === selectedLogoId) || null;
     const xRange = 0.35;
@@ -166,6 +168,7 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, activeLogoTarget, addLogo, se
             {selected && (
                 <>
                     <div className="mt-3 space-y-3 xl:hidden">
+                        <LogoBackgroundRemovalButton logo={selected} language={language} onApply={(file) => replaceLogoFile(selected.id, file)} />
                         {selected.mode === 'wrap' && (
                             <div className="rounded-[8px] border border-white/10 bg-white/8 px-3 py-2 text-xs font-bold text-white/60">
                                 {t(language, 'aiWrapApplied')}
@@ -182,6 +185,7 @@ const ThermosLogoPanel = ({ logos, selectedLogoId, activeLogoTarget, addLogo, se
                         )}
                     </div>
                     <FloatingLogoSettings title={t(language, 'logoLabel')} subtitle={selected.filename}>
+                    <LogoBackgroundRemovalButton logo={selected} language={language} onApply={(file) => replaceLogoFile(selected.id, file)} />
                     {selected.mode === 'wrap' && (
                         <div className="rounded-[8px] border border-white/10 bg-white/8 px-3 py-2 text-xs font-bold text-white/60">
                             {t(language, 'aiWrapApplied')}
