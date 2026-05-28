@@ -9,8 +9,8 @@ const DEFAULT_SHEET_LENGTH_M = 25;
 const EMPTY_SHEET_HEIGHT_MM = 360;
 const DEFAULT_LOGO_WIDTH_MM = 72;
 const MAX_IMAGE_EDGE = 1400;
-const MINIMIZE_GAP_MM = 1.5;
-const COMFORT_GAP_MM = 14;
+const LOGO_GAP_OPTIONS_MM = [3, 5];
+const DEFAULT_LOGO_GAP_MM = 3;
 const MINIMIZE_SHEET_PADDING_MM = 8;
 const COMFORT_SHEET_PADDING_MM = 16;
 const MIN_ZOOM = 0.5;
@@ -101,15 +101,14 @@ const expandInstances = (logos) => logos.flatMap((logo, logoIndex) => {
     }));
 });
 
-const getItemFootprint = (item, mode, rotated = false) => {
+const getItemFootprint = (item, rotated = false) => {
     const drawWidth = rotated ? item.height : item.width;
     const drawHeight = rotated ? item.width : item.height;
-    const compactRound = mode === 'minimize' && item.shape === 'round';
     return {
         drawWidth,
         drawHeight,
-        width: compactRound ? drawWidth * 0.9 : drawWidth,
-        height: compactRound ? drawHeight * 0.84 : drawHeight,
+        width: drawWidth,
+        height: drawHeight,
     };
 };
 
@@ -173,8 +172,8 @@ const placeOnSkyline = (segments, x, width, nextY) => {
     return mergeSegments(placed);
 };
 
-const packRows = (instances, { mode, sheetWidth, maxLengthM }) => {
-    const gap = mode === 'comfort' ? COMFORT_GAP_MM : MINIMIZE_GAP_MM;
+const packRows = (instances, { mode, sheetWidth, maxLengthM, logoGapMm }) => {
+    const gap = LOGO_GAP_OPTIONS_MM.includes(Number(logoGapMm)) ? Number(logoGapMm) : DEFAULT_LOGO_GAP_MM;
     const sheetPadding = mode === 'comfort' ? COMFORT_SHEET_PADDING_MM : MINIMIZE_SHEET_PADDING_MM;
     const widthLimit = SHEET_WIDTH_OPTIONS_MM.includes(Number(sheetWidth)) ? Number(sheetWidth) : DEFAULT_SHEET_WIDTH_MM;
     const maxLengthMm = (SHEET_LENGTH_OPTIONS_M.includes(Number(maxLengthM)) ? Number(maxLengthM) : DEFAULT_SHEET_LENGTH_M) * 1000;
@@ -198,7 +197,7 @@ const packRows = (instances, { mode, sheetWidth, maxLengthM }) => {
 
         let best = null;
         orientationOptions.forEach((rotated) => {
-            const footprint = getItemFootprint(item, mode, rotated);
+            const footprint = getItemFootprint(item, rotated);
             const placeWidth = Math.min(footprint.width, innerWidthLimit);
             const placeHeight = footprint.height;
 
@@ -231,7 +230,7 @@ const packRows = (instances, { mode, sheetWidth, maxLengthM }) => {
             });
         });
 
-        const fallbackFootprint = getItemFootprint(item, mode, false);
+        const fallbackFootprint = getItemFootprint(item, false);
         const fallbackPlaceWidth = Math.min(fallbackFootprint.width, innerWidthLimit);
         const placement = best || {
             x: sheetPadding,
@@ -296,6 +295,7 @@ export const PrintCanvas = ({ onBack }) => {
     const language = useConfigurator((state) => state.language);
     const [logos, setLogos] = useState([]);
     const [mode, setMode] = useState('minimize');
+    const [logoGapMm, setLogoGapMm] = useState(DEFAULT_LOGO_GAP_MM);
     const [sheetWidthMm, setSheetWidthMm] = useState(DEFAULT_SHEET_WIDTH_MM);
     const [sheetLengthM, setSheetLengthM] = useState(DEFAULT_SHEET_LENGTH_M);
     const [zoom, setZoom] = useState(1);
@@ -329,7 +329,10 @@ export const PrintCanvas = ({ onBack }) => {
     }, []);
 
     const instances = useMemo(() => expandInstances(logos), [logos]);
-    const layout = useMemo(() => packRows(instances, { mode, sheetWidth: sheetWidthMm, maxLengthM: sheetLengthM }), [instances, mode, sheetLengthM, sheetWidthMm]);
+    const layout = useMemo(
+        () => packRows(instances, { mode, sheetWidth: sheetWidthMm, maxLengthM: sheetLengthM, logoGapMm }),
+        [instances, logoGapMm, mode, sheetLengthM, sheetWidthMm]
+    );
     const previewFitScale = Math.min(1, 1080 / layout.width);
     const previewScale = previewFitScale * zoom;
     const density = layout.placements.length
@@ -472,7 +475,7 @@ export const PrintCanvas = ({ onBack }) => {
                             </div>
                         </div>
 
-                        <div className="grid gap-3 border-b border-white/10 px-4 py-3 md:grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,0.8fr)]">
+                        <div className="grid gap-3 border-b border-white/10 px-4 py-3 md:grid-cols-[minmax(0,1.35fr)_minmax(0,0.95fr)_minmax(0,0.8fr)_minmax(0,0.8fr)]">
                             <div className="rounded-[10px] border border-white/10 bg-white/7 px-3 py-2">
                                 <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/36">{t(language, 'printCanvasSize')}</p>
                                 <div className="mt-2 grid gap-2">
@@ -514,6 +517,26 @@ export const PrintCanvas = ({ onBack }) => {
                                 <p className={`mt-1 text-[10px] font-bold ${layout.lengthExceeded ? 'text-red-200' : 'text-white/38'}`}>
                                     {mmLabel(layout.usedWidth)} x {mmLabel(layout.usedHeight)} / {sheetLengthM} м
                                 </p>
+                            </div>
+                            <div className="rounded-[10px] border border-white/10 bg-white/7 px-3 py-2">
+                                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/36">{t(language, 'printCanvasLogoGap')}</p>
+                                <div className="mt-2 grid grid-cols-2 gap-1" aria-label={t(language, 'printCanvasLogoGap')}>
+                                    {LOGO_GAP_OPTIONS_MM.map((gap) => (
+                                        <button
+                                            key={gap}
+                                            type="button"
+                                            onClick={() => setLogoGapMm(gap)}
+                                            className="h-8 rounded-[8px] border px-2 text-[12px] font-black transition"
+                                            style={{
+                                                borderColor: logoGapMm === gap ? '#fff9ec' : 'rgba(255,255,255,0.14)',
+                                                backgroundColor: logoGapMm === gap ? '#fff9ec' : '#211a1d',
+                                                color: logoGapMm === gap ? '#211a1d' : '#fff',
+                                            }}
+                                        >
+                                            {gap} мм
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                             <div className="rounded-[10px] border border-white/10 bg-white/7 px-3 py-2">
                                 <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/36">{t(language, 'printCanvasItems')}</p>

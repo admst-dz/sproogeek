@@ -171,6 +171,7 @@ export default {
     "printCanvasMinimize": "Minimize waste",
     "printCanvasComfort": "Easy cutting",
     "printCanvasSize": "Used area",
+    "printCanvasLogoGap": "Spacing between logos",
     "printCanvasSheetWidth": "Canvas width",
     "printCanvasSheetLength": "Maximum canvas length",
     "printCanvasItems": "Items",
