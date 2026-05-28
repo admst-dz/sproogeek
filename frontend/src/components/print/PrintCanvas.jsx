@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { t } from '../../i18n';
+import { printCanvasApi } from '../../api';
 import { useConfigurator } from '../../store';
 
 const SHEET_WIDTH_OPTIONS_MM = [580, 280];
@@ -16,6 +17,8 @@ const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
 const RECT_EPSILON = 0.001;
+const TIFF_EXPORT_DPI = 150;
+const MM_PER_INCH = 25.4;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -32,6 +35,92 @@ const loadImage = (src) => new Promise((resolve, reject) => {
     image.onerror = reject;
     image.src = src;
 });
+
+const downloadBlob = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+};
+
+const writeAscii = (view, offset, value) => {
+    for (let index = 0; index < value.length; index += 1) {
+        view.setUint8(offset + index, value.charCodeAt(index));
+    }
+};
+
+const writeTiffEntry = (view, offset, tag, type, count, value) => {
+    view.setUint16(offset, tag, true);
+    view.setUint16(offset + 2, type, true);
+    view.setUint32(offset + 4, count, true);
+    if (type === 3 && count === 1) {
+        view.setUint16(offset + 8, value, true);
+        view.setUint16(offset + 10, 0, true);
+    } else {
+        view.setUint32(offset + 8, value, true);
+    }
+};
+
+const canvasToTiffBlob = (canvas, dpi = TIFF_EXPORT_DPI) => {
+    const { width, height } = canvas;
+    const image = canvas.getContext('2d').getImageData(0, 0, width, height).data;
+    const entryCount = 12;
+    const ifdOffset = 8;
+    const ifdSize = 2 + entryCount * 12 + 4;
+    const bitsOffset = ifdOffset + ifdSize;
+    const xResolutionOffset = bitsOffset + 6;
+    const yResolutionOffset = xResolutionOffset + 8;
+    const software = 'Sproogeek Print Canvas';
+    const softwareOffset = yResolutionOffset + 8;
+    const imageOffset = softwareOffset + software.length + 1;
+    const pixelBytes = width * height * 3;
+    const buffer = new ArrayBuffer(imageOffset + pixelBytes);
+    const view = new DataView(buffer);
+
+    writeAscii(view, 0, 'II');
+    view.setUint16(2, 42, true);
+    view.setUint32(4, ifdOffset, true);
+    view.setUint16(ifdOffset, entryCount, true);
+
+    let entryOffset = ifdOffset + 2;
+    writeTiffEntry(view, entryOffset, 256, 4, 1, width); entryOffset += 12;
+    writeTiffEntry(view, entryOffset, 257, 4, 1, height); entryOffset += 12;
+    writeTiffEntry(view, entryOffset, 258, 3, 3, bitsOffset); entryOffset += 12;
+    writeTiffEntry(view, entryOffset, 259, 3, 1, 1); entryOffset += 12;
+    writeTiffEntry(view, entryOffset, 262, 3, 1, 2); entryOffset += 12;
+    writeTiffEntry(view, entryOffset, 273, 4, 1, imageOffset); entryOffset += 12;
+    writeTiffEntry(view, entryOffset, 277, 3, 1, 3); entryOffset += 12;
+    writeTiffEntry(view, entryOffset, 278, 4, 1, height); entryOffset += 12;
+    writeTiffEntry(view, entryOffset, 279, 4, 1, pixelBytes); entryOffset += 12;
+    writeTiffEntry(view, entryOffset, 282, 5, 1, xResolutionOffset); entryOffset += 12;
+    writeTiffEntry(view, entryOffset, 283, 5, 1, yResolutionOffset); entryOffset += 12;
+    writeTiffEntry(view, entryOffset, 296, 3, 1, 2); entryOffset += 12;
+    view.setUint32(entryOffset, 0, true);
+
+    view.setUint16(bitsOffset, 8, true);
+    view.setUint16(bitsOffset + 2, 8, true);
+    view.setUint16(bitsOffset + 4, 8, true);
+    view.setUint32(xResolutionOffset, dpi, true);
+    view.setUint32(xResolutionOffset + 4, 1, true);
+    view.setUint32(yResolutionOffset, dpi, true);
+    view.setUint32(yResolutionOffset + 4, 1, true);
+    writeAscii(view, softwareOffset, software);
+    view.setUint8(softwareOffset + software.length, 0);
+
+    const output = new Uint8Array(buffer, imageOffset, pixelBytes);
+    for (let src = 0, dst = 0; src < image.length; src += 4, dst += 3) {
+        const alpha = image[src + 3] / 255;
+        output[dst] = Math.round(image[src] * alpha + 255 * (1 - alpha));
+        output[dst + 1] = Math.round(image[src + 1] * alpha + 255 * (1 - alpha));
+        output[dst + 2] = Math.round(image[src + 2] * alpha + 255 * (1 - alpha));
+    }
+
+    return new Blob([buffer], { type: 'image/tiff' });
+};
 
 const makeLogoId = () => (
     typeof crypto !== 'undefined' && crypto.randomUUID
@@ -355,6 +444,8 @@ export const PrintCanvas = ({ onBack }) => {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [isDraggingPreview, setIsDraggingPreview] = useState(false);
+    const [exportBusy, setExportBusy] = useState(false);
+    const [exportMsg, setExportMsg] = useState('');
 
     const addFiles = useCallback(async (fileList) => {
         const files = Array.from(fileList || []).filter((file) => file?.type?.startsWith('image/'));
@@ -426,6 +517,102 @@ export const PrintCanvas = ({ onBack }) => {
     const density = layout.placements.length
         ? Math.round((layout.placements.reduce((sum, item) => sum + item.width * item.height, 0) / (layout.width * layout.height)) * 100)
         : 0;
+
+    const buildTiffExport = useCallback(async () => {
+        if (!layout.placements.length) {
+            throw new Error('empty-layout');
+        }
+
+        const pxPerMm = TIFF_EXPORT_DPI / MM_PER_INCH;
+        const widthPx = Math.max(1, Math.ceil(layout.width * pxPerMm));
+        const heightPx = Math.max(1, Math.ceil(layout.usedHeight * pxPerMm));
+        const canvas = document.createElement('canvas');
+        canvas.width = widthPx;
+        canvas.height = heightPx;
+        const ctx = canvas.getContext('2d', { alpha: true, colorSpace: 'srgb' });
+        if (!ctx) throw new Error('canvas-unavailable');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, widthPx, heightPx);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        const imageCache = new Map();
+        for (const item of layout.placements) {
+            let image = imageCache.get(item.logoId);
+            if (!image) {
+                image = await loadImage(item.src);
+                imageCache.set(item.logoId, image);
+            }
+
+            const x = Math.round(item.x * pxPerMm);
+            const y = Math.round(item.y * pxPerMm);
+            const width = Math.round(item.drawWidth * pxPerMm);
+            const height = Math.round(item.drawHeight * pxPerMm);
+            if (item.rotated) {
+                ctx.save();
+                ctx.translate(x + width / 2, y + height / 2);
+                ctx.rotate(Math.PI / 2);
+                ctx.drawImage(image, -height / 2, -width / 2, height, width);
+                ctx.restore();
+            } else {
+                ctx.drawImage(image, x, y, width, height);
+            }
+        }
+
+        const blob = canvasToTiffBlob(canvas, TIFF_EXPORT_DPI);
+        const metadata = {
+            sheet_width_mm: layout.width,
+            used_width_mm: layout.usedWidth,
+            used_height_mm: layout.usedHeight,
+            max_length_m: sheetLengthM,
+            logo_gap_mm: logoGapMm,
+            items_count: layout.placements.length,
+            density,
+            export_dpi: TIFF_EXPORT_DPI,
+            pixel_width: widthPx,
+            pixel_height: heightPx,
+            logos: logos.map((logo) => ({
+                id: logo.id,
+                name: logo.name,
+                quantity: logo.quantity,
+                width_px: logo.widthPx,
+                height_px: logo.heightPx,
+            })),
+            placements: layout.placements.map((item) => ({
+                logo_id: item.logoId,
+                name: item.name,
+                copy_index: item.copyIndex,
+                x_mm: item.x,
+                y_mm: item.y,
+                width_mm: item.drawWidth,
+                height_mm: item.drawHeight,
+                rotated: Boolean(item.rotated),
+            })),
+        };
+
+        return { blob, metadata };
+    }, [density, layout, logoGapMm, logos, sheetLengthM]);
+
+    const exportTiff = useCallback(async () => {
+        setExportBusy(true);
+        setExportMsg('');
+        setError('');
+        try {
+            const { blob, metadata } = await buildTiffExport();
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const filename = `print-canvas-${stamp}.tiff`;
+            const file = new File([blob], filename, { type: 'image/tiff' });
+            await printCanvasApi.createExport(file, metadata);
+            downloadBlob(blob, filename);
+            setExportMsg(t(language, 'printCanvasExportSaved'));
+        } catch (err) {
+            console.error(err);
+            setExportMsg('');
+            setError(t(language, err?.message === 'empty-layout' ? 'printCanvasExportEmpty' : 'printCanvasExportError'));
+        } finally {
+            setExportBusy(false);
+        }
+    }, [buildTiffExport, language]);
 
     return (
         <main className="app-bg h-full w-full overflow-y-auto overflow-x-hidden font-zen text-white">
@@ -609,8 +796,19 @@ export const PrintCanvas = ({ onBack }) => {
                         </div>
 
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-                            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/36">{t(language, 'printCanvasZoom')}</span>
+                            <div className="flex min-w-0 flex-col gap-1">
+                                <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/36">{t(language, 'printCanvasZoom')}</span>
+                                {exportMsg && <span className="text-[11px] font-bold text-emerald-300">{exportMsg}</span>}
+                            </div>
                             <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={exportTiff}
+                                    disabled={exportBusy || !layout.placements.length}
+                                    className="h-8 rounded-[8px] border border-[#fff9ec]/35 bg-[#fff9ec] px-3 text-[11px] font-black uppercase tracking-wider text-[#211a1d] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    {exportBusy ? t(language, 'printCanvasExporting') : t(language, 'printCanvasExportTiff')}
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => setZoom((value) => clamp(Number((value - ZOOM_STEP).toFixed(2)), MIN_ZOOM, MAX_ZOOM))}
