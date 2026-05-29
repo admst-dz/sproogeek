@@ -373,9 +373,14 @@ const logoWidthMm = (logo) => clamp(
     MAX_LOGO_WIDTH_MM
 );
 const logoHeightMm = (logo, widthMm) => Math.max(6, widthMm * (logo.heightPx / Math.max(1, logo.widthPx)));
+const formatMmValue = (value) => {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '0,00';
+    return number.toFixed(2).replace('.', ',');
+};
 const logoSizeLabel = (logo) => {
     const width = logoWidthMm(logo);
-    return `${Math.round(width)} × ${Math.round(logoHeightMm(logo, width))} мм`;
+    return `${formatMmValue(width)} × ${formatMmValue(logoHeightMm(logo, width))} мм`;
 };
 
 const expandInstances = (logos) => logos.flatMap((logo, logoIndex) => {
@@ -741,7 +746,7 @@ const packRows = (instances, { sheetWidth, maxLengthM, logoGapMm }) => {
             width: widthLimit,
             height: Math.max(260, Math.ceil(usedHeight)),
             usedWidth,
-            usedHeight: Math.ceil(usedHeight),
+            usedHeight,
             maxLengthMm,
             lengthExceeded: usedHeight > maxLengthMm,
         };
@@ -757,7 +762,7 @@ const packRows = (instances, { sheetWidth, maxLengthM, logoGapMm }) => {
         }, null);
 };
 
-const mmLabel = (value) => `${Math.round(value)} мм`;
+const mmLabel = (value) => `${formatMmValue(value)} мм`;
 
 const QuantityButton = ({ children, onClick, disabled }) => (
     <button
@@ -927,8 +932,8 @@ export const PrintCanvas = ({ onBack }) => {
                     quantity: logo.quantity,
                     width_px: logo.widthPx,
                     height_px: logo.heightPx,
-                    width_mm: Math.round(widthMm),
-                    height_mm: Math.round(logoHeightMm(logo, widthMm)),
+                    width_mm: widthMm,
+                    height_mm: logoHeightMm(logo, widthMm),
                 };
             }),
             placements: layout.placements.map((item) => ({
