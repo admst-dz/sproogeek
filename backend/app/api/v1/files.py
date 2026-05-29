@@ -8,6 +8,7 @@ from urllib.parse import quote, urlsplit, urlunsplit
 import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
+from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -31,8 +32,13 @@ ALLOWED_IMAGE_TYPES = {
     "image/png": ("png", lambda content: content.startswith(b"\x89PNG\r\n\x1a\n")),
     "image/jpeg": ("jpg", lambda content: content.startswith(b"\xff\xd8\xff")),
     "image/webp": ("webp", lambda content: content.startswith(b"RIFF") and content[8:12] == b"WEBP"),
+    "image/tiff": ("tiff", lambda content: content[:4] in {b"II*\x00", b"MM\x00*"}),
+    "image/tif": ("tiff", lambda content: content[:4] in {b"II*\x00", b"MM\x00*"}),
     "application/pdf": ("pdf", lambda content: content[:5] == b"%PDF-"),
 }
+
+TIFF_EXTENSIONS = {".tif", ".tiff"}
+TIFF_CONTENT_TYPES = {"image/tiff", "image/tif"}
 
 PDF_RASTER_MAX_EDGE_PX = 2500
 PDF_RASTER_MAX_DPI = 300
@@ -57,6 +63,32 @@ def _pdf_first_page_png(content: bytes) -> bytes:
         raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Could not rasterize PDF") from exc
+
+
+def _tiff_to_png(content: bytes) -> bytes:
+    """Convert a TIFF logo to browser-friendly PNG while preserving DPI."""
+    try:
+        import io
+
+        out = io.BytesIO()
+        with Image.open(io.BytesIO(content)) as image:
+            image.seek(0)
+            dpi = image.info.get("dpi")
+            if image.mode not in {"RGB", "RGBA"}:
+                has_alpha = image.mode in {"LA", "PA"} or "transparency" in image.info
+                image = image.convert("RGBA" if has_alpha else "RGB")
+            save_kwargs = {}
+            if (
+                isinstance(dpi, tuple)
+                and len(dpi) >= 2
+                and dpi[0]
+                and dpi[1]
+            ):
+                save_kwargs["dpi"] = (float(dpi[0]), float(dpi[1]))
+            image.save(out, format="PNG", **save_kwargs)
+        return out.getvalue()
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Could not convert TIFF") from exc
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(SESSION_DIR, exist_ok=True)
@@ -251,22 +283,32 @@ def _session_payload(session: dict) -> dict:
     return result
 
 
-async def _read_logo_upload(file: UploadFile) -> dict:
+async def _read_logo_upload(file: UploadFile, max_bytes: int | None = settings.max_logo_bytes) -> dict:
     content_type = (file.content_type or "").split(";")[0].lower()
+    original_filename = os.path.basename(file.filename or "")[:160]
+    filename_extension = os.path.splitext(original_filename)[1].lower()
+    if not content_type and filename_extension in TIFF_EXTENSIONS:
+        content_type = "image/tiff"
     file_meta = ALLOWED_IMAGE_TYPES.get(content_type)
     if not file_meta:
         raise HTTPException(status_code=400, detail="Unsupported file format")
 
     extension, validate_signature = file_meta
     content = await file.read()
-    if len(content) > settings.max_logo_bytes:
+    if max_bytes is not None and len(content) > max_bytes:
         raise HTTPException(status_code=413, detail="File is too large")
     if not validate_signature(content):
         raise HTTPException(status_code=400, detail="File content does not match declared type")
-    original_filename = os.path.basename(file.filename or f"logo.{extension}")[:160]
+    if not original_filename:
+        original_filename = f"logo.{extension}"
 
     if content_type == "application/pdf":
         content = await run_in_threadpool(_pdf_first_page_png, content)
+        extension = "png"
+        content_type = "image/png"
+        original_filename = f"{os.path.splitext(original_filename)[0] or 'logo'}.png"
+    elif content_type in TIFF_CONTENT_TYPES:
+        content = await run_in_threadpool(_tiff_to_png, content)
         extension = "png"
         content_type = "image/png"
         original_filename = f"{os.path.splitext(original_filename)[0] or 'logo'}.png"
@@ -380,6 +422,23 @@ async def remove_uploaded_logo_background(
             ),
             "X-Background-Removal-Engine": result.engine,
             "X-Background-Removed-Ratio": f"{result.removed_ratio:.4f}",
+        },
+    )
+
+
+@router.post("/prepare-logo")
+async def prepare_logo_for_browser(file: UploadFile = File(...)):
+    upload = await _read_logo_upload(file, max_bytes=None)
+    output_filename = upload["filename"] or "logo.png"
+    ascii_filename = re.sub(r"[^A-Za-z0-9._-]+", "_", output_filename).strip("._") or "logo.png"
+    return Response(
+        content=upload["content"],
+        media_type=upload["content_type"],
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": (
+                f'inline; filename="{ascii_filename}"; filename*=UTF-8\'\'{quote(output_filename)}'
+            ),
         },
     )
 

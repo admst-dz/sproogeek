@@ -162,7 +162,7 @@ export default {
     "printCanvasSubtitle": "Загружайце набор лагатыпаў, мяняйце колькасць і параўноўвайце расход палатна.",
     "printCanvasAddLogos": "Дадаць лагатыпы",
     "printCanvasUploadCta": "Загрузіць лагатыпы",
-    "printCanvasUploadHint": "PNG, JPG або WebP. Можна некалькі файлаў адразу.",
+    "printCanvasUploadHint": "PNG, JPG, WebP або TIFF. Можна некалькі файлаў адразу.",
     "printCanvasUploadError": "Не атрымалася падрыхтаваць лагатып. Паспрабуйце іншы файл.",
     "printCanvasLogos": "Загружаныя лагатыпы",
     "printCanvasEmpty": "Дадайце першы лагатып, каб убачыць раскладку на палатне.",

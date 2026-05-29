@@ -162,7 +162,7 @@ export default {
     "printCanvasSubtitle": "Upload logo sets, adjust quantities, and compare material usage.",
     "printCanvasAddLogos": "Add logos",
     "printCanvasUploadCta": "Upload logos",
-    "printCanvasUploadHint": "PNG, JPG or WebP. Multiple files are supported.",
+    "printCanvasUploadHint": "PNG, JPG, WebP or TIFF. Multiple files are supported.",
     "printCanvasUploadError": "Could not prepare this logo. Try another file.",
     "printCanvasLogos": "Uploaded logos",
     "printCanvasEmpty": "Add the first logo to preview the print canvas.",

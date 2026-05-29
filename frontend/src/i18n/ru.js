@@ -162,7 +162,7 @@ export default {
     "printCanvasSubtitle": "Загружайте набор логотипов, меняйте количество и сравнивайте расход полотна.",
     "printCanvasAddLogos": "Добавить логотипы",
     "printCanvasUploadCta": "Загрузить логотипы",
-    "printCanvasUploadHint": "PNG, JPG или WebP. Можно сразу несколько файлов.",
+    "printCanvasUploadHint": "PNG, JPG, WebP или TIFF. Можно сразу несколько файлов.",
     "printCanvasUploadError": "Не получилось подготовить логотип. Попробуйте другой файл.",
     "printCanvasLogos": "Загруженные логотипы",
     "printCanvasEmpty": "Добавьте первый логотип, чтобы увидеть раскладку на полотне.",

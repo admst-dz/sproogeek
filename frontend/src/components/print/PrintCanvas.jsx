@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { t } from '../../i18n';
-import { printCanvasApi } from '../../api';
+import { mediaApi, printCanvasApi } from '../../api';
 import { useConfigurator } from '../../store';
 
 const SHEET_WIDTH_OPTIONS_MM = [580, 280];
@@ -12,6 +12,7 @@ const DEFAULT_LOGO_WIDTH_MM = 72;
 const MIN_LOGO_WIDTH_MM = 10;
 const MAX_LOGO_WIDTH_MM = 560;
 const DEFAULT_IMAGE_DPI = 72;
+const LOGO_FILE_ACCEPT = 'image/*,.tif,.tiff';
 const MAX_IMAGE_EDGE = 1400;
 const LOGO_GAP_OPTIONS_MM = [3, 5];
 const DEFAULT_LOGO_GAP_MM = 3;
@@ -165,6 +166,19 @@ const readImageDpi = async (file) => {
 
 const pxToMm = (pixels, dpi) => (pixels / Math.max(1, dpi)) * MM_PER_INCH;
 
+const isTiffFile = (file) => {
+    const type = (file?.type || '').split(';')[0].toLowerCase();
+    const name = (file?.name || '').toLowerCase();
+    return type === 'image/tiff' || type === 'image/tif' || name.endsWith('.tif') || name.endsWith('.tiff');
+};
+
+const prepareBrowserLogoFile = async (file) => {
+    if (!isTiffFile(file)) return file;
+    const { data } = await mediaApi.prepareLogo(file);
+    const baseName = (file?.name || 'logo').replace(/\.[^.]+$/, '') || 'logo';
+    return new File([data], `${baseName}.png`, { type: data.type || 'image/png' });
+};
+
 // PackBits run-length encodes a single scanline (TIFF compression 32773).
 // Encoding is flushed per row, as required by the TIFF spec.
 const packBitsRow = (src) => {
@@ -317,9 +331,10 @@ const makeLogoId = () => (
 );
 
 const prepareLogoFile = async (file) => {
+    const browserFile = await prepareBrowserLogoFile(file);
     const [source, dpi] = await Promise.all([
-        readAsDataURL(file),
-        readImageDpi(file),
+        readAsDataURL(browserFile),
+        readImageDpi(browserFile),
     ]);
     const image = await loadImage(source);
     const sourceWidth = image.naturalWidth || image.width;
@@ -357,7 +372,7 @@ const prepareLogoFile = async (file) => {
     const widthMm = clamp(pxToMm(sourceWidth, dpi.dpiX), MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
     return {
         id: makeLogoId(),
-        name: file.name || 'logo.png',
+        name: file.name || browserFile.name || 'logo.png',
         src: canvas.toDataURL('image/png'),
         widthPx: sourceWidth,
         heightPx: sourceHeight,
@@ -791,7 +806,7 @@ export const PrintCanvas = ({ onBack }) => {
     const [exportMsg, setExportMsg] = useState('');
 
     const addFiles = useCallback(async (fileList) => {
-        const files = Array.from(fileList || []).filter((file) => file?.type?.startsWith('image/'));
+        const files = Array.from(fileList || []).filter((file) => file?.type?.startsWith('image/') || isTiffFile(file));
         if (!files.length) return;
         setBusy(true);
         setError('');
@@ -1018,7 +1033,7 @@ export const PrintCanvas = ({ onBack }) => {
                                 </span>
                                 <span className="mt-3 text-[12px] font-black uppercase tracking-wider">{busy ? t(language, 'loading') : t(language, 'printCanvasUploadCta')}</span>
                                 <span className="mt-1 text-[11px] font-bold text-white/42">{t(language, 'printCanvasUploadHint')}</span>
-                                <input type="file" accept="image/*" multiple className="hidden" onChange={(event) => addFiles(event.target.files)} />
+                                <input type="file" accept={LOGO_FILE_ACCEPT} multiple className="hidden" onChange={(event) => addFiles(event.target.files)} />
                             </label>
 
                             {error && (
