@@ -167,7 +167,7 @@ export default {
     "printCanvasLogos": "Загружаныя лагатыпы",
     "printCanvasEmpty": "Дадайце першы лагатып, каб убачыць раскладку на палатне.",
     "printCanvasQuantity": "Колькасць",
-    "printCanvasLogoSize": "Шырыня, мм",
+    "printCanvasLogoSize": "Памер, мм",
     "printCanvasPreview": "Прагляд",
     "printCanvasSize": "Занятае поле",
     "printCanvasLogoGap": "Адлегласць паміж лагатыпамі",

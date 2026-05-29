@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Column, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.sql import func
 
@@ -15,7 +15,7 @@ class PrintCanvasExport(Base):
     user_email = Column(String, nullable=True)
     filename = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
-    file_size = Column(Integer, nullable=False, default=0)
+    file_size = Column(BigInteger, nullable=False, default=0)
     content_type = Column(String, nullable=False, default="image/tiff")
     sheet_width_mm = Column(Integer, nullable=False)
     used_width_mm = Column(Float, nullable=False)

@@ -11,6 +11,7 @@ const EMPTY_SHEET_HEIGHT_MM = 360;
 const DEFAULT_LOGO_WIDTH_MM = 72;
 const MIN_LOGO_WIDTH_MM = 10;
 const MAX_LOGO_WIDTH_MM = 560;
+const DEFAULT_IMAGE_DPI = 300;
 const MAX_IMAGE_EDGE = 1400;
 const LOGO_GAP_OPTIONS_MM = [3, 5];
 const DEFAULT_LOGO_GAP_MM = 3;
@@ -31,6 +32,13 @@ const readAsDataURL = (file) => new Promise((resolve, reject) => {
     reader.onload = (event) => resolve(event.target.result);
     reader.onerror = reject;
     reader.readAsDataURL(file);
+});
+
+const readAsArrayBuffer = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => resolve(event.target.result);
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
 });
 
 const loadImage = (src) => new Promise((resolve, reject) => {
@@ -68,6 +76,94 @@ const writeTiffEntry = (view, offset, tag, type, count, value) => {
         view.setUint32(offset + 8, value, true);
     }
 };
+
+const readAscii = (bytes, offset, length) => {
+    let value = '';
+    for (let index = 0; index < length; index += 1) {
+        value += String.fromCharCode(bytes[offset + index] || 0);
+    }
+    return value;
+};
+
+const ppmToDpi = (value) => (Number.isFinite(value) && value > 0 ? value * 0.0254 : null);
+
+const resolveDpi = (dpiX, dpiY) => ({
+    dpiX: Number.isFinite(dpiX) && dpiX > 0 ? dpiX : DEFAULT_IMAGE_DPI,
+    dpiY: Number.isFinite(dpiY) && dpiY > 0 ? dpiY : DEFAULT_IMAGE_DPI,
+});
+
+const parsePngDpi = (buffer) => {
+    const bytes = new Uint8Array(buffer);
+    if (
+        bytes.length < 33
+        || bytes[0] !== 0x89
+        || readAscii(bytes, 1, 3) !== 'PNG'
+        || bytes[4] !== 0x0d
+        || bytes[5] !== 0x0a
+        || bytes[6] !== 0x1a
+        || bytes[7] !== 0x0a
+    ) {
+        return null;
+    }
+
+    const view = new DataView(buffer);
+    let offset = 8;
+    while (offset + 12 <= bytes.length) {
+        const length = view.getUint32(offset, false);
+        const type = readAscii(bytes, offset + 4, 4);
+        const dataOffset = offset + 8;
+        if (dataOffset + length + 4 > bytes.length) break;
+        if (type === 'pHYs' && length >= 9 && bytes[dataOffset + 8] === 1) {
+            return resolveDpi(
+                ppmToDpi(view.getUint32(dataOffset, false)),
+                ppmToDpi(view.getUint32(dataOffset + 4, false))
+            );
+        }
+        offset = dataOffset + length + 4;
+    }
+    return null;
+};
+
+const parseJpegDpi = (buffer) => {
+    const bytes = new Uint8Array(buffer);
+    if (bytes.length < 20 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+
+    const view = new DataView(buffer);
+    let offset = 2;
+    while (offset + 4 <= bytes.length) {
+        while (offset < bytes.length && bytes[offset] === 0xff) offset += 1;
+        if (offset >= bytes.length) break;
+        const marker = bytes[offset];
+        offset += 1;
+        if (marker === 0xda || marker === 0xd9) break;
+        if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+        if (offset + 2 > bytes.length) break;
+
+        const length = view.getUint16(offset, false);
+        if (length < 2 || offset + length > bytes.length) break;
+        const dataOffset = offset + 2;
+        if (marker === 0xe0 && length >= 16 && readAscii(bytes, dataOffset, 5) === 'JFIF\0') {
+            const units = bytes[dataOffset + 7];
+            const xDensity = view.getUint16(dataOffset + 8, false);
+            const yDensity = view.getUint16(dataOffset + 10, false);
+            if (units === 1) return resolveDpi(xDensity, yDensity);
+            if (units === 2) return resolveDpi(xDensity * 2.54, yDensity * 2.54);
+        }
+        offset += length;
+    }
+    return null;
+};
+
+const readImageDpi = async (file) => {
+    try {
+        const buffer = await readAsArrayBuffer(file);
+        return parsePngDpi(buffer) || parseJpegDpi(buffer) || resolveDpi();
+    } catch {
+        return resolveDpi();
+    }
+};
+
+const pxToMm = (pixels, dpi) => (pixels / Math.max(1, dpi)) * MM_PER_INCH;
 
 // PackBits run-length encodes a single scanline (TIFF compression 32773).
 // Encoding is flushed per row, as required by the TIFF spec.
@@ -221,7 +317,10 @@ const makeLogoId = () => (
 );
 
 const prepareLogoFile = async (file) => {
-    const source = await readAsDataURL(file);
+    const [source, dpi] = await Promise.all([
+        readAsDataURL(file),
+        readImageDpi(file),
+    ]);
     const image = await loadImage(source);
     const sourceWidth = image.naturalWidth || image.width;
     const sourceHeight = image.naturalHeight || image.height;
@@ -255,22 +354,32 @@ const prepareLogoFile = async (file) => {
     }
 
     const aspect = width / height;
+    const widthMm = clamp(pxToMm(sourceWidth, dpi.dpiX), MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
     return {
         id: makeLogoId(),
         name: file.name || 'logo.png',
         src: canvas.toDataURL('image/png'),
-        widthPx: width,
-        heightPx: height,
+        widthPx: sourceWidth,
+        heightPx: sourceHeight,
         quantity: 1,
-        widthMm: DEFAULT_LOGO_WIDTH_MM,
+        widthMm,
         shape: hasTransparentCorners && aspect > 0.82 && aspect < 1.18 ? 'round' : 'auto',
     };
 };
 
+const logoWidthMm = (logo) => clamp(
+    Number(logo.widthMm) || DEFAULT_LOGO_WIDTH_MM,
+    MIN_LOGO_WIDTH_MM,
+    MAX_LOGO_WIDTH_MM
+);
 const logoHeightMm = (logo, widthMm) => Math.max(6, widthMm * (logo.heightPx / Math.max(1, logo.widthPx)));
+const logoSizeLabel = (logo) => {
+    const width = logoWidthMm(logo);
+    return `${Math.round(width)} × ${Math.round(logoHeightMm(logo, width))} мм`;
+};
 
 const expandInstances = (logos) => logos.flatMap((logo, logoIndex) => {
-    const width = clamp(Number(logo.widthMm) || DEFAULT_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
+    const width = logoWidthMm(logo);
     const height = logoHeightMm(logo, width);
     return Array.from({ length: Math.max(0, Number(logo.quantity) || 0) }, (_, copyIndex) => ({
         id: `${logo.id}-${copyIndex}`,
@@ -811,7 +920,7 @@ export const PrintCanvas = ({ onBack }) => {
             pixel_width: widthPx,
             pixel_height: heightPx,
             logos: logos.map((logo) => {
-                const widthMm = clamp(Number(logo.widthMm) || DEFAULT_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
+                const widthMm = logoWidthMm(logo);
                 return {
                     id: logo.id,
                     name: logo.name,
@@ -959,19 +1068,11 @@ export const PrintCanvas = ({ onBack }) => {
                                             </button>
                                         </div>
                                         <div className="mt-2 flex items-center justify-between gap-2 border-t border-white/8 pt-2">
-                                            <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-white/42">
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-white/42">
                                                 {t(language, 'printCanvasLogoSize')}
-                                                <input
-                                                    type="number"
-                                                    min={MIN_LOGO_WIDTH_MM}
-                                                    max={MAX_LOGO_WIDTH_MM}
-                                                    value={Math.round(logo.widthMm ?? DEFAULT_LOGO_WIDTH_MM)}
-                                                    onChange={(event) => updateLogo(logo.id, { widthMm: clamp(Number(event.target.value) || DEFAULT_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM) })}
-                                                    className="h-8 w-16 rounded-[8px] border border-white/14 bg-[#211a1d] text-center text-[12px] font-black text-white outline-none [color-scheme:dark] focus:border-[#fff9ec]/70"
-                                                />
-                                            </label>
+                                            </span>
                                             <span className="text-[10px] font-bold uppercase tracking-wider text-white/38">
-                                                {Math.round(clamp(Number(logo.widthMm) || DEFAULT_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM))} × {Math.round(logoHeightMm(logo, clamp(Number(logo.widthMm) || DEFAULT_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM)))} мм
+                                                {logoSizeLabel(logo)}
                                             </span>
                                         </div>
                                     </div>

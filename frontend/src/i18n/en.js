@@ -167,7 +167,7 @@ export default {
     "printCanvasLogos": "Uploaded logos",
     "printCanvasEmpty": "Add the first logo to preview the print canvas.",
     "printCanvasQuantity": "Quantity",
-    "printCanvasLogoSize": "Width, mm",
+    "printCanvasLogoSize": "Size, mm",
     "printCanvasPreview": "Preview",
     "printCanvasSize": "Used area",
     "printCanvasLogoGap": "Spacing between logos",
