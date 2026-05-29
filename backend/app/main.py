@@ -107,6 +107,8 @@ class LimitUploadSize(BaseHTTPMiddleware):
         self._max_bytes = max_bytes
 
     async def dispatch(self, request: Request, call_next):
+        if request.url.path in {"/api/v1/print-canvas/exports", "/api/v1/files/prepare-logo"}:
+            return await call_next(request)
         if request.method in {"POST", "PUT", "PATCH"}:
             content_length = request.headers.get("content-length")
             try:

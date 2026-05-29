@@ -33,6 +33,7 @@ EXPORT_DIR = "uploads/print_canvas_exports"
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
 TIFF_SIGNATURES = (b"II*\x00", b"MM\x00*")
+UPLOAD_CHUNK_SIZE = 1024 * 1024
 
 
 def _ensure_can_use_print_canvas(current_user) -> None:
@@ -47,17 +48,43 @@ def _is_tiff(content: bytes) -> bool:
     return len(content) >= 4 and content[:4] in TIFF_SIGNATURES
 
 
-def _to_cmyk_tiff(content: bytes) -> bytes:
-    """Convert the RGB export to CMYK for print. Returns original bytes on
-    failure or when the sheet is too large to transcode safely (avoids OOM)."""
+async def _save_tiff_upload(file: UploadFile, file_path: str) -> int:
+    first_bytes = await file.read(4)
+    if not _is_tiff(first_bytes):
+        raise HTTPException(status_code=400, detail="File content is not TIFF")
+
+    total_size = 0
     try:
-        with Image.open(io.BytesIO(content)) as img:
+        async with aiofiles.open(file_path, "wb") as out_file:
+            await out_file.write(first_bytes)
+            total_size += len(first_bytes)
+            while True:
+                chunk = await file.read(UPLOAD_CHUNK_SIZE)
+                if not chunk:
+                    break
+                await out_file.write(chunk)
+                total_size += len(chunk)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="Could not save TIFF export") from exc
+
+    return total_size
+
+
+def _to_cmyk_tiff_from_path(file_path: str) -> bytes | None:
+    """Convert the RGB export to CMYK for print.
+
+    Returns None when the sheet is too large to transcode safely, so the
+    already saved original TIFF can be kept without loading it into memory.
+    """
+    previous_limit = Image.MAX_IMAGE_PIXELS
+    try:
+        Image.MAX_IMAGE_PIXELS = None
+        with Image.open(file_path) as img:
             width, height = img.size
             if width * height > settings.print_canvas_cmyk_max_pixels:
                 logger.warning("print canvas too large for CMYK conversion: %sx%s", width, height)
-                return content
+                return None
 
-            previous_limit = Image.MAX_IMAGE_PIXELS
             Image.MAX_IMAGE_PIXELS = max(previous_limit or 0, width * height + 1)
             try:
                 rgb = img.convert("RGB")
@@ -80,7 +107,9 @@ def _to_cmyk_tiff(content: bytes) -> bytes:
     except Exception as exc:  # noqa: BLE001 - never let color conversion break export
         logger.exception("CMYK conversion failed, keeping RGB export")
         sentry_sdk.capture_exception(exc)
-        return content
+        return None
+    finally:
+        Image.MAX_IMAGE_PIXELS = previous_limit
 
 
 def _number(value: Any, default: float = 0) -> float:
@@ -95,6 +124,10 @@ def _int_number(value: Any, default: int = 0) -> int:
         return int(float(value))
     except (TypeError, ValueError):
         return default
+
+
+def _format_mm(value: Any) -> str:
+    return f"{_number(value, 0):.2f}".replace(".", ",")
 
 
 def _metadata_from_form(raw: str) -> dict:
@@ -115,7 +148,7 @@ def _email_body(item, metadata: dict) -> str:
             continue
         size_mm = ""
         if logo.get("width_mm") and logo.get("height_mm"):
-            size_mm = f" — {logo.get('width_mm')} x {logo.get('height_mm')} мм"
+            size_mm = f" — {_format_mm(logo.get('width_mm'))} x {_format_mm(logo.get('height_mm'))} мм"
         logo_lines.append(
             f"- {logo.get('name') or 'logo'}: {logo.get('quantity', 0)} шт., "
             f"{logo.get('width_px', 0)} x {logo.get('height_px', 0)} px{size_mm}"
@@ -133,9 +166,7 @@ def _email_body(item, metadata: dict) -> str:
         "",
         "Параметры полотна:",
         f"- ширина полотна: {item.sheet_width_mm} мм",
-        f"- занятая ширина: {round(item.used_width_mm)} мм",
-        f"- использованная длина: {round(item.used_height_mm)} мм",
-        f"- максимальная длина рулона: {item.max_length_m} м",
+        f"- занятое поле: {_format_mm(item.used_width_mm)} x {_format_mm(item.used_height_mm)} мм",
         f"- расстояние между логотипами: {item.logo_gap_mm:g} мм",
         f"- элементов: {item.items_count}",
         f"- плотность: {item.density}%",
@@ -186,23 +217,23 @@ async def create_print_canvas_export(
     parsed = _metadata_from_form(metadata)
 
     content_type = (file.content_type or "").split(";")[0].lower()
-    if content_type not in {"image/tiff", "image/tif", "application/octet-stream"}:
+    if content_type not in {"", "image/tiff", "image/tif", "image/x-tiff", "application/octet-stream"}:
         raise HTTPException(status_code=400, detail="Only TIFF export is supported")
-
-    content = await file.read()
-    if not _is_tiff(content):
-        raise HTTPException(status_code=400, detail="File content is not TIFF")
-    if len(content) > settings.max_print_canvas_tiff_bytes:
-        raise HTTPException(status_code=413, detail="TIFF export is too large")
-
-    # Print is produced in CMYK — transcode the uploaded RGB sheet on the backend.
-    content = await run_in_threadpool(_to_cmyk_tiff, content)
 
     export_id = uuid.uuid4()
     filename = f"print-canvas-{export_id.hex}.tiff"
     file_path = os.path.join(EXPORT_DIR, filename)
-    async with aiofiles.open(file_path, "wb") as out_file:
-        await out_file.write(content)
+
+    file_size = await _save_tiff_upload(file, file_path)
+
+    # Print is produced in CMYK when the sheet can be transcoded safely.
+    converted = await run_in_threadpool(_to_cmyk_tiff_from_path, file_path)
+    if converted is not None:
+        async with aiofiles.open(file_path, "wb") as out_file:
+            await out_file.write(converted)
+        file_size = len(converted)
+    else:
+        file_size = os.path.getsize(file_path)
 
     item = await crud_print_canvas.create_export(db, {
         "id": export_id,
@@ -210,7 +241,7 @@ async def create_print_canvas_export(
         "user_email": current_user.email,
         "filename": filename,
         "file_path": file_path,
-        "file_size": len(content),
+        "file_size": file_size,
         "content_type": "image/tiff",
         "sheet_width_mm": _int_number(parsed.get("sheet_width_mm"), 0),
         "used_width_mm": _number(parsed.get("used_width_mm"), 0),
@@ -244,7 +275,6 @@ async def create_print_canvas_export(
             "sheet_width_mm": item.sheet_width_mm,
             "used_width_mm": item.used_width_mm,
             "used_height_mm": item.used_height_mm,
-            "max_length_m": item.max_length_m,
             "logo_gap_mm": item.logo_gap_mm,
             "items_count": item.items_count,
             "density": item.density,

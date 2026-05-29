@@ -74,7 +74,6 @@ class Settings(BaseSettings):
 
     max_upload_bytes: int = Field(25_000_000, alias="MAX_UPLOAD_BYTES")
     max_logo_bytes: int = Field(25_000_000, alias="MAX_LOGO_BYTES")
-    max_print_canvas_tiff_bytes: int = Field(600_000_000, alias="MAX_PRINT_CANVAS_TIFF_BYTES")
     background_removal_max_edge: int = Field(2400, alias="BACKGROUND_REMOVAL_MAX_EDGE")
     # Print export is delivered in CMYK. Conversion runs on the backend; an
     # optional ICC profile gives color-accurate output, otherwise Pillow's

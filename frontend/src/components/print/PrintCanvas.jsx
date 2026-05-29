@@ -1,16 +1,16 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { t } from '../../i18n';
-import { printCanvasApi } from '../../api';
+import { mediaApi, printCanvasApi } from '../../api';
 import { useConfigurator } from '../../store';
 
 const SHEET_WIDTH_OPTIONS_MM = [580, 280];
 const DEFAULT_SHEET_WIDTH_MM = 580;
-const SHEET_LENGTH_OPTIONS_M = [25, 50, 100];
-const DEFAULT_SHEET_LENGTH_M = 25;
 const EMPTY_SHEET_HEIGHT_MM = 360;
 const DEFAULT_LOGO_WIDTH_MM = 72;
 const MIN_LOGO_WIDTH_MM = 10;
 const MAX_LOGO_WIDTH_MM = 560;
+const DEFAULT_IMAGE_DPI = 72;
+const LOGO_FILE_ACCEPT = 'image/*,.tif,.tiff';
 const MAX_IMAGE_EDGE = 1400;
 const LOGO_GAP_OPTIONS_MM = [3, 5];
 const DEFAULT_LOGO_GAP_MM = 3;
@@ -31,6 +31,13 @@ const readAsDataURL = (file) => new Promise((resolve, reject) => {
     reader.onload = (event) => resolve(event.target.result);
     reader.onerror = reject;
     reader.readAsDataURL(file);
+});
+
+const readAsArrayBuffer = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => resolve(event.target.result);
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
 });
 
 const loadImage = (src) => new Promise((resolve, reject) => {
@@ -67,6 +74,107 @@ const writeTiffEntry = (view, offset, tag, type, count, value) => {
     } else {
         view.setUint32(offset + 8, value, true);
     }
+};
+
+const readAscii = (bytes, offset, length) => {
+    let value = '';
+    for (let index = 0; index < length; index += 1) {
+        value += String.fromCharCode(bytes[offset + index] || 0);
+    }
+    return value;
+};
+
+const ppmToDpi = (value) => (Number.isFinite(value) && value > 0 ? value * 0.0254 : null);
+
+const resolveDpi = (dpiX, dpiY) => ({
+    dpiX: Number.isFinite(dpiX) && dpiX > 0 ? dpiX : DEFAULT_IMAGE_DPI,
+    dpiY: Number.isFinite(dpiY) && dpiY > 0 ? dpiY : DEFAULT_IMAGE_DPI,
+});
+
+const parsePngDpi = (buffer) => {
+    const bytes = new Uint8Array(buffer);
+    if (
+        bytes.length < 33
+        || bytes[0] !== 0x89
+        || readAscii(bytes, 1, 3) !== 'PNG'
+        || bytes[4] !== 0x0d
+        || bytes[5] !== 0x0a
+        || bytes[6] !== 0x1a
+        || bytes[7] !== 0x0a
+    ) {
+        return null;
+    }
+
+    const view = new DataView(buffer);
+    let offset = 8;
+    while (offset + 12 <= bytes.length) {
+        const length = view.getUint32(offset, false);
+        const type = readAscii(bytes, offset + 4, 4);
+        const dataOffset = offset + 8;
+        if (dataOffset + length + 4 > bytes.length) break;
+        if (type === 'pHYs' && length >= 9 && bytes[dataOffset + 8] === 1) {
+            return resolveDpi(
+                ppmToDpi(view.getUint32(dataOffset, false)),
+                ppmToDpi(view.getUint32(dataOffset + 4, false))
+            );
+        }
+        offset = dataOffset + length + 4;
+    }
+    return null;
+};
+
+const parseJpegDpi = (buffer) => {
+    const bytes = new Uint8Array(buffer);
+    if (bytes.length < 20 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+
+    const view = new DataView(buffer);
+    let offset = 2;
+    while (offset + 4 <= bytes.length) {
+        while (offset < bytes.length && bytes[offset] === 0xff) offset += 1;
+        if (offset >= bytes.length) break;
+        const marker = bytes[offset];
+        offset += 1;
+        if (marker === 0xda || marker === 0xd9) break;
+        if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+        if (offset + 2 > bytes.length) break;
+
+        const length = view.getUint16(offset, false);
+        if (length < 2 || offset + length > bytes.length) break;
+        const dataOffset = offset + 2;
+        if (marker === 0xe0 && length >= 16 && readAscii(bytes, dataOffset, 5) === 'JFIF\0') {
+            const units = bytes[dataOffset + 7];
+            const xDensity = view.getUint16(dataOffset + 8, false);
+            const yDensity = view.getUint16(dataOffset + 10, false);
+            if (units === 1) return resolveDpi(xDensity, yDensity);
+            if (units === 2) return resolveDpi(xDensity * 2.54, yDensity * 2.54);
+        }
+        offset += length;
+    }
+    return null;
+};
+
+const readImageDpi = async (file) => {
+    try {
+        const buffer = await readAsArrayBuffer(file);
+        return parsePngDpi(buffer) || parseJpegDpi(buffer) || resolveDpi();
+    } catch {
+        return resolveDpi();
+    }
+};
+
+const pxToMm = (pixels, dpi) => (pixels / Math.max(1, dpi)) * MM_PER_INCH;
+
+const isTiffFile = (file) => {
+    const type = (file?.type || '').split(';')[0].toLowerCase();
+    const name = (file?.name || '').toLowerCase();
+    return type === 'image/tiff' || type === 'image/tif' || name.endsWith('.tif') || name.endsWith('.tiff');
+};
+
+const prepareBrowserLogoFile = async (file) => {
+    if (!isTiffFile(file)) return file;
+    const { data } = await mediaApi.prepareLogo(file);
+    const baseName = (file?.name || 'logo').replace(/\.[^.]+$/, '') || 'logo';
+    return new File([data], `${baseName}.png`, { type: data.type || 'image/png' });
 };
 
 // PackBits run-length encodes a single scanline (TIFF compression 32773).
@@ -221,7 +329,11 @@ const makeLogoId = () => (
 );
 
 const prepareLogoFile = async (file) => {
-    const source = await readAsDataURL(file);
+    const browserFile = await prepareBrowserLogoFile(file);
+    const [source, dpi] = await Promise.all([
+        readAsDataURL(browserFile),
+        readImageDpi(browserFile),
+    ]);
     const image = await loadImage(source);
     const sourceWidth = image.naturalWidth || image.width;
     const sourceHeight = image.naturalHeight || image.height;
@@ -255,22 +367,37 @@ const prepareLogoFile = async (file) => {
     }
 
     const aspect = width / height;
+    const widthMm = clamp(pxToMm(sourceWidth, dpi.dpiX), MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
     return {
         id: makeLogoId(),
-        name: file.name || 'logo.png',
+        name: file.name || browserFile.name || 'logo.png',
         src: canvas.toDataURL('image/png'),
-        widthPx: width,
-        heightPx: height,
+        widthPx: sourceWidth,
+        heightPx: sourceHeight,
         quantity: 1,
-        widthMm: DEFAULT_LOGO_WIDTH_MM,
+        widthMm,
         shape: hasTransparentCorners && aspect > 0.82 && aspect < 1.18 ? 'round' : 'auto',
     };
 };
 
+const logoWidthMm = (logo) => clamp(
+    Number(logo.widthMm) || DEFAULT_LOGO_WIDTH_MM,
+    MIN_LOGO_WIDTH_MM,
+    MAX_LOGO_WIDTH_MM
+);
 const logoHeightMm = (logo, widthMm) => Math.max(6, widthMm * (logo.heightPx / Math.max(1, logo.widthPx)));
+const formatMmValue = (value) => {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '0,00';
+    return number.toFixed(2).replace('.', ',');
+};
+const logoSizeLabel = (logo) => {
+    const width = logoWidthMm(logo);
+    return `${formatMmValue(width)} × ${formatMmValue(logoHeightMm(logo, width))} мм`;
+};
 
 const expandInstances = (logos) => logos.flatMap((logo, logoIndex) => {
-    const width = clamp(Number(logo.widthMm) || DEFAULT_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
+    const width = logoWidthMm(logo);
     const height = logoHeightMm(logo, width);
     return Array.from({ length: Math.max(0, Number(logo.quantity) || 0) }, (_, copyIndex) => ({
         id: `${logo.id}-${copyIndex}`,
@@ -288,6 +415,22 @@ const expandInstances = (logos) => logos.flatMap((logo, logoIndex) => {
 const getItemFootprint = (item, rotated = false) => {
     const drawWidth = rotated ? item.height : item.width;
     const drawHeight = rotated ? item.width : item.height;
+    return {
+        drawWidth,
+        drawHeight,
+        width: drawWidth,
+        height: drawHeight,
+    };
+};
+
+const constrainFootprint = (footprint, maxWidth, maxHeight = Infinity) => {
+    const scale = Math.min(
+        1,
+        maxWidth / Math.max(1, footprint.drawWidth),
+        maxHeight / Math.max(1, footprint.drawHeight)
+    );
+    const drawWidth = footprint.drawWidth * scale;
+    const drawHeight = footprint.drawHeight * scale;
     return {
         drawWidth,
         drawHeight,
@@ -374,12 +517,94 @@ const applyPlacementToFreeRects = (freeRects, usedRect) => {
     return pruneFreeRects(splitRects);
 };
 
-const packRows = (instances, { sheetWidth, maxLengthM, logoGapMm }) => {
+const uniqueNumbers = (values) => values.reduce((result, value) => {
+    if (!Number.isFinite(value)) return result;
+    if (!result.some((item) => Math.abs(item - value) < RECT_EPSILON)) {
+        result.push(value);
+    }
+    return result;
+}, []);
+
+const comparePlacementRanks = (a, b) => {
+    for (let index = 0; index < a.length; index += 1) {
+        const delta = a[index] - b[index];
+        if (Math.abs(delta) > RECT_EPSILON) return delta;
+    }
+    return 0;
+};
+
+const overlapsOnX = (a, b, gap) => (
+    a.x < b.x + b.drawWidth + gap - RECT_EPSILON
+    && a.x + a.drawWidth + gap > b.x + RECT_EPSILON
+);
+
+const overlapsOnY = (a, b, gap) => (
+    a.y < b.y + b.drawHeight + gap - RECT_EPSILON
+    && a.y + a.drawHeight + gap > b.y + RECT_EPSILON
+);
+
+const compactPlacements = (placements, { gap, sheetPadding, widthLimit, maxLengthMm }) => {
+    const compacted = placements.map((item) => ({ ...item }));
+    const ordered = [...compacted].sort((a, b) => (a.y - b.y) || (a.x - b.x));
+    const maxRight = widthLimit - sheetPadding;
+    const maxBottom = maxLengthMm - sheetPadding;
+
+    for (let pass = 0; pass < 3; pass += 1) {
+        let moved = false;
+        ordered.forEach((item) => {
+            const others = compacted.filter((other) => other.id !== item.id);
+            const maxX = Math.max(sheetPadding, maxRight - item.drawWidth);
+            const maxY = Math.max(sheetPadding, maxBottom - item.drawHeight);
+
+            let nextY = sheetPadding;
+            others.forEach((other) => {
+                if (
+                    overlapsOnX(item, other, gap)
+                    && other.y + other.drawHeight + gap <= item.y + RECT_EPSILON
+                ) {
+                    nextY = Math.max(nextY, other.y + other.drawHeight + gap);
+                }
+            });
+            nextY = clamp(nextY, sheetPadding, Math.min(item.y, maxY));
+            if (nextY < item.y - RECT_EPSILON) {
+                item.y = nextY;
+                moved = true;
+            }
+
+            let nextX = sheetPadding;
+            others.forEach((other) => {
+                if (
+                    overlapsOnY(item, other, gap)
+                    && other.x + other.drawWidth + gap <= item.x + RECT_EPSILON
+                ) {
+                    nextX = Math.max(nextX, other.x + other.drawWidth + gap);
+                }
+            });
+            nextX = clamp(nextX, sheetPadding, Math.min(item.x, maxX));
+            if (nextX < item.x - RECT_EPSILON) {
+                item.x = nextX;
+                moved = true;
+            }
+        });
+        if (!moved) break;
+    }
+
+    return compacted;
+};
+
+const packRows = (instances, { sheetWidth, logoGapMm }) => {
     const gap = LOGO_GAP_OPTIONS_MM.includes(Number(logoGapMm)) ? Number(logoGapMm) : DEFAULT_LOGO_GAP_MM;
     const sheetPadding = SHEET_PADDING_MM;
     const widthLimit = SHEET_WIDTH_OPTIONS_MM.includes(Number(sheetWidth)) ? Number(sheetWidth) : DEFAULT_SHEET_WIDTH_MM;
-    const maxLengthMm = (SHEET_LENGTH_OPTIONS_M.includes(Number(maxLengthM)) ? Number(maxLengthM) : DEFAULT_SHEET_LENGTH_M) * 1000;
+    const maxItemHeight = instances.length
+        ? Math.max(...instances.map((item) => Math.max(item.width, item.height)))
+        : EMPTY_SHEET_HEIGHT_MM;
+    const maxLengthMm = Math.max(
+        EMPTY_SHEET_HEIGHT_MM,
+        SHEET_PADDING_MM * 2 + instances.length * (maxItemHeight + gap)
+    );
     const innerWidthLimit = Math.max(1, widthLimit - sheetPadding * 2);
+    const innerHeightLimit = Math.max(1, maxLengthMm - sheetPadding * 2);
     const byArea = (a, b) => {
         const areaDelta = (b.width * b.height) - (a.width * a.height);
         if (Math.abs(areaDelta) > 0.1) return areaDelta;
@@ -411,9 +636,19 @@ const packRows = (instances, { sheetWidth, maxLengthM, logoGapMm }) => {
             ));
 
             let best = null;
+            const currentRight = placements.length
+                ? Math.max(...placements.map((placed) => placed.x + placed.drawWidth))
+                : sheetPadding;
+            const currentBottom = placements.length
+                ? Math.max(...placements.map((placed) => placed.y + placed.drawHeight))
+                : sheetPadding;
             orientationOptions.forEach((rotated) => {
-                const footprint = getItemFootprint(item, rotated);
-                const drawWidth = Math.min(footprint.drawWidth, innerWidthLimit);
+                const footprint = constrainFootprint(
+                    getItemFootprint(item, rotated),
+                    innerWidthLimit,
+                    innerHeightLimit
+                );
+                const drawWidth = footprint.drawWidth;
                 const drawHeight = footprint.drawHeight;
 
                 freeRects.forEach((rect) => {
@@ -421,43 +656,69 @@ const packRows = (instances, { sheetWidth, maxLengthM, logoGapMm }) => {
 
                     const maxRight = widthLimit - sheetPadding;
                     const maxBottom = maxLengthMm - sheetPadding;
-                    const placeWidth = Math.min(drawWidth + gap, maxRight - rect.x);
-                    const placeHeight = Math.min(drawHeight + gap, maxBottom - rect.y);
-                    if (placeWidth > rect.width + RECT_EPSILON || placeHeight > rect.height + RECT_EPSILON) return;
+                    const basePlaceWidth = drawWidth + gap <= rect.width + RECT_EPSILON ? drawWidth + gap : drawWidth;
+                    const basePlaceHeight = drawHeight + gap <= rect.height + RECT_EPSILON ? drawHeight + gap : drawHeight;
+                    if (basePlaceWidth > rect.width + RECT_EPSILON || basePlaceHeight > rect.height + RECT_EPSILON) return;
 
-                    const usedBottom = rect.y + drawHeight;
-                    const shortSideWaste = Math.min(rect.width - placeWidth, rect.height - placeHeight);
-                    const longSideWaste = Math.max(rect.width - placeWidth, rect.height - placeHeight);
-                    const areaWaste = (rect.width * rect.height) - (placeWidth * placeHeight);
-                    const rotationBias = rotated && item.width / Math.max(1, item.height) > 2.2
-                        ? -Math.max(0, item.width - item.height) * 0.08
-                        : rotated ? 0.04 : 0;
-                    const next = {
-                        x: rect.x,
-                        y: rect.y,
-                        score: usedBottom + rotationBias,
-                        shortSideWaste,
-                        longSideWaste,
-                        areaWaste,
-                        placeWidth,
-                        placeHeight,
-                        drawWidth: footprint.drawWidth,
-                        drawHeight: footprint.drawHeight,
-                        rotated,
-                    };
-                    const isBetter = !best
-                        || next.score < best.score - RECT_EPSILON
-                        || (Math.abs(next.score - best.score) < RECT_EPSILON && next.shortSideWaste < best.shortSideWaste - RECT_EPSILON)
-                        || (Math.abs(next.score - best.score) < RECT_EPSILON && Math.abs(next.shortSideWaste - best.shortSideWaste) < RECT_EPSILON && next.longSideWaste < best.longSideWaste - RECT_EPSILON)
-                        || (Math.abs(next.score - best.score) < RECT_EPSILON && Math.abs(next.shortSideWaste - best.shortSideWaste) < RECT_EPSILON && Math.abs(next.longSideWaste - best.longSideWaste) < RECT_EPSILON && next.areaWaste < best.areaWaste - RECT_EPSILON)
-                        || (Math.abs(next.score - best.score) < RECT_EPSILON && Math.abs(next.shortSideWaste - best.shortSideWaste) < RECT_EPSILON && Math.abs(next.longSideWaste - best.longSideWaste) < RECT_EPSILON && Math.abs(next.areaWaste - best.areaWaste) < RECT_EPSILON && next.x < best.x);
-                    if (isBetter) {
-                        best = next;
-                    }
+                    const xPositions = uniqueNumbers([
+                        rect.x,
+                        rect.x + rect.width - basePlaceWidth,
+                    ]);
+                    const yPositions = uniqueNumbers([rect.y]);
+
+                    yPositions.forEach((y) => {
+                        xPositions.forEach((x) => {
+                            if (x < sheetPadding - RECT_EPSILON || y < sheetPadding - RECT_EPSILON) return;
+                            if (x + drawWidth > maxRight + RECT_EPSILON || y + drawHeight > maxBottom + RECT_EPSILON) return;
+
+                            const placeWidth = Math.min(basePlaceWidth, maxRight - x);
+                            const placeHeight = Math.min(basePlaceHeight, maxBottom - y);
+                            if (placeWidth < drawWidth - RECT_EPSILON || placeHeight < drawHeight - RECT_EPSILON) return;
+                            if (x + placeWidth > rect.x + rect.width + RECT_EPSILON) return;
+                            if (y + placeHeight > rect.y + rect.height + RECT_EPSILON) return;
+
+                            const prospectiveRight = Math.max(currentRight, x + drawWidth);
+                            const prospectiveBottom = Math.max(currentBottom, y + drawHeight);
+                            const heightGrowth = Math.max(0, prospectiveBottom - currentBottom);
+                            const widthGrowth = Math.max(0, prospectiveRight - currentRight);
+                            const shortSideWaste = Math.min(rect.width - placeWidth, rect.height - placeHeight);
+                            const longSideWaste = Math.max(rect.width - placeWidth, rect.height - placeHeight);
+                            const areaWaste = (rect.width * rect.height) - (placeWidth * placeHeight);
+                            const rotationCost = rotated ? 0.04 : 0;
+                            const next = {
+                                x,
+                                y,
+                                rank: [
+                                    prospectiveBottom,
+                                    heightGrowth,
+                                    shortSideWaste,
+                                    longSideWaste,
+                                    areaWaste,
+                                    widthGrowth,
+                                    prospectiveRight,
+                                    rotationCost,
+                                    y,
+                                    x,
+                                ],
+                                placeWidth,
+                                placeHeight,
+                                drawWidth: footprint.drawWidth,
+                                drawHeight: footprint.drawHeight,
+                                rotated,
+                            };
+                            if (!best || comparePlacementRanks(next.rank, best.rank) < 0) {
+                                best = next;
+                            }
+                        });
+                    });
                 });
             });
 
-            const fallbackFootprint = getItemFootprint(item, false);
+            const fallbackFootprint = constrainFootprint(
+                getItemFootprint(item, false),
+                innerWidthLimit,
+                innerHeightLimit
+            );
             const placement = best || {
                 x: sheetPadding,
                 y: placements.length
@@ -487,20 +748,25 @@ const packRows = (instances, { sheetWidth, maxLengthM, logoGapMm }) => {
             });
         });
 
-        const usedHeight = placements.length
-            ? Math.max(...placements.map((item) => item.y + item.drawHeight)) + sheetPadding
+        const compactedPlacements = compactPlacements(placements, {
+            gap,
+            sheetPadding,
+            widthLimit,
+            maxLengthMm,
+        });
+        const usedHeight = compactedPlacements.length
+            ? Math.max(...compactedPlacements.map((item) => item.y + item.drawHeight)) + sheetPadding
             : EMPTY_SHEET_HEIGHT_MM;
-        const usedWidth = placements.length
-            ? Math.min(widthLimit, Math.max(...placements.map((item) => item.x + item.drawWidth)) + sheetPadding)
+        const usedWidth = compactedPlacements.length
+            ? Math.min(widthLimit, Math.max(...compactedPlacements.map((item) => item.x + item.drawWidth)) + sheetPadding)
             : widthLimit;
         return {
-            placements,
+            placements: compactedPlacements,
             width: widthLimit,
             height: Math.max(260, Math.ceil(usedHeight)),
             usedWidth,
-            usedHeight: Math.ceil(usedHeight),
+            usedHeight,
             maxLengthMm,
-            lengthExceeded: usedHeight > maxLengthMm,
         };
     };
 
@@ -514,7 +780,7 @@ const packRows = (instances, { sheetWidth, maxLengthM, logoGapMm }) => {
         }, null);
 };
 
-const mmLabel = (value) => `${Math.round(value)} мм`;
+const mmLabel = (value) => `${formatMmValue(value)} мм`;
 
 const QuantityButton = ({ children, onClick, disabled }) => (
     <button
@@ -534,7 +800,6 @@ export const PrintCanvas = ({ onBack }) => {
     const [logos, setLogos] = useState([]);
     const [logoGapMm, setLogoGapMm] = useState(DEFAULT_LOGO_GAP_MM);
     const [sheetWidthMm, setSheetWidthMm] = useState(DEFAULT_SHEET_WIDTH_MM);
-    const [sheetLengthM, setSheetLengthM] = useState(DEFAULT_SHEET_LENGTH_M);
     const [zoom, setZoom] = useState(1);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
@@ -543,7 +808,7 @@ export const PrintCanvas = ({ onBack }) => {
     const [exportMsg, setExportMsg] = useState('');
 
     const addFiles = useCallback(async (fileList) => {
-        const files = Array.from(fileList || []).filter((file) => file?.type?.startsWith('image/'));
+        const files = Array.from(fileList || []).filter((file) => file?.type?.startsWith('image/') || isTiffFile(file));
         if (!files.length) return;
         setBusy(true);
         setError('');
@@ -604,13 +869,13 @@ export const PrintCanvas = ({ onBack }) => {
 
     const instances = useMemo(() => expandInstances(logos), [logos]);
     const layout = useMemo(
-        () => packRows(instances, { sheetWidth: sheetWidthMm, maxLengthM: sheetLengthM, logoGapMm }),
-        [instances, logoGapMm, sheetLengthM, sheetWidthMm]
+        () => packRows(instances, { sheetWidth: sheetWidthMm, logoGapMm }),
+        [instances, logoGapMm, sheetWidthMm]
     );
     const previewFitScale = Math.min(1, 1080 / layout.width);
     const previewScale = previewFitScale * zoom;
     const density = layout.placements.length
-        ? Math.round((layout.placements.reduce((sum, item) => sum + item.width * item.height, 0) / (layout.width * layout.height)) * 100)
+        ? Math.round((layout.placements.reduce((sum, item) => sum + item.drawWidth * item.drawHeight, 0) / (layout.width * layout.height)) * 100)
         : 0;
 
     const buildTiffExport = useCallback(async () => {
@@ -669,7 +934,7 @@ export const PrintCanvas = ({ onBack }) => {
             sheet_width_mm: layout.width,
             used_width_mm: layout.usedWidth,
             used_height_mm: layout.usedHeight,
-            max_length_m: sheetLengthM,
+            max_length_m: Math.ceil(layout.usedHeight / 1000),
             logo_gap_mm: logoGapMm,
             items_count: layout.placements.length,
             density,
@@ -677,15 +942,15 @@ export const PrintCanvas = ({ onBack }) => {
             pixel_width: widthPx,
             pixel_height: heightPx,
             logos: logos.map((logo) => {
-                const widthMm = clamp(Number(logo.widthMm) || DEFAULT_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
+                const widthMm = logoWidthMm(logo);
                 return {
                     id: logo.id,
                     name: logo.name,
                     quantity: logo.quantity,
                     width_px: logo.widthPx,
                     height_px: logo.heightPx,
-                    width_mm: Math.round(widthMm),
-                    height_mm: Math.round(logoHeightMm(logo, widthMm)),
+                    width_mm: widthMm,
+                    height_mm: logoHeightMm(logo, widthMm),
                 };
             }),
             placements: layout.placements.map((item) => ({
@@ -701,7 +966,7 @@ export const PrintCanvas = ({ onBack }) => {
         };
 
         return { blob, metadata };
-    }, [density, layout, logoGapMm, logos, sheetLengthM]);
+    }, [density, layout, logoGapMm, logos]);
 
     const exportTiff = useCallback(async () => {
         setExportBusy(true);
@@ -770,7 +1035,7 @@ export const PrintCanvas = ({ onBack }) => {
                                 </span>
                                 <span className="mt-3 text-[12px] font-black uppercase tracking-wider">{busy ? t(language, 'loading') : t(language, 'printCanvasUploadCta')}</span>
                                 <span className="mt-1 text-[11px] font-bold text-white/42">{t(language, 'printCanvasUploadHint')}</span>
-                                <input type="file" accept="image/*" multiple className="hidden" onChange={(event) => addFiles(event.target.files)} />
+                                <input type="file" accept={LOGO_FILE_ACCEPT} multiple className="hidden" onChange={(event) => addFiles(event.target.files)} />
                             </label>
 
                             {error && (
@@ -825,19 +1090,11 @@ export const PrintCanvas = ({ onBack }) => {
                                             </button>
                                         </div>
                                         <div className="mt-2 flex items-center justify-between gap-2 border-t border-white/8 pt-2">
-                                            <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-white/42">
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-white/42">
                                                 {t(language, 'printCanvasLogoSize')}
-                                                <input
-                                                    type="number"
-                                                    min={MIN_LOGO_WIDTH_MM}
-                                                    max={MAX_LOGO_WIDTH_MM}
-                                                    value={Math.round(logo.widthMm ?? DEFAULT_LOGO_WIDTH_MM)}
-                                                    onChange={(event) => updateLogo(logo.id, { widthMm: clamp(Number(event.target.value) || DEFAULT_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM) })}
-                                                    className="h-8 w-16 rounded-[8px] border border-white/14 bg-[#211a1d] text-center text-[12px] font-black text-white outline-none [color-scheme:dark] focus:border-[#fff9ec]/70"
-                                                />
-                                            </label>
+                                            </span>
                                             <span className="text-[10px] font-bold uppercase tracking-wider text-white/38">
-                                                {Math.round(clamp(Number(logo.widthMm) || DEFAULT_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM))} × {Math.round(logoHeightMm(logo, clamp(Number(logo.widthMm) || DEFAULT_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM)))} мм
+                                                {logoSizeLabel(logo)}
                                             </span>
                                         </div>
                                     </div>
@@ -875,26 +1132,9 @@ export const PrintCanvas = ({ onBack }) => {
                                             </button>
                                         ))}
                                     </div>
-                                    <div className="grid min-w-0 grid-cols-3 gap-1" aria-label={t(language, 'printCanvasSheetLength')}>
-                                        {SHEET_LENGTH_OPTIONS_M.map((length) => (
-                                            <button
-                                                key={length}
-                                                type="button"
-                                                onClick={() => setSheetLengthM(length)}
-                                                className="h-8 rounded-[8px] border px-2 text-[12px] font-black transition"
-                                                style={{
-                                                    borderColor: sheetLengthM === length ? '#fff9ec' : 'rgba(255,255,255,0.14)',
-                                                    backgroundColor: sheetLengthM === length ? '#fff9ec' : '#211a1d',
-                                                    color: sheetLengthM === length ? '#211a1d' : '#fff',
-                                                }}
-                                            >
-                                                {length} м
-                                            </button>
-                                        ))}
-                                    </div>
                                 </div>
-                                <p className={`mt-1 text-[10px] font-bold ${layout.lengthExceeded ? 'text-red-200' : 'text-white/38'}`}>
-                                    {mmLabel(layout.usedWidth)} x {mmLabel(layout.usedHeight)} / {sheetLengthM} м
+                                <p className="mt-2 text-[10px] font-bold text-white/38">
+                                    {mmLabel(layout.usedWidth)} x {mmLabel(layout.usedHeight)}
                                 </p>
                             </div>
                             <div className="rounded-[10px] border border-white/10 bg-white/7 px-3 py-2">
@@ -992,8 +1232,6 @@ export const PrintCanvas = ({ onBack }) => {
                                 style={{
                                     width: layout.width * previewScale,
                                     height: layout.height * previewScale,
-                                    minWidth: 320,
-                                    minHeight: 260,
                                     backgroundImage: 'linear-gradient(rgba(255,249,236,0.10) 1px, transparent 1px), linear-gradient(90deg, rgba(255,249,236,0.10) 1px, transparent 1px)',
                                     backgroundSize: `${20 * previewScale}px ${20 * previewScale}px`,
                                 }}
@@ -1006,7 +1244,9 @@ export const PrintCanvas = ({ onBack }) => {
                                 {layout.placements.map((item) => (
                                     <div
                                         key={item.id}
-                                        className="absolute grid place-items-center overflow-hidden border border-[#fff9ec]/20 bg-white/8"
+                                        className={`absolute grid place-items-center bg-white/8 ${
+                                            item.rotated ? 'overflow-visible' : 'overflow-hidden'
+                                        }`}
                                         title={`${item.name} #${item.copyIndex + 1}`}
                                         style={{
                                             left: item.x * previewScale,
@@ -1014,6 +1254,7 @@ export const PrintCanvas = ({ onBack }) => {
                                             width: item.drawWidth * previewScale,
                                             height: item.drawHeight * previewScale,
                                             borderRadius: item.shape === 'round' ? '999px' : 4,
+                                            boxShadow: 'inset 0 0 0 1px rgba(255,249,236,0.2)',
                                         }}
                                     >
                                         <img
