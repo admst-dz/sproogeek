@@ -172,7 +172,6 @@ export default {
     "printCanvasSize": "Занятае поле",
     "printCanvasLogoGap": "Адлегласць паміж лагатыпамі",
     "printCanvasSheetWidth": "Шырыня палатна",
-    "printCanvasSheetLength": "Максімальная даўжыня палатна",
     "printCanvasItems": "Элементаў",
     "printCanvasDensity": "Шчыльнасць",
     "printCanvasZoom": "Маштаб прагляду",

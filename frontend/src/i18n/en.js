@@ -172,7 +172,6 @@ export default {
     "printCanvasSize": "Used area",
     "printCanvasLogoGap": "Spacing between logos",
     "printCanvasSheetWidth": "Canvas width",
-    "printCanvasSheetLength": "Maximum canvas length",
     "printCanvasItems": "Items",
     "printCanvasDensity": "Density",
     "printCanvasZoom": "Preview zoom",

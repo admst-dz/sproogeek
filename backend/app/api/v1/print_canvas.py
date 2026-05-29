@@ -126,6 +126,10 @@ def _int_number(value: Any, default: int = 0) -> int:
         return default
 
 
+def _format_mm(value: Any) -> str:
+    return f"{_number(value, 0):.2f}".replace(".", ",")
+
+
 def _metadata_from_form(raw: str) -> dict:
     try:
         parsed = json.loads(raw or "{}")
@@ -144,7 +148,7 @@ def _email_body(item, metadata: dict) -> str:
             continue
         size_mm = ""
         if logo.get("width_mm") and logo.get("height_mm"):
-            size_mm = f" — {logo.get('width_mm')} x {logo.get('height_mm')} мм"
+            size_mm = f" — {_format_mm(logo.get('width_mm'))} x {_format_mm(logo.get('height_mm'))} мм"
         logo_lines.append(
             f"- {logo.get('name') or 'logo'}: {logo.get('quantity', 0)} шт., "
             f"{logo.get('width_px', 0)} x {logo.get('height_px', 0)} px{size_mm}"
@@ -162,9 +166,7 @@ def _email_body(item, metadata: dict) -> str:
         "",
         "Параметры полотна:",
         f"- ширина полотна: {item.sheet_width_mm} мм",
-        f"- занятая ширина: {round(item.used_width_mm)} мм",
-        f"- использованная длина: {round(item.used_height_mm)} мм",
-        f"- максимальная длина рулона: {item.max_length_m} м",
+        f"- занятое поле: {_format_mm(item.used_width_mm)} x {_format_mm(item.used_height_mm)} мм",
         f"- расстояние между логотипами: {item.logo_gap_mm:g} мм",
         f"- элементов: {item.items_count}",
         f"- плотность: {item.density}%",
@@ -273,7 +275,6 @@ async def create_print_canvas_export(
             "sheet_width_mm": item.sheet_width_mm,
             "used_width_mm": item.used_width_mm,
             "used_height_mm": item.used_height_mm,
-            "max_length_m": item.max_length_m,
             "logo_gap_mm": item.logo_gap_mm,
             "items_count": item.items_count,
             "density": item.density,

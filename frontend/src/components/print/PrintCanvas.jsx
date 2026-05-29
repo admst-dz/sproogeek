@@ -5,8 +5,6 @@ import { useConfigurator } from '../../store';
 
 const SHEET_WIDTH_OPTIONS_MM = [580, 280];
 const DEFAULT_SHEET_WIDTH_MM = 580;
-const SHEET_LENGTH_OPTIONS_M = [25, 50, 100];
-const DEFAULT_SHEET_LENGTH_M = 25;
 const EMPTY_SHEET_HEIGHT_MM = 360;
 const DEFAULT_LOGO_WIDTH_MM = 72;
 const MIN_LOGO_WIDTH_MM = 10;
@@ -594,11 +592,17 @@ const compactPlacements = (placements, { gap, sheetPadding, widthLimit, maxLengt
     return compacted;
 };
 
-const packRows = (instances, { sheetWidth, maxLengthM, logoGapMm }) => {
+const packRows = (instances, { sheetWidth, logoGapMm }) => {
     const gap = LOGO_GAP_OPTIONS_MM.includes(Number(logoGapMm)) ? Number(logoGapMm) : DEFAULT_LOGO_GAP_MM;
     const sheetPadding = SHEET_PADDING_MM;
     const widthLimit = SHEET_WIDTH_OPTIONS_MM.includes(Number(sheetWidth)) ? Number(sheetWidth) : DEFAULT_SHEET_WIDTH_MM;
-    const maxLengthMm = (SHEET_LENGTH_OPTIONS_M.includes(Number(maxLengthM)) ? Number(maxLengthM) : DEFAULT_SHEET_LENGTH_M) * 1000;
+    const maxItemHeight = instances.length
+        ? Math.max(...instances.map((item) => Math.max(item.width, item.height)))
+        : EMPTY_SHEET_HEIGHT_MM;
+    const maxLengthMm = Math.max(
+        EMPTY_SHEET_HEIGHT_MM,
+        SHEET_PADDING_MM * 2 + instances.length * (maxItemHeight + gap)
+    );
     const innerWidthLimit = Math.max(1, widthLimit - sheetPadding * 2);
     const innerHeightLimit = Math.max(1, maxLengthMm - sheetPadding * 2);
     const byArea = (a, b) => {
@@ -763,7 +767,6 @@ const packRows = (instances, { sheetWidth, maxLengthM, logoGapMm }) => {
             usedWidth,
             usedHeight,
             maxLengthMm,
-            lengthExceeded: usedHeight > maxLengthMm,
         };
     };
 
@@ -797,7 +800,6 @@ export const PrintCanvas = ({ onBack }) => {
     const [logos, setLogos] = useState([]);
     const [logoGapMm, setLogoGapMm] = useState(DEFAULT_LOGO_GAP_MM);
     const [sheetWidthMm, setSheetWidthMm] = useState(DEFAULT_SHEET_WIDTH_MM);
-    const [sheetLengthM, setSheetLengthM] = useState(DEFAULT_SHEET_LENGTH_M);
     const [zoom, setZoom] = useState(1);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
@@ -867,8 +869,8 @@ export const PrintCanvas = ({ onBack }) => {
 
     const instances = useMemo(() => expandInstances(logos), [logos]);
     const layout = useMemo(
-        () => packRows(instances, { sheetWidth: sheetWidthMm, maxLengthM: sheetLengthM, logoGapMm }),
-        [instances, logoGapMm, sheetLengthM, sheetWidthMm]
+        () => packRows(instances, { sheetWidth: sheetWidthMm, logoGapMm }),
+        [instances, logoGapMm, sheetWidthMm]
     );
     const previewFitScale = Math.min(1, 1080 / layout.width);
     const previewScale = previewFitScale * zoom;
@@ -932,7 +934,7 @@ export const PrintCanvas = ({ onBack }) => {
             sheet_width_mm: layout.width,
             used_width_mm: layout.usedWidth,
             used_height_mm: layout.usedHeight,
-            max_length_m: sheetLengthM,
+            max_length_m: Math.ceil(layout.usedHeight / 1000),
             logo_gap_mm: logoGapMm,
             items_count: layout.placements.length,
             density,
@@ -964,7 +966,7 @@ export const PrintCanvas = ({ onBack }) => {
         };
 
         return { blob, metadata };
-    }, [density, layout, logoGapMm, logos, sheetLengthM]);
+    }, [density, layout, logoGapMm, logos]);
 
     const exportTiff = useCallback(async () => {
         setExportBusy(true);
@@ -1130,26 +1132,9 @@ export const PrintCanvas = ({ onBack }) => {
                                             </button>
                                         ))}
                                     </div>
-                                    <div className="grid min-w-0 grid-cols-3 gap-1" aria-label={t(language, 'printCanvasSheetLength')}>
-                                        {SHEET_LENGTH_OPTIONS_M.map((length) => (
-                                            <button
-                                                key={length}
-                                                type="button"
-                                                onClick={() => setSheetLengthM(length)}
-                                                className="h-8 rounded-[8px] border px-2 text-[12px] font-black transition"
-                                                style={{
-                                                    borderColor: sheetLengthM === length ? '#fff9ec' : 'rgba(255,255,255,0.14)',
-                                                    backgroundColor: sheetLengthM === length ? '#fff9ec' : '#211a1d',
-                                                    color: sheetLengthM === length ? '#211a1d' : '#fff',
-                                                }}
-                                            >
-                                                {length} м
-                                            </button>
-                                        ))}
-                                    </div>
                                 </div>
-                                <p className={`mt-1 text-[10px] font-bold ${layout.lengthExceeded ? 'text-red-200' : 'text-white/38'}`}>
-                                    {mmLabel(layout.usedWidth)} x {mmLabel(layout.usedHeight)} / {sheetLengthM} м
+                                <p className="mt-2 text-[10px] font-bold text-white/38">
+                                    {mmLabel(layout.usedWidth)} x {mmLabel(layout.usedHeight)}
                                 </p>
                             </div>
                             <div className="rounded-[10px] border border-white/10 bg-white/7 px-3 py-2">

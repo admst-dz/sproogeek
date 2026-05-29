@@ -172,7 +172,6 @@ export default {
     "printCanvasSize": "Занятое поле",
     "printCanvasLogoGap": "Расстояние между логотипами",
     "printCanvasSheetWidth": "Ширина полотна",
-    "printCanvasSheetLength": "Максимальная длина полотна",
     "printCanvasItems": "Элементов",
     "printCanvasDensity": "Плотность",
     "printCanvasZoom": "Масштаб просмотра",

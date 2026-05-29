@@ -117,6 +117,12 @@ const formatFileSize = (bytes = 0) => {
     return `${(bytes / 1024 / 1024).toFixed(bytes > 10 * 1024 * 1024 ? 1 : 2)} MB`;
 };
 
+const formatMm = (value) => {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '0,00';
+    return number.toFixed(2).replace('.', ',');
+};
+
 export const ClientDashboard = ({ onBack, onEdit, onPrintCanvas, showSuccessToast, onSuccessToastShown, initialTab, onTabChange }) => {
     const {
         currentUser, logout, cartItems, clearCart, removeFromCart, updateCartItem, startEditingCartItem,
@@ -647,28 +653,27 @@ export const ClientDashboard = ({ onBack, onEdit, onPrintCanvas, showSuccessToas
                                         key={item.id}
                                         className={`px-4 md:px-6 py-4 md:py-5 ${index !== printCanvasExports.length - 1 ? 'border-b border-white/5' : ''}`}
                                     >
-                                        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                                            <div className="flex-1 min-w-0">
+                                        <div className="grid gap-4 xl:grid-cols-[minmax(160px,220px)_minmax(0,1fr)_auto] xl:items-center">
+                                            <div className="min-w-0">
                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{t(language, 'printCanvasExportDate')}</p>
                                                 <p className="mt-1 font-bold text-white">
                                                     {item.created_at ? new Date(item.created_at).toLocaleString('ru-RU') : '—'}
                                                 </p>
                                                 <p className="mt-1 text-xs text-gray-500 truncate">{item.filename}</p>
                                             </div>
-                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 lg:min-w-[560px]">
+                                            <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                                                 <ClientDetailRow label={t(language, 'printCanvasSheetWidth')} value={`${item.sheet_width_mm} мм`} />
-                                                <ClientDetailRow label={t(language, 'printCanvasSize')} value={`${Math.round(item.used_width_mm)} x ${Math.round(item.used_height_mm)} мм`} accent />
+                                                <ClientDetailRow label={t(language, 'printCanvasSize')} value={`${formatMm(item.used_width_mm)} x ${formatMm(item.used_height_mm)} мм`} accent />
                                                 <ClientDetailRow label={t(language, 'printCanvasItems')} value={`${item.items_count}`} />
                                                 <ClientDetailRow label={t(language, 'printCanvasLogoGap')} value={`${item.logo_gap_mm} мм`} />
                                                 <ClientDetailRow label={t(language, 'printCanvasDensity')} value={`${item.density}%`} />
                                                 <ClientDetailRow label="DPI" value={`${item.export_dpi}`} />
                                                 <ClientDetailRow label={t(language, 'printCanvasFileSize')} value={formatFileSize(item.file_size)} />
-                                                <ClientDetailRow label={t(language, 'printCanvasSheetLength')} value={`${item.max_length_m} м`} />
                                             </div>
                                             <button
                                                 type="button"
                                                 onClick={() => downloadPrintCanvasTiff(item)}
-                                                className="shrink-0 rounded-[12px] bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-[#0B0F19] transition hover:bg-gray-100 active:scale-[0.98]"
+                                                className="w-full rounded-[12px] bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-[#0B0F19] transition hover:bg-gray-100 active:scale-[0.98] sm:w-auto xl:justify-self-end"
                                             >
                                                 {t(language, 'printCanvasDownloadTiff')}
                                             </button>
@@ -778,9 +783,9 @@ const CartInput = ({ label, name, placeholder, type = 'text', value, onChange, i
 );
 
 const ClientDetailRow = ({ label, value, accent }) => (
-    <div className={`flex flex-col gap-1 rounded-[10px] px-3 py-2.5 border ${accent ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-white/[0.03] border-white/8'}`}>
-        <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">{label}</span>
-        <span className="font-bold text-sm text-white">{value}</span>
+    <div className={`min-w-0 flex flex-col gap-1 rounded-[10px] px-3 py-2.5 border ${accent ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-white/[0.03] border-white/8'}`}>
+        <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 leading-tight">{label}</span>
+        <span className="break-words font-bold text-sm text-white">{value}</span>
     </div>
 );
 
