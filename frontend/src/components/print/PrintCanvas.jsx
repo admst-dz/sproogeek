@@ -1138,7 +1138,9 @@ export const PrintCanvas = ({ onBack }) => {
                                 {layout.placements.map((item) => (
                                     <div
                                         key={item.id}
-                                        className="absolute grid place-items-center overflow-hidden border border-[#fff9ec]/20 bg-white/8"
+                                        className={`absolute grid place-items-center bg-white/8 ${
+                                            item.rotated ? 'overflow-visible' : 'overflow-hidden'
+                                        }`}
                                         title={`${item.name} #${item.copyIndex + 1}`}
                                         style={{
                                             left: item.x * previewScale,
@@ -1146,6 +1148,7 @@ export const PrintCanvas = ({ onBack }) => {
                                             width: item.drawWidth * previewScale,
                                             height: item.drawHeight * previewScale,
                                             borderRadius: item.shape === 'round' ? '999px' : 4,
+                                            boxShadow: 'inset 0 0 0 1px rgba(255,249,236,0.2)',
                                         }}
                                     >
                                         <img
