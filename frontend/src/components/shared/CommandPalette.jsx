@@ -87,6 +87,7 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth, open: cont
         list.push({ group: cfg, id: 'cfg-notebook', label: t(language, 'notebook'), onSelect: () => goConfigurator('notebook') });
         list.push({ group: cfg, id: 'cfg-thermos', label: t(language, 'thermos'), onSelect: () => goConfigurator('thermos') });
         list.push({ group: cfg, id: 'cfg-powerbank', label: t(language, 'powerbank'), onSelect: () => goConfigurator('powerbank') });
+        list.push({ group: cfg, id: 'cfg-sticker', label: t(language, 'sticker3d'), onSelect: () => goConfigurator('sticker') });
         if (THEME_SWITCHING_ENABLED) {
             list.push({
                 group: actions,

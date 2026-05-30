@@ -15,7 +15,7 @@ const STATUS_KEYS = {
 };
 const BINDING_KEYS = { hard: 'bindingHardShort', spiral: 'bindingSpiralShort', soft: 'bindingSoft' };
 const PATTERN_KEYS = { blank: 'patternBlank', lined: 'patternLined', tlined: 'patternTLined', grid: 'patternGrid', dotted: 'patternDotted' };
-const PRODUCT_KEYS = { notebook: 'notebook', thermos: 'thermos', powerbank: 'powerbank' };
+const PRODUCT_KEYS = { notebook: 'notebook', thermos: 'thermos', powerbank: 'powerbank', sticker: 'sticker3d' };
 
 function getStatusLabel(status, language) {
     const key = STATUS_KEYS[status];
@@ -1184,21 +1184,82 @@ function StatCard({ label, value, hint }) {
     );
 }
 
+const DEFAULT_ADMIN_SETTINGS = {
+    guest_approval_enabled: true,
+    home_sections: {
+        notebook: true,
+        thermos: true,
+        powerbank: true,
+        sticker: true,
+        print_canvas: false,
+    },
+    dashboard_sections: {
+        notebook: true,
+        thermos: true,
+        powerbank: true,
+        sticker: true,
+        print_canvas: true,
+    },
+    print_canvas_public_enabled: false,
+};
+
+const SECTION_LABELS = {
+    notebook: 'Ежедневник',
+    thermos: 'Термос',
+    powerbank: 'Повербанк',
+    sticker: '3D стикер',
+    print_canvas: 'Полотно на печать',
+};
+
+function SettingsSwitch({ label, description, enabled, loading, saving, onToggle }) {
+    return (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-[12px] border border-white/8 bg-black/15 px-3 py-3">
+            <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-white/85">{label}</p>
+                {description && <p className="mt-1 text-xs leading-relaxed text-white/38">{description}</p>}
+            </div>
+            <button
+                type="button"
+                onClick={onToggle}
+                disabled={loading || saving}
+                role="switch"
+                aria-checked={enabled}
+                className={`relative h-8 w-14 shrink-0 overflow-hidden rounded-full border transition-colors disabled:opacity-50 ${
+                    enabled
+                        ? 'border-emerald-400/40 bg-emerald-500/30'
+                        : 'border-white/12 bg-white/12'
+                }`}
+            >
+                <span
+                    className={`absolute left-1 top-1 h-6 w-6 rounded-full shadow-lg transition-all ${
+                        enabled ? 'translate-x-6 bg-emerald-300' : 'translate-x-0 bg-slate-400'
+                    }`}
+                />
+            </button>
+        </div>
+    );
+}
+
 function AdminSettingsPanel({ language }) {
-    const [settings, setSettings] = useState({ guest_approval_enabled: true });
+    const [settings, setSettings] = useState(DEFAULT_ADMIN_SETTINGS);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState('');
-    const setGuestApprovalEnabled = useConfigurator((state) => state.setGuestApprovalEnabled);
+    const setAppSettings = useConfigurator((state) => state.setAppSettings);
 
     useEffect(() => {
         let alive = true;
         adminApi.getSettings()
             .then(({ data }) => {
                 if (!alive) return;
-                const nextSettings = data || { guest_approval_enabled: true };
+                const nextSettings = {
+                    ...DEFAULT_ADMIN_SETTINGS,
+                    ...(data || {}),
+                    home_sections: { ...DEFAULT_ADMIN_SETTINGS.home_sections, ...(data?.home_sections || {}) },
+                    dashboard_sections: { ...DEFAULT_ADMIN_SETTINGS.dashboard_sections, ...(data?.dashboard_sections || {}) },
+                };
                 setSettings(nextSettings);
-                setGuestApprovalEnabled(nextSettings.guest_approval_enabled !== false);
+                setAppSettings(nextSettings);
             })
             .catch((err) => {
                 if (alive) setMsg('✗ ' + formatApiError(err, language));
@@ -1207,16 +1268,21 @@ function AdminSettingsPanel({ language }) {
                 if (alive) setLoading(false);
             });
         return () => { alive = false; };
-    }, [language, setGuestApprovalEnabled]);
+    }, [language, setAppSettings]);
 
-    const toggleGuestApproval = async () => {
-        const nextEnabled = !settings.guest_approval_enabled;
+    const saveSettingsPatch = async (patch) => {
         setSaving(true);
         setMsg('');
         try {
-            const { data } = await adminApi.updateSettings({ guest_approval_enabled: nextEnabled });
-            setSettings(data || { guest_approval_enabled: nextEnabled });
-            setGuestApprovalEnabled((data || { guest_approval_enabled: nextEnabled }).guest_approval_enabled !== false);
+            const { data } = await adminApi.updateSettings(patch);
+            const nextSettings = {
+                ...DEFAULT_ADMIN_SETTINGS,
+                ...(data || {}),
+                home_sections: { ...DEFAULT_ADMIN_SETTINGS.home_sections, ...(data?.home_sections || {}) },
+                dashboard_sections: { ...DEFAULT_ADMIN_SETTINGS.dashboard_sections, ...(data?.dashboard_sections || {}) },
+            };
+            setSettings(nextSettings);
+            setAppSettings(nextSettings);
             setMsg(t(language, 'adminSaved'));
         } catch (err) {
             setMsg('✗ ' + formatApiError(err, language));
@@ -1230,45 +1296,78 @@ function AdminSettingsPanel({ language }) {
 
     return (
         <div className="mt-6 rounded-[14px] border border-white/10 bg-white/[0.03] p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex flex-col gap-5">
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 flex-wrap">
-                        <h3 className="text-base font-bold">{t(language, 'adminGuestModeTitle')}</h3>
+                        <h3 className="text-base font-bold">Настройки платформы</h3>
                         <span className={`text-[10px] font-bold uppercase tracking-widest rounded-full border px-2 py-0.5 ${
-                            enabled
+                            saving
+                                ? 'text-yellow-300 bg-yellow-500/10 border-yellow-500/25'
+                                : enabled
                                 ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25'
                                 : 'text-white/35 bg-white/5 border-white/10'
                         }`}>
-                            {enabled ? t(language, 'adminGuestModeOn') : t(language, 'adminGuestModeOff')}
+                            {saving ? t(language, 'adminSaving') : t(language, 'adminSaved')}
                         </span>
                     </div>
-                    <p className="mt-1 text-xs leading-relaxed text-white/40">
-                        {t(language, 'adminGuestModeDesc')}
-                    </p>
                     {msg && (
                         <p className={`mt-2 text-xs font-bold ${msg.startsWith('✓') ? 'text-emerald-400' : 'text-red-400'}`}>
                             {msg}
                         </p>
                     )}
                 </div>
-                <button
-                    type="button"
-                    onClick={toggleGuestApproval}
-                    disabled={loading || saving}
-                    role="switch"
-                    aria-checked={enabled}
-                    className={`relative h-8 w-14 shrink-0 overflow-hidden rounded-full border transition-colors disabled:opacity-50 ${
-                        enabled
-                            ? 'border-emerald-400/40 bg-emerald-500/30'
-                            : 'border-white/12 bg-white/12'
-                    }`}
-                >
-                    <span
-                        className={`absolute left-1 top-1 h-6 w-6 rounded-full shadow-lg transition-all ${
-                            enabled ? 'translate-x-6 bg-emerald-300' : 'translate-x-0 bg-slate-400'
-                        }`}
-                    />
-                </button>
+                <SettingsSwitch
+                    label={t(language, 'adminGuestModeTitle')}
+                    description={t(language, 'adminGuestModeDesc')}
+                    enabled={enabled}
+                    loading={loading}
+                    saving={saving}
+                    onToggle={() => saveSettingsPatch({ guest_approval_enabled: !enabled })}
+                />
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest">Общая главная страница</p>
+                        {Object.entries(SECTION_LABELS).map(([key, label]) => (
+                            <SettingsSwitch
+                                key={`home-${key}`}
+                                label={label}
+                                enabled={settings.home_sections?.[key] !== false}
+                                loading={loading}
+                                saving={saving}
+                                onToggle={() => saveSettingsPatch({
+                                    home_sections: { [key]: !(settings.home_sections?.[key] !== false) },
+                                })}
+                            />
+                        ))}
+                    </div>
+                    <div className="space-y-2">
+                        <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest">Личный кабинет клиента</p>
+                        {Object.entries(SECTION_LABELS).map(([key, label]) => (
+                            <SettingsSwitch
+                                key={`dashboard-${key}`}
+                                label={label}
+                                enabled={settings.dashboard_sections?.[key] !== false}
+                                loading={loading}
+                                saving={saving}
+                                onToggle={() => saveSettingsPatch({
+                                    dashboard_sections: { [key]: !(settings.dashboard_sections?.[key] !== false) },
+                                })}
+                            />
+                        ))}
+                    </div>
+                </div>
+
+                <SettingsSwitch
+                    label="Публичное полотно на печать"
+                    description="Разрешает открывать и выгружать полотно без персонального доступа пользователя."
+                    enabled={settings.print_canvas_public_enabled !== false}
+                    loading={loading}
+                    saving={saving}
+                    onToggle={() => saveSettingsPatch({
+                        print_canvas_public_enabled: !(settings.print_canvas_public_enabled !== false),
+                    })}
+                />
             </div>
         </div>
     );

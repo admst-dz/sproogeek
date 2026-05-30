@@ -61,6 +61,18 @@ def _to_user_response(user: User, stats_map: dict | None = None) -> dict:
     }
 
 
+def _settings_patch(payload: AdminSettingsPatch) -> dict:
+    updates = payload.model_dump(exclude_unset=True)
+    current = read_settings()
+    for section_key in ("home_sections", "dashboard_sections"):
+        if section_key in updates:
+            updates[section_key] = {
+                **current.get(section_key, {}),
+                **(updates[section_key] or {}),
+            }
+    return updates
+
+
 @router.get("/users", response_model=List[UserAdminResponse])
 async def get_admin_users(
     db: AsyncSession = Depends(get_db),
@@ -248,7 +260,7 @@ async def patch_admin_settings(
     payload: AdminSettingsPatch,
     current_user=Depends(get_admin_user),
 ):
-    updates = payload.model_dump(exclude_unset=True)
+    updates = _settings_patch(payload)
     settings = write_settings(updates)
     event_logger.log(
         "ADMIN_SETTINGS_UPDATED",

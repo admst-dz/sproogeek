@@ -9,6 +9,7 @@ import { ApprovalPanel } from '../shared/ApprovalPanel';
 import { Notebook } from '../shared/Notebook';
 import { Thermos } from '../thermos/Thermos';
 import { Powerbank } from '../powerbank/Powerbank';
+import { Sticker } from '../sticker/Sticker';
 import { ConfiguratorProductMenu } from '../home/Home';
 import { getUserDisplayName, getUserSecondaryLabel } from '../../utils/user';
 import { SceneLoadingOverlay } from '../shared/VibeLoader';
@@ -123,7 +124,17 @@ const formatMm = (value) => {
     return number.toFixed(2).replace('.', ',');
 };
 
-export const ClientDashboard = ({ onBack, onEdit, onPrintCanvas, showSuccessToast, onSuccessToastShown, initialTab, onTabChange }) => {
+export const ClientDashboard = ({
+    onBack,
+    onEdit,
+    onPrintCanvas,
+    showSuccessToast,
+    onSuccessToastShown,
+    initialTab,
+    onTabChange,
+    sectionVisibility,
+    printCanvasEnabled,
+}) => {
     const {
         currentUser, logout, cartItems, clearCart, removeFromCart, updateCartItem, startEditingCartItem,
         language,
@@ -191,13 +202,13 @@ export const ClientDashboard = ({ onBack, onEdit, onPrintCanvas, showSuccessToas
     }, [activeTab, currentUser]);
 
     useEffect(() => {
-        if (activeTab === 'printCanvas' && currentUser?.print_canvas_enabled) {
+        if (activeTab === 'printCanvas' && printCanvasEnabled) {
             setPrintCanvasLoading(true);
             fetchPrintCanvasExports()
                 .then((data) => setPrintCanvasExports(data || []))
                 .finally(() => setPrintCanvasLoading(false));
         }
-    }, [activeTab, currentUser]);
+    }, [activeTab, printCanvasEnabled]);
 
     const downloadPrintCanvasTiff = useCallback(async (exportItem) => {
         try {
@@ -346,7 +357,7 @@ export const ClientDashboard = ({ onBack, onEdit, onPrintCanvas, showSuccessToas
                     )}
                 </TabBtn>
                     <TabBtn active={activeTab === 'orders'} onClick={() => changeTab('orders')}>{t(language, 'tabOrders')}</TabBtn>
-                    {currentUser?.print_canvas_enabled && (
+                    {sectionVisibility?.print_canvas !== false && printCanvasEnabled && (
                         <TabBtn active={activeTab === 'printCanvas'} onClick={() => changeTab('printCanvas')}>{t(language, 'tabPrintCanvas')}</TabBtn>
                     )}
                 </div>
@@ -362,7 +373,8 @@ export const ClientDashboard = ({ onBack, onEdit, onPrintCanvas, showSuccessToas
                     <div className="flex flex-col items-center">
                         <ConfiguratorProductMenu
                             onStart={onEdit}
-                            onPrintCanvas={currentUser?.print_canvas_enabled ? onPrintCanvas : null}
+                            onPrintCanvas={sectionVisibility?.print_canvas !== false && printCanvasEnabled ? onPrintCanvas : null}
+                            visibility={sectionVisibility}
                         />
                     </div>
                 )}
@@ -633,7 +645,7 @@ export const ClientDashboard = ({ onBack, onEdit, onPrintCanvas, showSuccessToas
                 )}
 
                 {/* PRINT CANVAS EXPORTS TAB */}
-                {activeTab === 'printCanvas' && currentUser?.print_canvas_enabled && (
+                {activeTab === 'printCanvas' && printCanvasEnabled && (
                     <div>
                         <h2 className="text-xl font-bold uppercase tracking-widest mb-6 text-white">{t(language, 'printCanvasHistoryTitle')}</h2>
                         <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[20px] md:rounded-[24px] overflow-hidden">
@@ -801,8 +813,9 @@ const ClientOrder3DPreview = ({ configuration, productName, language = 'ru' }) =
     const isNote = productName?.toLowerCase().includes('ежедневник') || productName?.toLowerCase().includes('блокнот') || cfg.type === 'notebook';
     const isThermos = productName?.toLowerCase().includes('термос') || cfg.activeProduct === 'thermos' || cfg.type === 'thermos';
     const isPowerbank = productName?.toLowerCase().includes('повербанк') || productName?.toLowerCase().includes('power') || cfg.activeProduct === 'powerbank' || cfg.type === 'powerbank';
+    const isSticker = productName?.toLowerCase().includes('стикер') || cfg.activeProduct === 'sticker' || cfg.type === 'sticker';
 
-    if (!isNote && !isThermos && !isPowerbank) {
+    if (!isNote && !isThermos && !isPowerbank && !isSticker) {
         return (
             <div className="w-full h-40 rounded-[14px] bg-white/[0.03] border border-white/8 flex items-center justify-center">
                 <span className="text-gray-600 text-xs font-bold uppercase tracking-widest">{t(language, 'noLayout')}</span>
@@ -821,6 +834,7 @@ const ClientOrder3DPreview = ({ configuration, productName, language = 'ru' }) =
                         {isNote && <Notebook config={cfg} />}
                         {isThermos && <Thermos config={cfg} />}
                         {isPowerbank && <Powerbank config={cfg} />}
+                        {isSticker && <Sticker config={cfg} preview />}
                     </Stage>
                 </PresentationControls>
             </Canvas>

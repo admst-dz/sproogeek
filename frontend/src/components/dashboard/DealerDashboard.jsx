@@ -14,6 +14,7 @@ import { Canvas } from '@react-three/fiber';
 import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { Notebook } from '../shared/Notebook';
 import { Thermos } from '../thermos/Thermos';
+import { Sticker } from '../sticker/Sticker';
 import { downloadBlob } from '../../utils/download';
 import { OrderQrTile } from '../shared/OrderQrTile';
 import { SiteFooter } from '../shared/SiteFooter';
@@ -413,6 +414,7 @@ const getProductType = (order) => {
     if (cfg.type) return cfg.type;
     if (product.includes('термос') || product.includes('thermos')) return 'thermos';
     if (product.includes('powerbank') || product.includes('повербанк')) return 'powerbank';
+    if (product.includes('стикер') || product.includes('sticker')) return 'sticker';
     return 'notebook';
 };
 
@@ -434,7 +436,7 @@ const DealerOrder3DPreview = ({ order }) => {
     const cfg = getOrderConfig(order);
     const type = getProductType(order);
 
-    if (!['notebook', 'calendar', 'thermos'].includes(type)) {
+    if (!['notebook', 'calendar', 'thermos', 'sticker'].includes(type)) {
         return (
             <div className="h-52 rounded-[16px] bg-white/[0.03] border border-white/8 flex items-center justify-center">
                 <span className="text-[10px] text-gray-600 font-bold uppercase tracking-widest">3D</span>
@@ -452,6 +454,7 @@ const DealerOrder3DPreview = ({ order }) => {
                     <Stage environment={null} intensity={0} shadows={false}>
                         {(type === 'notebook' || type === 'calendar') && <Notebook config={cfg} />}
                         {type === 'thermos' && <Thermos config={cfg} />}
+                        {type === 'sticker' && <Sticker config={cfg} preview />}
                     </Stage>
                 </PresentationControls>
             </Canvas>

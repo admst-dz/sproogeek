@@ -118,12 +118,42 @@ class AdminStatsResponse(BaseModel):
     new_orders_last_30d: int
 
 
+class SectionVisibilitySettings(BaseModel):
+    notebook: bool = True
+    thermos: bool = True
+    powerbank: bool = True
+    sticker: bool = True
+    print_canvas: bool = False
+
+
+class DashboardSectionVisibilitySettings(BaseModel):
+    notebook: bool = True
+    thermos: bool = True
+    powerbank: bool = True
+    sticker: bool = True
+    print_canvas: bool = True
+
+
+class SectionVisibilityPatch(BaseModel):
+    notebook: Optional[bool] = None
+    thermos: Optional[bool] = None
+    powerbank: Optional[bool] = None
+    sticker: Optional[bool] = None
+    print_canvas: Optional[bool] = None
+
+
 class AdminSettingsResponse(BaseModel):
     guest_approval_enabled: bool = True
+    home_sections: SectionVisibilitySettings = Field(default_factory=SectionVisibilitySettings)
+    dashboard_sections: DashboardSectionVisibilitySettings = Field(default_factory=DashboardSectionVisibilitySettings)
+    print_canvas_public_enabled: bool = False
 
 
 class AdminSettingsPatch(BaseModel):
     guest_approval_enabled: Optional[bool] = None
+    home_sections: Optional[SectionVisibilityPatch] = None
+    dashboard_sections: Optional[SectionVisibilityPatch] = None
+    print_canvas_public_enabled: Optional[bool] = None
 
 
 class OrderTypeSummary(BaseModel):

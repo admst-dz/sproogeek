@@ -125,6 +125,7 @@ function HomeFallbackCard({ title, actionLabel, tone, onClick }) {
         slate: 'bg-slate-500/10 dark:bg-slate-400/15',
         emerald: 'bg-emerald-500/10 dark:bg-emerald-400/15',
         amber: 'bg-amber-500/10 dark:bg-amber-400/15',
+        pink: 'bg-pink-500/10 dark:bg-pink-400/15',
     }[tone] || 'bg-gray-500/10 dark:bg-white/10';
 
     return (
@@ -248,6 +249,12 @@ function HomeRouteFallback({ onStart, onAuth, user, logout, openCommandPalette }
                         tone="emerald"
                         onClick={() => handleSelect('powerbank')}
                     />
+                    <HomeFallbackCard
+                        title={t(language, 'sticker3d')}
+                        actionLabel={t(language, 'openBtn')}
+                        tone="pink"
+                        onClick={() => handleSelect('sticker')}
+                    />
                 </div>
             </main>
         </div>
@@ -327,8 +334,15 @@ function MainApp() {
         cartRestoredFromCookie,
         clearCart,
         language,
-        setGuestApprovalEnabled,
+        setAppSettings,
+        appSettings,
     } = useConfigurator();
+
+    const printCanvasEnabledForCurrentUser = Boolean(
+        appSettings.print_canvas_public_enabled
+        || (currentUser?.role === 'client' && currentUser?.print_canvas_enabled)
+        || ['admin', 'owner'].includes(currentUser?.role)
+    );
 
     const guardedNavigate = (target) => {
         setScreen(target);
@@ -367,9 +381,9 @@ function MainApp() {
 
     useEffect(() => {
         fetchPublicSettings()
-            .then((settings) => setGuestApprovalEnabled(settings.guest_approval_enabled !== false))
-            .catch(() => setGuestApprovalEnabled(true));
-    }, [setGuestApprovalEnabled]);
+            .then((settings) => setAppSettings(settings))
+            .catch(() => setAppSettings({ guest_approval_enabled: true }));
+    }, [setAppSettings]);
 
     useEffect(() => {
         if (!THEME_SWITCHING_ENABLED) {
@@ -416,13 +430,13 @@ function MainApp() {
 
     useEffect(() => {
         if (authLoading || screen !== 'print_canvas') return undefined;
-        if (currentUser?.role === 'client' && currentUser?.print_canvas_enabled) return undefined;
+        if (printCanvasEnabledForCurrentUser) return undefined;
         const frame = window.requestAnimationFrame(() => {
             setScreen(currentUser ? 'client_dashboard' : 'home');
             if (currentUser) setClientTab('catalog');
         });
         return () => window.cancelAnimationFrame(frame);
-    }, [authLoading, currentUser, screen]);
+    }, [authLoading, currentUser, printCanvasEnabledForCurrentUser, screen]);
 
     useEffect(() => {
         const path = getPathForRouteState(screen, activeProduct, clientTab, dealerTab, manufacturerTab);
@@ -634,6 +648,12 @@ function MainApp() {
                             setClientTab(null);
                             setScreen('configurator');
                         }}
+                        onPrintCanvas={
+                            appSettings.home_sections?.print_canvas !== false && printCanvasEnabledForCurrentUser
+                                ? () => setScreen('print_canvas')
+                                : null
+                        }
+                        sectionVisibility={appSettings.home_sections}
                         onAuth={() => setShowAuth(true)}
                         user={currentUser}
                         logout={logout}
@@ -642,11 +662,15 @@ function MainApp() {
             )}
 
             {/* --- ЭКРАН: ПОЛОТНО НА ПЕЧАТЬ --- */}
-            {screen === 'print_canvas' && currentUser?.role === 'client' && currentUser?.print_canvas_enabled && (
+            {screen === 'print_canvas' && printCanvasEnabledForCurrentUser && (
                 <RouteSuspense>
                     <PrintCanvas onBack={() => {
-                        setClientTab('catalog');
-                        setScreen('client_dashboard');
+                        if (currentUser?.role === 'client') {
+                            setClientTab('catalog');
+                            setScreen('client_dashboard');
+                        } else {
+                            setScreen('home');
+                        }
                     }} />
                 </RouteSuspense>
             )}
@@ -710,6 +734,8 @@ function MainApp() {
                         initialTab={clientTab}
                         onTabChange={setClientTab}
                         onPrintCanvas={() => setScreen('print_canvas')}
+                        sectionVisibility={appSettings.dashboard_sections}
+                        printCanvasEnabled={printCanvasEnabledForCurrentUser}
                     />
                 </RouteSuspense>
             )}

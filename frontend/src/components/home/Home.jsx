@@ -10,6 +10,7 @@ import termosModelUrl from '../../assets/termos3.glb?url';
 import powerbankModelUrl from '../../assets/poverbank.glb?url';
 import { FeedbackPanel } from './FeedbackPanel';
 import { Notebook } from '../shared/Notebook';
+import { Sticker } from '../sticker/Sticker';
 import { SiteFooter } from '../shared/SiteFooter';
 
 const NOTEBOOK_PREVIEW_CONFIG = {
@@ -242,6 +243,24 @@ function NotebookPreview() {
     );
 }
 
+function StickerPreview() {
+    return (
+        <div className="relative h-full w-full">
+            <Canvas camera={{ position: [0, 0.08, 4.8], fov: 36 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
+                <ambientLight intensity={0.78} />
+                <directionalLight position={[4, 6, 5]} intensity={1.4} />
+                <directionalLight position={[-4, 3, 2]} intensity={0.55} />
+                <Suspense fallback={null}>
+                    <Stage environment="city" intensity={0.22} shadows={false} adjustCamera={false}>
+                        <Sticker preview />
+                    </Stage>
+                </Suspense>
+            </Canvas>
+            <SceneLoadingOverlay compact label="3D" />
+        </div>
+    );
+}
+
 
 // Карточки реагируют только на собственное наведение: лёгкий подъём плюс
 // локальный блик под курсором без движения соседних элементов.
@@ -336,7 +355,15 @@ function PrintCanvasPreview() {
     );
 }
 
-export function ConfiguratorProductMenu({ onStart, onPrintCanvas }) {
+const DEFAULT_SECTION_VISIBILITY = {
+    notebook: true,
+    thermos: true,
+    powerbank: true,
+    sticker: true,
+    print_canvas: false,
+};
+
+export function ConfiguratorProductMenu({ onStart, onPrintCanvas, visibility = DEFAULT_SECTION_VISIBILITY }) {
     const {
         setProduct, setFormat, setBindingType, setHasElastic,
         setColor,
@@ -360,61 +387,81 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas }) {
 
     return (
         <ProductGrid>
-            {/* Карточка 1: Ежедневник */}
-            <ProductCard
-                glowColor="rgba(59, 130, 246, 0.22)"
-                onClick={() => handleSelect('notebook', {
-                    format: 'A5',
-                    bindingType: 'spiral',
-                    hasElastic: true,
-                    coverColor: '#1565C0',
-                    innerCoverColor: '#1565C0',
-                    stitchColor: '#ffffff',
-                    spiralColor: '#C0C0C0',
-                    elasticColor: '#1a1a1a',
-                })}
-            >
-                <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
-                    <NotebookPreview />
-                </div>
-                <div className="relative z-10 mt-2 text-center">
-                    <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'notebook')}</h3>
-                    <span className="mt-4 inline-flex max-w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-center text-[11px] font-bold text-gray-600 transition-colors sm:mt-5 sm:px-5 sm:text-xs group-hover:bg-blue-50 group-hover:text-blue-600 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
-                        {t(language, 'openBtn')}
-                    </span>
-                </div>
-            </ProductCard>
+            {visibility.notebook !== false && (
+                <ProductCard
+                    glowColor="rgba(59, 130, 246, 0.22)"
+                    onClick={() => handleSelect('notebook', {
+                        format: 'A5',
+                        bindingType: 'spiral',
+                        hasElastic: true,
+                        coverColor: '#1565C0',
+                        innerCoverColor: '#1565C0',
+                        stitchColor: '#ffffff',
+                        spiralColor: '#C0C0C0',
+                        elasticColor: '#1a1a1a',
+                    })}
+                >
+                    <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
+                        <NotebookPreview />
+                    </div>
+                    <div className="relative z-10 mt-2 text-center">
+                        <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'notebook')}</h3>
+                        <span className="mt-4 inline-flex max-w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-center text-[11px] font-bold text-gray-600 transition-colors sm:mt-5 sm:px-5 sm:text-xs group-hover:bg-blue-50 group-hover:text-blue-600 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
+                            {t(language, 'openBtn')}
+                        </span>
+                    </div>
+                </ProductCard>
+            )}
 
-            {/* Карточка 2: Термос */}
-            <ProductCard glowColor="rgba(100, 116, 139, 0.22)" onClick={() => handleSelect('thermos', {})}>
-                <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
-                    <ThermosPreview />
-                </div>
-                <div className="relative z-10 mt-2 text-center">
-                    <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'thermos')}</h3>
-                    <span className="mt-4 inline-flex max-w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-center text-[11px] font-bold text-gray-600 transition-colors sm:mt-5 sm:px-5 sm:text-xs group-hover:bg-slate-50 group-hover:text-slate-700 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
-                        {t(language, 'openBtn')}
-                    </span>
-                </div>
-            </ProductCard>
+            {visibility.thermos !== false && (
+                <ProductCard glowColor="rgba(100, 116, 139, 0.22)" onClick={() => handleSelect('thermos', {})}>
+                    <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
+                        <ThermosPreview />
+                    </div>
+                    <div className="relative z-10 mt-2 text-center">
+                        <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'thermos')}</h3>
+                        <span className="mt-4 inline-flex max-w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-center text-[11px] font-bold text-gray-600 transition-colors sm:mt-5 sm:px-5 sm:text-xs group-hover:bg-slate-50 group-hover:text-slate-700 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
+                            {t(language, 'openBtn')}
+                        </span>
+                    </div>
+                </ProductCard>
+            )}
 
-            {/* Карточка 3: Повербанк */}
-            <ProductCard
-                glowColor="rgba(16, 185, 129, 0.2)"
-                onClick={() => handleSelect('powerbank', {})}
-            >
-                <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
-                    <PowerbankPreview />
-                </div>
-                <div className="relative z-10 mt-2 text-center">
-                    <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'powerbank')}</h3>
-                    <span className="mt-4 inline-flex max-w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-center text-[11px] font-bold text-gray-600 transition-colors sm:mt-5 sm:px-5 sm:text-xs group-hover:bg-emerald-50 group-hover:text-emerald-700 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
-                        {t(language, 'openBtn')}
-                    </span>
-                </div>
-            </ProductCard>
+            {visibility.powerbank !== false && (
+                <ProductCard
+                    glowColor="rgba(16, 185, 129, 0.2)"
+                    onClick={() => handleSelect('powerbank', {})}
+                >
+                    <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
+                        <PowerbankPreview />
+                    </div>
+                    <div className="relative z-10 mt-2 text-center">
+                        <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'powerbank')}</h3>
+                        <span className="mt-4 inline-flex max-w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-center text-[11px] font-bold text-gray-600 transition-colors sm:mt-5 sm:px-5 sm:text-xs group-hover:bg-emerald-50 group-hover:text-emerald-700 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
+                            {t(language, 'openBtn')}
+                        </span>
+                    </div>
+                </ProductCard>
+            )}
 
-            {onPrintCanvas && (
+            {visibility.sticker !== false && (
+                <ProductCard
+                    glowColor="rgba(236, 72, 153, 0.18)"
+                    onClick={() => handleSelect('sticker', {})}
+                >
+                    <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
+                        <StickerPreview />
+                    </div>
+                    <div className="relative z-10 mt-2 text-center">
+                        <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'sticker3d')}</h3>
+                        <span className="mt-4 inline-flex max-w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-center text-[11px] font-bold text-gray-600 transition-colors sm:mt-5 sm:px-5 sm:text-xs group-hover:bg-pink-50 group-hover:text-pink-700 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
+                            {t(language, 'openBtn')}
+                        </span>
+                    </div>
+                </ProductCard>
+            )}
+
+            {visibility.print_canvas !== false && onPrintCanvas && (
                 <ProductCard glowColor="rgba(245, 158, 11, 0.2)" onClick={onPrintCanvas}>
                     <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
                         <PrintCanvasPreview />
@@ -431,7 +478,7 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas }) {
     );
 }
 
-export const Home = ({ onStart, onAuth, user, logout }) => {
+export const Home = ({ onStart, onAuth, user, logout, sectionVisibility, onPrintCanvas }) => {
     const {
         language, setLanguage, theme, toggleTheme
     } = useConfigurator();
@@ -525,7 +572,11 @@ export const Home = ({ onStart, onAuth, user, logout }) => {
                     {t(language, 'subtitle')}
                 </p>
 
-                <ConfiguratorProductMenu onStart={onStart} />
+                <ConfiguratorProductMenu
+                    onStart={onStart}
+                    onPrintCanvas={onPrintCanvas}
+                    visibility={sectionVisibility}
+                />
 
                 <FeedbackPanel language={language} />
             </main>

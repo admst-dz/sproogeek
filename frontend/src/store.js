@@ -71,6 +71,38 @@ export const getNotebookBindingCapabilities = (bindingType) => (
     NOTEBOOK_BINDING_CAPABILITIES[bindingType] ?? NOTEBOOK_BINDING_CAPABILITIES.hard
 );
 
+export const DEFAULT_APP_SETTINGS = {
+    guest_approval_enabled: true,
+    home_sections: {
+        notebook: true,
+        thermos: true,
+        powerbank: true,
+        sticker: true,
+        print_canvas: false,
+    },
+    dashboard_sections: {
+        notebook: true,
+        thermos: true,
+        powerbank: true,
+        sticker: true,
+        print_canvas: true,
+    },
+    print_canvas_public_enabled: false,
+};
+
+export const normalizeAppSettings = (settings = {}) => ({
+    ...DEFAULT_APP_SETTINGS,
+    ...settings,
+    home_sections: {
+        ...DEFAULT_APP_SETTINGS.home_sections,
+        ...(settings?.home_sections || {}),
+    },
+    dashboard_sections: {
+        ...DEFAULT_APP_SETTINGS.dashboard_sections,
+        ...(settings?.dashboard_sections || {}),
+    },
+});
+
 // Поля, которые откатываются по Undo/Redo и сравниваются с defaults для "грязного" состояния.
 // Сюда НЕ попадают auth/UI-state/корзина/тема/zoom — они не должны влиять на историю конструктора.
 export const NOTEBOOK_DEFAULTS = {
@@ -101,7 +133,11 @@ export const POWERBANK_DEFAULTS = {
     powerbankLogos: [],
     selectedPowerbankLogoId: null,
 };
-export const ALL_PRODUCT_DEFAULTS = { ...NOTEBOOK_DEFAULTS, ...THERMOS_DEFAULTS, ...POWERBANK_DEFAULTS };
+export const STICKER_DEFAULTS = {
+    stickerImages: [],
+    selectedStickerImageId: null,
+};
+export const ALL_PRODUCT_DEFAULTS = { ...NOTEBOOK_DEFAULTS, ...THERMOS_DEFAULTS, ...POWERBANK_DEFAULTS, ...STICKER_DEFAULTS };
 const TRACKED_KEYS = Object.keys(ALL_PRODUCT_DEFAULTS);
 
 const pickTracked = (state) => {
@@ -113,11 +149,12 @@ const pickTracked = (state) => {
 export const getDefaultsForProduct = (product) => {
     if (product === 'thermos') return THERMOS_DEFAULTS;
     if (product === 'powerbank') return POWERBANK_DEFAULTS;
+    if (product === 'sticker') return STICKER_DEFAULTS;
     return NOTEBOOK_DEFAULTS;
 };
 
 const normalizeProduct = (type) => (
-    ['notebook', 'calendar', 'thermos', 'powerbank'].includes(type) ? type : 'notebook'
+    ['notebook', 'calendar', 'thermos', 'powerbank', 'sticker'].includes(type) ? type : 'notebook'
 );
 
 const makeLogoId = () => (
@@ -178,6 +215,10 @@ export const useConfigurator = create(temporal((set, get) => ({
     powerbankLogos: [],
     selectedPowerbankLogoId: null,
 
+    // --- Параметры 3D стикера ---
+    stickerImages: [],
+    selectedStickerImageId: null,
+
     // --- AUTH И РОЛИ ---
     currentUser: null,
     userRole: null,
@@ -187,6 +228,7 @@ export const useConfigurator = create(temporal((set, get) => ({
     language: 'ru',
     theme: 'dark',
     guestApprovalEnabled: true,
+    appSettings: DEFAULT_APP_SETTINGS,
 
     cartItems: _initialCartItems,
     cartRestoredFromCookie: _initialCartItems.length > 0,
@@ -208,6 +250,13 @@ export const useConfigurator = create(temporal((set, get) => ({
 
     setLanguage: (lang) => set({ language: lang }),
     setGuestApprovalEnabled: (enabled) => set({ guestApprovalEnabled: Boolean(enabled) }),
+    setAppSettings: (settings) => {
+        const appSettings = normalizeAppSettings(settings);
+        set({
+            appSettings,
+            guestApprovalEnabled: appSettings.guest_approval_enabled !== false,
+        });
+    },
     toggleTheme: () => set((state) => {
         if (!THEME_SWITCHING_ENABLED) {
             document.documentElement.classList.add('dark');
@@ -491,6 +540,56 @@ export const useConfigurator = create(temporal((set, get) => ({
             selectedPowerbankLogoId: state.selectedPowerbankLogoId === id
                 ? (remaining.length > 0 ? remaining[remaining.length - 1].id : null)
                 : state.selectedPowerbankLogoId
+        };
+    }),
+
+    // --- ACTIONS: 3D СТИКЕР ---
+    addStickerImage: async (file) => {
+        if (file instanceof File) {
+            const id = makeLogoId();
+            try {
+                const texture = await normalizeImageFile(file);
+                set((state) => ({
+                    stickerImages: [...state.stickerImages, { id, texture, filename: file.name, position: [0, 0], rotation: 0, scale: 0.72 }],
+                    selectedStickerImageId: id
+                }));
+            } catch (error) {
+                console.error('Failed to prepare sticker image', error);
+            }
+        }
+    },
+    replaceStickerImageFile: async (id, file) => {
+        if (!id || !(file instanceof File)) return;
+        try {
+            const texture = await normalizeImageFile(file);
+            set((state) => ({
+                stickerImages: state.stickerImages.map(l => l.id === id ? { ...l, texture, filename: file.name || l.filename } : l)
+            }));
+        } catch (error) {
+            console.error('Failed to replace sticker image', error);
+            throw error;
+        }
+    },
+    selectStickerImage: (id) => set({ selectedStickerImageId: id }),
+    setStickerImagePosition: (x, y) => set((state) => ({
+        stickerImages: state.stickerImages.map(l => l.id === state.selectedStickerImageId ? { ...l, position: [x, y] } : l)
+    })),
+    setStickerImageRotation: (rotation) => set((state) => ({
+        stickerImages: state.stickerImages.map(l => l.id === state.selectedStickerImageId ? { ...l, rotation } : l)
+    })),
+    setStickerImageScale: (scale) => set((state) => ({
+        stickerImages: state.stickerImages.map(l => l.id === state.selectedStickerImageId ? { ...l, scale } : l)
+    })),
+    resetStickerImageTransform: () => set((state) => ({
+        stickerImages: state.stickerImages.map(l => l.id === state.selectedStickerImageId ? { ...l, position: [0, 0], rotation: 0, scale: 0.72 } : l)
+    })),
+    removeStickerImage: (id) => set((state) => {
+        const remaining = state.stickerImages.filter(l => l.id !== id);
+        return {
+            stickerImages: remaining,
+            selectedStickerImageId: state.selectedStickerImageId === id
+                ? (remaining.length > 0 ? remaining[remaining.length - 1].id : null)
+                : state.selectedStickerImageId
         };
     }),
 
