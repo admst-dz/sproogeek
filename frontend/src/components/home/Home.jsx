@@ -1,4 +1,4 @@
-import { useEffect, Suspense, useMemo, useRef } from 'react';
+import { createElement, useEffect, Suspense, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF, Stage } from '@react-three/drei';
 import * as THREE from 'three';
@@ -247,7 +247,7 @@ function NotebookPreview() {
     );
 }
 
-function MerchPreview({ model: Model, previewConfig }) {
+function MerchPreview({ model, previewConfig }) {
     return (
         <div className="relative h-full w-full">
             <Canvas camera={{ position: [0, 0.2, 5.4], fov: 36 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
@@ -256,7 +256,7 @@ function MerchPreview({ model: Model, previewConfig }) {
                 <directionalLight position={[-4, 3, 2]} intensity={0.55} />
                 <Suspense fallback={null}>
                     <Stage environment="city" intensity={0.22} shadows={false} adjustCamera>
-                        <Model config={previewConfig} preview />
+                        {createElement(model, { config: previewConfig, preview: true })}
                     </Stage>
                 </Suspense>
             </Canvas>

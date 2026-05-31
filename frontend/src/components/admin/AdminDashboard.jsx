@@ -1273,7 +1273,7 @@ const SECTION_LABELS = {
     notebook: 'Ежедневник',
     thermos: 'Термос',
     powerbank: 'Повербанк',
-    sticker: '3D стикер',
+    sticker: '3D стикеры',
     shopper: 'Шопер',
     tshirt: 'Майка',
     hoodie: 'Худи',
