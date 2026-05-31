@@ -22,7 +22,6 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "sticker": True,
         "print_canvas": True,
     },
-    "print_canvas_public_enabled": False,
 }
 MAX_SETTINGS_FILE_BYTES = int(os.getenv("APP_SETTINGS_MAX_BYTES", "16384"))
 

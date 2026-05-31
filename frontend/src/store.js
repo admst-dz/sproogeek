@@ -87,7 +87,6 @@ export const DEFAULT_APP_SETTINGS = {
         sticker: true,
         print_canvas: true,
     },
-    print_canvas_public_enabled: false,
 };
 
 export const normalizeAppSettings = (settings = {}) => ({

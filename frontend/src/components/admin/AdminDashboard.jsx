@@ -1250,7 +1250,6 @@ const DEFAULT_ADMIN_SETTINGS = {
         sticker: true,
         print_canvas: true,
     },
-    print_canvas_public_enabled: false,
 };
 
 const SECTION_LABELS = {
@@ -1423,16 +1422,6 @@ function AdminSettingsPanel({ language }) {
                         loading={loading}
                         saving={saving}
                         onToggle={() => saveSettingsPatch({ guest_approval_enabled: !enabled })}
-                    />
-                    <SettingsSwitch
-                        label="Публичный доступ к полотну на печать"
-                        description="Это не про карточку на главной. Флаг разрешает открыть и выгрузить полотно без логина и без персонального доступа пользователя."
-                        enabled={settings.print_canvas_public_enabled !== false}
-                        loading={loading}
-                        saving={saving}
-                        onToggle={() => saveSettingsPatch({
-                            print_canvas_public_enabled: !(settings.print_canvas_public_enabled !== false),
-                        })}
                     />
                 </div>
 

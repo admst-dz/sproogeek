@@ -36,15 +36,7 @@ TIFF_SIGNATURES = (b"II*\x00", b"MM\x00*")
 UPLOAD_CHUNK_SIZE = 1024 * 1024
 
 
-def _is_print_canvas_public() -> bool:
-    from app.services.settings_store import read_settings
-
-    return bool(read_settings().get("print_canvas_public_enabled", False))
-
-
 def _ensure_can_use_print_canvas(current_user) -> None:
-    if _is_print_canvas_public():
-        return
     if current_user and current_user.role in {"admin", "owner"}:
         return
     if current_user and current_user.role == "client" and current_user.print_canvas_enabled:
@@ -313,8 +305,7 @@ async def download_print_canvas_export(
         raise HTTPException(status_code=404, detail="Print canvas export not found")
     is_owner = current_user and item.user_id == current_user.id
     is_admin = current_user and current_user.role in {"admin", "owner"}
-    is_public_guest_export = item.user_id is None and _is_print_canvas_public()
-    if not (is_owner or is_admin or is_public_guest_export):
+    if not (is_owner or is_admin):
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(item.file_path):
         raise HTTPException(status_code=404, detail="TIFF file not found")

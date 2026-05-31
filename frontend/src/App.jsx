@@ -355,8 +355,7 @@ function MainApp() {
     } = useConfigurator();
 
     const printCanvasEnabledForCurrentUser = Boolean(
-        appSettings.print_canvas_public_enabled
-        || (currentUser?.role === 'client' && currentUser?.print_canvas_enabled)
+        (currentUser?.role === 'client' && currentUser?.print_canvas_enabled)
         || ['admin', 'owner'].includes(currentUser?.role)
     );
     const effectiveDashboardSections = useMemo(() => (

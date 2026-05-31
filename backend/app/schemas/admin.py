@@ -170,14 +170,12 @@ class AdminSettingsResponse(BaseModel):
     guest_approval_enabled: bool = True
     home_sections: SectionVisibilitySettings = Field(default_factory=SectionVisibilitySettings)
     dashboard_sections: DashboardSectionVisibilitySettings = Field(default_factory=DashboardSectionVisibilitySettings)
-    print_canvas_public_enabled: bool = False
 
 
 class AdminSettingsPatch(BaseModel):
     guest_approval_enabled: Optional[bool] = None
     home_sections: Optional[SectionVisibilityPatch] = None
     dashboard_sections: Optional[SectionVisibilityPatch] = None
-    print_canvas_public_enabled: Optional[bool] = None
 
 
 class OrderTypeSummary(BaseModel):

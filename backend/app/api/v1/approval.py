@@ -87,7 +87,6 @@ class ApprovalSettingsResponse(BaseModel):
     guest_approval_enabled: bool = True
     home_sections: dict[str, bool] = Field(default_factory=dict)
     dashboard_sections: dict[str, bool] = Field(default_factory=dict)
-    print_canvas_public_enabled: bool = False
 
 
 @router.get("/settings", response_model=ApprovalSettingsResponse)
