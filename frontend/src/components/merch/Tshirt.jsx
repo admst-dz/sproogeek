@@ -1,82 +1,76 @@
 import { useMemo } from 'react';
+import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { useConfigurator } from '../../store';
+import tshirtModelUrl from '../../assets/tshirt_test.glb?url';
 import { MerchLogoPlane } from './MerchLogoPlane';
 
-// Силуэт майки собирается из ExtrudeGeometry по 2D-форме. Это временный
-// плейсхолдер до подключения реальной glb/gltf-модели.
-const SHIRT_HALF_WIDTH = 1.6;
-const SHIRT_HEIGHT = 2.6;
-const SHIRT_DEPTH = 0.2;
-
-function buildShirtShape({ withSleeves = true } = {}) {
-    const shape = new THREE.Shape();
-    // Стартуем от низа-левой кромки и идём по периметру против часовой
-    const halfBottom = SHIRT_HALF_WIDTH * 0.78;
-    const sleeveOutset = withSleeves ? SHIRT_HALF_WIDTH : SHIRT_HALF_WIDTH * 0.72;
-    const sleeveTop = SHIRT_HEIGHT * 0.78;
-    const shoulderInset = SHIRT_HALF_WIDTH * 0.58;
-    const neckHalf = SHIRT_HALF_WIDTH * 0.22;
-    const neckDip = SHIRT_HEIGHT - SHIRT_HALF_WIDTH * 0.16;
-
-    shape.moveTo(-halfBottom, 0);
-    shape.lineTo(halfBottom, 0);
-    shape.lineTo(halfBottom + (sleeveOutset - halfBottom) * 0.85, SHIRT_HEIGHT * 0.55);
-    shape.lineTo(sleeveOutset, sleeveTop);
-    shape.lineTo(shoulderInset, SHIRT_HEIGHT * 0.92);
-    shape.quadraticCurveTo(neckHalf + 0.1, SHIRT_HEIGHT, neckHalf, neckDip);
-    shape.quadraticCurveTo(0, neckDip - SHIRT_HALF_WIDTH * 0.04, -neckHalf, neckDip);
-    shape.quadraticCurveTo(-neckHalf - 0.1, SHIRT_HEIGHT, -shoulderInset, SHIRT_HEIGHT * 0.92);
-    shape.lineTo(-sleeveOutset, sleeveTop);
-    shape.lineTo(-halfBottom - (sleeveOutset - halfBottom) * 0.85, SHIRT_HEIGHT * 0.55);
-    shape.closePath();
-    return shape;
-}
+const MODEL_SCALE = 1.18;
+const LOGO_SURFACE_OFFSET = 0.018;
 
 export function Tshirt({ config = null, preview = false, position = [0, 0, 0] }) {
     const state = useConfigurator();
     const color = config?.tshirtColor ?? state.tshirtColor;
     const printSide = config?.tshirtPrintSide ?? state.tshirtPrintSide;
     const logos = config?.tshirtLogos ?? state.tshirtLogos;
+    const { scene: sourceScene } = useGLTF(tshirtModelUrl);
 
-    const geometry = useMemo(() => {
-        const shape = buildShirtShape({ withSleeves: true });
-        return new THREE.ExtrudeGeometry(shape, {
-            depth: SHIRT_DEPTH,
-            bevelEnabled: true,
-            bevelSegments: 3,
-            bevelSize: 0.06,
-            bevelThickness: 0.04,
+    const { geometries, bbox, size, center } = useMemo(() => {
+        sourceScene.updateMatrixWorld(true);
+        const entries = [];
+        const box = new THREE.Box3();
+
+        sourceScene.traverse((node) => {
+            if (!node.isMesh || !node.geometry) return;
+            const geometry = node.geometry.clone();
+            geometry.applyMatrix4(node.matrixWorld);
+            geometry.computeBoundingBox();
+            box.union(geometry.boundingBox);
+            entries.push({ name: node.name, geometry });
         });
-    }, []);
 
-    const printAreaWidth = SHIRT_HALF_WIDTH * 1.1;
-    const printAreaHeight = SHIRT_HEIGHT * 0.5;
-    const isFront = printSide !== 'back';
-    const logoZ = isFront ? SHIRT_DEPTH + 0.06 : -0.06;
-    const logoYaw = isFront ? 0 : Math.PI;
+        const modelSize = new THREE.Vector3();
+        const modelCenter = new THREE.Vector3();
+        box.getSize(modelSize);
+        box.getCenter(modelCenter);
+        return { geometries: entries, bbox: box, size: modelSize, center: modelCenter };
+    }, [sourceScene]);
+
+    const isBack = printSide === 'back';
+    const isLeftSleeve = printSide === 'leftSleeve';
+    const isRightSleeve = printSide === 'rightSleeve';
+    const logoZ = isBack ? bbox.min.z - LOGO_SURFACE_OFFSET : bbox.max.z + LOGO_SURFACE_OFFSET;
+    const logoYaw = isBack ? Math.PI : 0;
+    const sleeveX = size.x * 0.34;
+    const logoX = isLeftSleeve ? -sleeveX : isRightSleeve ? sleeveX : 0;
+    const logoY = bbox.min.y + size.y * (isLeftSleeve || isRightSleeve ? 0.58 : 0.47);
+    const printAreaWidth = size.x * (isLeftSleeve || isRightSleeve ? 0.22 : 0.48);
+    const printAreaHeight = size.y * (isLeftSleeve || isRightSleeve ? 0.22 : 0.42);
+    const sleeveTilt = isLeftSleeve ? -0.28 : isRightSleeve ? 0.28 : 0;
 
     return (
-        <group position={[position[0], position[1] - SHIRT_HEIGHT / 2 + 0.6, position[2]]} rotation={preview ? [0.18, -0.42, 0] : [0.04, -0.18, 0]}>
-            <mesh geometry={geometry} castShadow receiveShadow>
-                <meshStandardMaterial color={color} roughness={0.78} metalness={0.02} />
-            </mesh>
-            {/* Резинка по горловине */}
-            <mesh position={[0, SHIRT_HEIGHT * 0.92, SHIRT_DEPTH / 2]} rotation={[Math.PI / 2, 0, 0]}>
-                <torusGeometry args={[SHIRT_HALF_WIDTH * 0.24, 0.025, 12, 48]} />
-                <meshStandardMaterial color={color} roughness={0.6} metalness={0.04} />
-            </mesh>
+        <group position={position} rotation={preview ? [0.16, -0.38, 0] : [0.04, -0.16, 0]}>
+            <group scale={MODEL_SCALE} position={[-center.x * MODEL_SCALE, -center.y * MODEL_SCALE, -center.z * MODEL_SCALE]}>
+                {geometries.map(({ name, geometry }) => (
+                    <mesh key={name} geometry={geometry} castShadow receiveShadow>
+                        <meshStandardMaterial color={color} roughness={0.82} metalness={0.02} side={THREE.DoubleSide} />
+                    </mesh>
+                ))}
 
-            {logos.map((image) => (
-                <MerchLogoPlane
-                    key={image.id}
-                    image={image}
-                    areaWidth={printAreaWidth}
-                    areaHeight={printAreaHeight}
-                    offset={[0, SHIRT_HEIGHT * 0.4, logoZ]}
-                    rotationFix={[0, logoYaw, 0]}
-                />
-            ))}
+                {logos.map((image) => (
+                    <MerchLogoPlane
+                        key={image.id}
+                        image={image}
+                        areaWidth={printAreaWidth}
+                        areaHeight={printAreaHeight}
+                        offset={[logoX, logoY, logoZ]}
+                        rotationFix={[0, logoYaw, sleeveTilt]}
+                        scaleBase={isLeftSleeve || isRightSleeve ? 0.55 : 0.9}
+                    />
+                ))}
+            </group>
         </group>
     );
 }
+
+useGLTF.preload(tshirtModelUrl);
