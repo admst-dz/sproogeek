@@ -9,8 +9,13 @@ from app.schemas.product import ProductCreate, ProductUpdate
 
 def _product_payload(product: ProductCreate | ProductUpdate) -> dict:
     return {
+        "type": product.type or "notebook",
         "name": product.name,
+        "description": product.description,
+        "is_active": bool(product.isActive),
         "retail_price": product.retailPrice or 0,
+        "image_url": product.imageUrl,
+        "model_url": product.modelUrl,
         "binding": product.binding or [],
         "spiral_colors": product.spiralColors or [],
         "has_elastic": product.hasElastic or False,
@@ -18,6 +23,7 @@ def _product_payload(product: ProductCreate | ProductUpdate) -> dict:
         "formats": product.formats or [],
         "cover_colors": product.coverColors or [],
         "wholesale_tiers": product.wholesaleTiers or [],
+        "attributes": product.attributes or {},
     }
 
 
@@ -26,13 +32,29 @@ async def get_product(db: AsyncSession, product_id) -> Optional[Product]:
     return result.scalar_one_or_none()
 
 
-async def get_products(db: AsyncSession, skip: int = 0, limit: int = 100) -> list[Product]:
-    result = await db.execute(select(Product).offset(skip).limit(limit))
+async def get_products(
+    db: AsyncSession,
+    skip: int = 0,
+    limit: int = 100,
+    product_type: Optional[str] = None,
+) -> list[Product]:
+    stmt = select(Product)
+    if product_type:
+        stmt = stmt.where(Product.type == product_type)
+    stmt = stmt.offset(skip).limit(limit)
+    result = await db.execute(stmt)
     return result.scalars().all()
 
 
-async def get_products_by_dealer(db: AsyncSession, dealer_id: str) -> list[Product]:
-    result = await db.execute(select(Product).where(Product.dealer_id == dealer_id))
+async def get_products_by_dealer(
+    db: AsyncSession,
+    dealer_id: str,
+    product_type: Optional[str] = None,
+) -> list[Product]:
+    stmt = select(Product).where(Product.dealer_id == dealer_id)
+    if product_type:
+        stmt = stmt.where(Product.type == product_type)
+    result = await db.execute(stmt)
     return result.scalars().all()
 
 

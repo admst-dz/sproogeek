@@ -78,6 +78,10 @@ export const DEFAULT_APP_SETTINGS = {
         thermos: true,
         powerbank: true,
         sticker: true,
+        shopper: true,
+        tshirt: true,
+        hoodie: true,
+        lanyard: true,
         print_canvas: false,
     },
     dashboard_sections: {
@@ -85,6 +89,10 @@ export const DEFAULT_APP_SETTINGS = {
         thermos: true,
         powerbank: true,
         sticker: true,
+        shopper: true,
+        tshirt: true,
+        hoodie: true,
+        lanyard: true,
         print_canvas: true,
     },
 };
@@ -102,7 +110,17 @@ export const normalizeAppSettings = (settings = {}) => ({
     },
 });
 
-export const SECTION_VISIBILITY_KEYS = ['notebook', 'thermos', 'powerbank', 'sticker', 'print_canvas'];
+export const SECTION_VISIBILITY_KEYS = [
+    'notebook',
+    'thermos',
+    'powerbank',
+    'sticker',
+    'shopper',
+    'tshirt',
+    'hoodie',
+    'lanyard',
+    'print_canvas',
+];
 
 export const mergeSectionVisibility = (base = {}, overrides = null) => (
     SECTION_VISIBILITY_KEYS.reduce((acc, key) => {
@@ -147,7 +165,52 @@ export const STICKER_DEFAULTS = {
     stickerImages: [],
     selectedStickerImageId: null,
 };
-export const ALL_PRODUCT_DEFAULTS = { ...NOTEBOOK_DEFAULTS, ...THERMOS_DEFAULTS, ...POWERBANK_DEFAULTS, ...STICKER_DEFAULTS };
+
+// Дефолты для мерч-конфигураторов. Логотипы храним по тому же контракту,
+// что у термоса/повербанка — отдельная коллекция и selectedId на товар.
+export const SHOPPER_DEFAULTS = {
+    shopperColor: '#F5F0E1',
+    shopperMaterial: 'canvas_220',
+    shopperHandleType: 'long',
+    shopperPrintSide: 'front',
+    shopperLogos: [],
+    selectedShopperLogoId: null,
+};
+export const TSHIRT_DEFAULTS = {
+    tshirtColor: '#FFFFFF',
+    tshirtMaterial: 'cotton_180',
+    tshirtSize: 'M',
+    tshirtPrintSide: 'front',
+    tshirtLogos: [],
+    selectedTshirtLogoId: null,
+};
+export const HOODIE_DEFAULTS = {
+    hoodieColor: '#1A1A1A',
+    hoodieMaterial: 'fleece_280',
+    hoodieSize: 'M',
+    hoodiePrintSide: 'front',
+    hoodieLogos: [],
+    selectedHoodieLogoId: null,
+};
+export const LANYARD_DEFAULTS = {
+    lanyardColor: '#1A1A1A',
+    lanyardMaterial: 'polyester_15',
+    lanyardLengthMm: 450,
+    lanyardWidthMm: 15,
+    lanyardCarabiner: 'carabiner',
+    lanyardLogos: [],
+    selectedLanyardLogoId: null,
+};
+export const ALL_PRODUCT_DEFAULTS = {
+    ...NOTEBOOK_DEFAULTS,
+    ...THERMOS_DEFAULTS,
+    ...POWERBANK_DEFAULTS,
+    ...STICKER_DEFAULTS,
+    ...SHOPPER_DEFAULTS,
+    ...TSHIRT_DEFAULTS,
+    ...HOODIE_DEFAULTS,
+    ...LANYARD_DEFAULTS,
+};
 const TRACKED_KEYS = Object.keys(ALL_PRODUCT_DEFAULTS);
 
 const pickTracked = (state) => {
@@ -160,11 +223,20 @@ export const getDefaultsForProduct = (product) => {
     if (product === 'thermos') return THERMOS_DEFAULTS;
     if (product === 'powerbank') return POWERBANK_DEFAULTS;
     if (product === 'sticker') return STICKER_DEFAULTS;
+    if (product === 'shopper') return SHOPPER_DEFAULTS;
+    if (product === 'tshirt') return TSHIRT_DEFAULTS;
+    if (product === 'hoodie') return HOODIE_DEFAULTS;
+    if (product === 'lanyard') return LANYARD_DEFAULTS;
     return NOTEBOOK_DEFAULTS;
 };
 
+const SUPPORTED_PRODUCTS = [
+    'notebook', 'calendar', 'thermos', 'powerbank', 'sticker',
+    'shopper', 'tshirt', 'hoodie', 'lanyard',
+];
+
 const normalizeProduct = (type) => (
-    ['notebook', 'calendar', 'thermos', 'powerbank', 'sticker'].includes(type) ? type : 'notebook'
+    SUPPORTED_PRODUCTS.includes(type) ? type : 'notebook'
 );
 
 const makeLogoId = () => (
@@ -228,6 +300,15 @@ export const useConfigurator = create(temporal((set, get) => ({
     // --- Параметры 3D стикера ---
     stickerImages: [],
     selectedStickerImageId: null,
+
+    // --- Параметры мерч-товаров (шопер/майка/худи/ланъярд) ---
+    // Минимальный набор настроек: цвет, материал, размер (для одежды),
+    // сторона нанесения, логотипы. Логотипы хранятся плоским массивом —
+    // примитивные плоскости, привязанные к сторонам печати.
+    ...SHOPPER_DEFAULTS,
+    ...TSHIRT_DEFAULTS,
+    ...HOODIE_DEFAULTS,
+    ...LANYARD_DEFAULTS,
 
     // --- AUTH И РОЛИ ---
     currentUser: null,
@@ -600,6 +681,90 @@ export const useConfigurator = create(temporal((set, get) => ({
             selectedStickerImageId: state.selectedStickerImageId === id
                 ? (remaining.length > 0 ? remaining[remaining.length - 1].id : null)
                 : state.selectedStickerImageId
+        };
+    }),
+
+    // --- ACTIONS: МЕРЧ (ШОПЕР/МАЙКА/ХУДИ/ЛАНЪЯРД) ---
+    // Один общий хелпер для добавления логотипа в коллекцию активного
+    // мерча — у всех контракт один (id/texture/position/rotation/scale/side).
+    _addMerchLogo: async (collectionKey, selectedKey, file, side = 'front') => {
+        if (!(file instanceof File)) return;
+        const id = makeLogoId();
+        try {
+            const texture = await normalizeImageFile(file);
+            set((state) => ({
+                [collectionKey]: [
+                    ...(state[collectionKey] || []),
+                    { id, texture, filename: file.name, position: [0, 0], rotation: 0, scale: 0.6, side },
+                ],
+                [selectedKey]: id,
+            }));
+        } catch (error) {
+            console.error(`Failed to prepare ${collectionKey} image`, error);
+        }
+    },
+    addShopperLogo: (file, side = 'front') => get()._addMerchLogo('shopperLogos', 'selectedShopperLogoId', file, side),
+    addTshirtLogo: (file, side = 'front') => get()._addMerchLogo('tshirtLogos', 'selectedTshirtLogoId', file, side),
+    addHoodieLogo: (file, side = 'front') => get()._addMerchLogo('hoodieLogos', 'selectedHoodieLogoId', file, side),
+    addLanyardLogo: (file, side = 'front') => get()._addMerchLogo('lanyardLogos', 'selectedLanyardLogoId', file, side),
+
+    setShopperColor: (color) => set({ shopperColor: color }),
+    setShopperMaterial: (material) => set({ shopperMaterial: material }),
+    setShopperHandleType: (handle) => set({ shopperHandleType: handle }),
+    setShopperPrintSide: (side) => set({ shopperPrintSide: side }),
+    selectShopperLogo: (id) => set({ selectedShopperLogoId: id }),
+    removeShopperLogo: (id) => set((state) => {
+        const remaining = state.shopperLogos.filter(l => l.id !== id);
+        return {
+            shopperLogos: remaining,
+            selectedShopperLogoId: state.selectedShopperLogoId === id
+                ? (remaining.length > 0 ? remaining[remaining.length - 1].id : null)
+                : state.selectedShopperLogoId,
+        };
+    }),
+
+    setTshirtColor: (color) => set({ tshirtColor: color }),
+    setTshirtMaterial: (material) => set({ tshirtMaterial: material }),
+    setTshirtSize: (size) => set({ tshirtSize: size }),
+    setTshirtPrintSide: (side) => set({ tshirtPrintSide: side }),
+    selectTshirtLogo: (id) => set({ selectedTshirtLogoId: id }),
+    removeTshirtLogo: (id) => set((state) => {
+        const remaining = state.tshirtLogos.filter(l => l.id !== id);
+        return {
+            tshirtLogos: remaining,
+            selectedTshirtLogoId: state.selectedTshirtLogoId === id
+                ? (remaining.length > 0 ? remaining[remaining.length - 1].id : null)
+                : state.selectedTshirtLogoId,
+        };
+    }),
+
+    setHoodieColor: (color) => set({ hoodieColor: color }),
+    setHoodieMaterial: (material) => set({ hoodieMaterial: material }),
+    setHoodieSize: (size) => set({ hoodieSize: size }),
+    setHoodiePrintSide: (side) => set({ hoodiePrintSide: side }),
+    selectHoodieLogo: (id) => set({ selectedHoodieLogoId: id }),
+    removeHoodieLogo: (id) => set((state) => {
+        const remaining = state.hoodieLogos.filter(l => l.id !== id);
+        return {
+            hoodieLogos: remaining,
+            selectedHoodieLogoId: state.selectedHoodieLogoId === id
+                ? (remaining.length > 0 ? remaining[remaining.length - 1].id : null)
+                : state.selectedHoodieLogoId,
+        };
+    }),
+
+    setLanyardColor: (color) => set({ lanyardColor: color }),
+    setLanyardMaterial: (material) => set({ lanyardMaterial: material }),
+    setLanyardLengthMm: (mm) => set({ lanyardLengthMm: mm }),
+    setLanyardCarabiner: (kind) => set({ lanyardCarabiner: kind }),
+    selectLanyardLogo: (id) => set({ selectedLanyardLogoId: id }),
+    removeLanyardLogo: (id) => set((state) => {
+        const remaining = state.lanyardLogos.filter(l => l.id !== id);
+        return {
+            lanyardLogos: remaining,
+            selectedLanyardLogoId: state.selectedLanyardLogoId === id
+                ? (remaining.length > 0 ? remaining[remaining.length - 1].id : null)
+                : state.selectedLanyardLogoId,
         };
     }),
 
