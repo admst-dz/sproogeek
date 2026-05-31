@@ -1,5 +1,5 @@
-import { lazy, Suspense, useState, useEffect, useRef } from 'react'
-import { ALL_PRODUCT_DEFAULTS, THEME_SWITCHING_ENABLED, getNotebookBindingCapabilities, useConfigurator } from './store'
+import { lazy, Suspense, useState, useEffect, useMemo, useRef } from 'react'
+import { ALL_PRODUCT_DEFAULTS, THEME_SWITCHING_ENABLED, getNotebookBindingCapabilities, mergeSectionVisibility, useConfigurator } from './store'
 import { t } from './i18n'
 import { CookieBanner } from './components/shared/CookieBanner'
 import { getInitialRouteState, getPathForRouteState } from './config/routes'
@@ -125,6 +125,7 @@ function HomeFallbackCard({ title, actionLabel, tone, onClick }) {
         slate: 'bg-slate-500/10 dark:bg-slate-400/15',
         emerald: 'bg-emerald-500/10 dark:bg-emerald-400/15',
         amber: 'bg-amber-500/10 dark:bg-amber-400/15',
+        pink: 'bg-pink-500/10 dark:bg-pink-400/15',
     }[tone] || 'bg-gray-500/10 dark:bg-white/10';
 
     return (
@@ -147,7 +148,7 @@ function HomeFallbackCard({ title, actionLabel, tone, onClick }) {
     );
 }
 
-function HomeRouteFallback({ onStart, onAuth, user, logout, openCommandPalette }) {
+function HomeRouteFallback({ onStart, onAuth, user, logout, openCommandPalette, sectionVisibility, onPrintCanvas }) {
     const {
         language,
         setLanguage,
@@ -229,25 +230,47 @@ function HomeRouteFallback({ onStart, onAuth, user, logout, openCommandPalette }
                     {t(language, 'subtitle')}
                 </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6 w-full max-w-5xl">
-                    <HomeFallbackCard
-                        title={t(language, 'notebook')}
-                        actionLabel={t(language, 'openBtn')}
-                        tone="blue"
-                        onClick={() => handleSelect('notebook', { format: 'A5', bindingType: 'hard', hasElastic: false })}
-                    />
-                    <HomeFallbackCard
-                        title={t(language, 'thermos')}
-                        actionLabel={t(language, 'openBtn')}
-                        tone="slate"
-                        onClick={() => handleSelect('thermos')}
-                    />
-                    <HomeFallbackCard
-                        title={t(language, 'powerbank')}
-                        actionLabel={t(language, 'openBtn')}
-                        tone="emerald"
-                        onClick={() => handleSelect('powerbank')}
-                    />
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6 w-full max-w-7xl">
+                    {sectionVisibility?.notebook !== false && (
+                        <HomeFallbackCard
+                            title={t(language, 'notebook')}
+                            actionLabel={t(language, 'openBtn')}
+                            tone="blue"
+                            onClick={() => handleSelect('notebook', { format: 'A5', bindingType: 'hard', hasElastic: false })}
+                        />
+                    )}
+                    {sectionVisibility?.thermos !== false && (
+                        <HomeFallbackCard
+                            title={t(language, 'thermos')}
+                            actionLabel={t(language, 'openBtn')}
+                            tone="slate"
+                            onClick={() => handleSelect('thermos')}
+                        />
+                    )}
+                    {sectionVisibility?.powerbank !== false && (
+                        <HomeFallbackCard
+                            title={t(language, 'powerbank')}
+                            actionLabel={t(language, 'openBtn')}
+                            tone="emerald"
+                            onClick={() => handleSelect('powerbank')}
+                        />
+                    )}
+                    {sectionVisibility?.sticker !== false && (
+                        <HomeFallbackCard
+                            title={t(language, 'sticker3d')}
+                            actionLabel={t(language, 'openBtn')}
+                            tone="pink"
+                            onClick={() => handleSelect('sticker')}
+                        />
+                    )}
+                    {sectionVisibility?.print_canvas !== false && onPrintCanvas && (
+                        <HomeFallbackCard
+                            title={t(language, 'printCanvasHomeButton')}
+                            actionLabel={t(language, 'printCanvasOpenBtn')}
+                            tone="amber"
+                            onClick={onPrintCanvas}
+                        />
+                    )}
                 </div>
             </main>
         </div>
@@ -327,8 +350,26 @@ function MainApp() {
         cartRestoredFromCookie,
         clearCart,
         language,
-        setGuestApprovalEnabled,
+        setAppSettings,
+        appSettings,
     } = useConfigurator();
+
+    const effectiveDashboardSections = useMemo(() => (
+        mergeSectionVisibility(
+            appSettings.dashboard_sections,
+            currentUser?.section_visibility_overrides
+        )
+    ), [appSettings.dashboard_sections, currentUser?.section_visibility_overrides]);
+    const homePrintCanvasEnabled = appSettings.home_sections?.print_canvas !== false;
+    const dashboardPrintCanvasEnabled = effectiveDashboardSections?.print_canvas !== false;
+    const printCanvasEnabledForCurrentUser = Boolean(
+        homePrintCanvasEnabled
+        || ['admin', 'owner'].includes(currentUser?.role)
+        || (currentUser?.role === 'client' && dashboardPrintCanvasEnabled)
+    );
+    const visibleConfiguratorSections = useMemo(() => (
+        currentUser?.role === 'client' ? effectiveDashboardSections : appSettings.home_sections
+    ), [appSettings.home_sections, currentUser?.role, effectiveDashboardSections]);
 
     const guardedNavigate = (target) => {
         setScreen(target);
@@ -367,9 +408,9 @@ function MainApp() {
 
     useEffect(() => {
         fetchPublicSettings()
-            .then((settings) => setGuestApprovalEnabled(settings.guest_approval_enabled !== false))
-            .catch(() => setGuestApprovalEnabled(true));
-    }, [setGuestApprovalEnabled]);
+            .then((settings) => setAppSettings(settings))
+            .catch(() => setAppSettings({ guest_approval_enabled: true }));
+    }, [setAppSettings]);
 
     useEffect(() => {
         if (!THEME_SWITCHING_ENABLED) {
@@ -416,13 +457,23 @@ function MainApp() {
 
     useEffect(() => {
         if (authLoading || screen !== 'print_canvas') return undefined;
-        if (currentUser?.role === 'client' && currentUser?.print_canvas_enabled) return undefined;
+        if (printCanvasEnabledForCurrentUser) return undefined;
         const frame = window.requestAnimationFrame(() => {
             setScreen(currentUser ? 'client_dashboard' : 'home');
             if (currentUser) setClientTab('catalog');
         });
         return () => window.cancelAnimationFrame(frame);
-    }, [authLoading, currentUser, screen]);
+    }, [authLoading, currentUser, printCanvasEnabledForCurrentUser, screen]);
+
+    useEffect(() => {
+        if (screen !== 'configurator') return undefined;
+        if (visibleConfiguratorSections?.[activeProduct] !== false) return undefined;
+        const frame = window.requestAnimationFrame(() => {
+            setScreen(currentUser ? 'client_dashboard' : 'home');
+            if (currentUser) setClientTab('catalog');
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, [activeProduct, currentUser, screen, visibleConfiguratorSections]);
 
     useEffect(() => {
         const path = getPathForRouteState(screen, activeProduct, clientTab, dealerTab, manufacturerTab);
@@ -503,6 +554,17 @@ function MainApp() {
         }
     };
 
+    const handleOpenPrintCanvas = () => {
+        if (printCanvasEnabledForCurrentUser) {
+            setScreen('print_canvas');
+        } else if (currentUser) {
+            setClientTab('catalog');
+            setScreen('client_dashboard');
+        } else {
+            setShowAuth(true);
+        }
+    };
+
     const openCommandPalette = () => {
         window.dispatchEvent(new Event('spruzhuk:open-command-palette'));
     };
@@ -515,6 +577,7 @@ function MainApp() {
                 navigate={guardedNavigate}
                 screen={screen}
                 openAuth={() => setShowAuth(true)}
+                productVisibility={visibleConfiguratorSections}
             />
 
             {/* --- МОДАЛЬНОЕ ОКНО АВТОРИЗАЦИИ --- */}
@@ -626,6 +689,12 @@ function MainApp() {
                             user={currentUser}
                             logout={logout}
                             openCommandPalette={openCommandPalette}
+                            sectionVisibility={appSettings.home_sections}
+                            onPrintCanvas={
+                                homePrintCanvasEnabled
+                                    ? handleOpenPrintCanvas
+                                    : null
+                            }
                         />
                     )}
                 >
@@ -634,6 +703,12 @@ function MainApp() {
                             setClientTab(null);
                             setScreen('configurator');
                         }}
+                        onPrintCanvas={
+                            homePrintCanvasEnabled
+                                ? handleOpenPrintCanvas
+                                : null
+                        }
+                        sectionVisibility={appSettings.home_sections}
                         onAuth={() => setShowAuth(true)}
                         user={currentUser}
                         logout={logout}
@@ -642,11 +717,15 @@ function MainApp() {
             )}
 
             {/* --- ЭКРАН: ПОЛОТНО НА ПЕЧАТЬ --- */}
-            {screen === 'print_canvas' && currentUser?.role === 'client' && currentUser?.print_canvas_enabled && (
+            {screen === 'print_canvas' && printCanvasEnabledForCurrentUser && (
                 <RouteSuspense>
                     <PrintCanvas onBack={() => {
-                        setClientTab('catalog');
-                        setScreen('client_dashboard');
+                        if (currentUser?.role === 'client') {
+                            setClientTab('catalog');
+                            setScreen('client_dashboard');
+                        } else {
+                            setScreen('home');
+                        }
                     }} />
                 </RouteSuspense>
             )}
@@ -710,6 +789,8 @@ function MainApp() {
                         initialTab={clientTab}
                         onTabChange={setClientTab}
                         onPrintCanvas={() => setScreen('print_canvas')}
+                        sectionVisibility={effectiveDashboardSections}
+                        printCanvasEnabled={dashboardPrintCanvasEnabled}
                     />
                 </RouteSuspense>
             )}

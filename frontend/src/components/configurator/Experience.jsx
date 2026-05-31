@@ -3,12 +3,13 @@ import { Notebook } from '../shared/Notebook'
 import { Calendar } from '../shared/Calendar'
 import { Thermos } from '../thermos/Thermos'
 import { Powerbank } from '../powerbank/Powerbank'
+import { Sticker } from '../sticker/Sticker'
 import { useConfigurator, registerWebGLCanvas } from '../../store'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useThree, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 
-const ORBIT_PRODUCTS = new Set(['thermos', 'powerbank'])
+const ORBIT_PRODUCTS = new Set(['thermos', 'powerbank', 'sticker'])
 const MIN_ZOOM = 0.35
 const MAX_ZOOM = 2.5
 const clampZoom = (value) => Math.min(Math.max(value, MIN_ZOOM), MAX_ZOOM)
@@ -65,6 +66,30 @@ const ORBIT_VIEW_CONFIG = {
             maxPolarAngle: FULL_POLAR_MAX,
             rotateSpeed: 0.95,
             zoomSpeed: 0.84,
+        },
+    },
+    sticker: {
+        desktop: {
+            baseDistance: 5.2,
+            minDistance: 2.4,
+            maxDistance: 12,
+            target: [0, 0, 0],
+            defaultDirection: [0, 0.03, 1],
+            minPolarAngle: FULL_POLAR_MIN,
+            maxPolarAngle: FULL_POLAR_MAX,
+            rotateSpeed: 0.72,
+            zoomSpeed: 0.78,
+        },
+        mobile: {
+            baseDistance: 5.8,
+            minDistance: 2.7,
+            maxDistance: 14,
+            target: [0, 0, 0],
+            defaultDirection: [0, 0.03, 1],
+            minPolarAngle: FULL_POLAR_MIN,
+            maxPolarAngle: FULL_POLAR_MAX,
+            rotateSpeed: 0.92,
+            zoomSpeed: 0.82,
         },
     },
 }
@@ -211,8 +236,8 @@ export const Experience = () => {
     const notebookBaseZoom = 1.0;
     const notebookPositionY = 0.28;
     const baseZoom = isMobile
-        ? (activeProduct === 'calendar' ? 0.6 : activeProduct === 'thermos' ? 0.5 : activeProduct === 'powerbank' ? 0.65 : 0.8)
-        : (activeProduct === 'calendar' ? 0.8 : activeProduct === 'thermos' ? 0.68 : activeProduct === 'powerbank' ? 0.85 : notebookBaseZoom);
+        ? (activeProduct === 'calendar' ? 0.6 : activeProduct === 'thermos' ? 0.5 : activeProduct === 'powerbank' ? 0.65 : activeProduct === 'sticker' ? 0.72 : 0.8)
+        : (activeProduct === 'calendar' ? 0.8 : activeProduct === 'thermos' ? 0.68 : activeProduct === 'powerbank' ? 0.85 : activeProduct === 'sticker' ? 0.9 : notebookBaseZoom);
 
     // Итоговый зум = База * То, что накликали кнопками
     const finalZoom = isOrbitProduct ? 1 : baseZoom * zoomLevel;
@@ -253,7 +278,7 @@ export const Experience = () => {
             <directionalLight position={[10, 10, 5]} intensity={1.5} />
             <directionalLight position={[-10, 5, 2]} intensity={0.5} />
 
-            {(activeProduct === 'thermos' || activeProduct === 'powerbank') ? (
+            {(activeProduct === 'thermos' || activeProduct === 'powerbank' || activeProduct === 'sticker') ? (
                 <>
                     <OrbitControls
                         key={activeProduct}
@@ -284,6 +309,7 @@ export const Experience = () => {
                     <group>
                         {activeProduct === 'thermos' && <Thermos />}
                         {activeProduct === 'powerbank' && <Powerbank />}
+                        {activeProduct === 'sticker' && <Sticker />}
                     </group>
                 </>
             ) : (

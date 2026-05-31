@@ -7,6 +7,7 @@ import { PresentationControls, Stage, Environment } from '@react-three/drei';
 import { Notebook } from '../shared/Notebook';
 import { Thermos } from '../thermos/Thermos';
 import { Powerbank } from '../powerbank/Powerbank';
+import { Sticker } from '../sticker/Sticker';
 import { SceneLoadingOverlay } from '../shared/VibeLoader';
 import { SiteFooter } from '../shared/SiteFooter';
 
@@ -19,6 +20,7 @@ export const Order = ({ onBack, onSuccess }) => {
         activeProduct, language,
         thermosBodyColor, thermosCapVisible, thermosLogos,
         powerbankBodyColor, powerbankLogos,
+        stickerImages,
     } = useConfigurator();
 
     const [clientType, setClientType] = useState('phys');
@@ -63,6 +65,15 @@ export const Order = ({ onBack, onSuccess }) => {
                 powerbankLogos,
             };
         }
+        if (activeProduct === 'sticker') {
+            return {
+                type: 'sticker',
+                activeProduct: 'sticker',
+                stickerWidthMm: 40,
+                stickerHeightMm: 45,
+                stickerImages,
+            };
+        }
         const bindingCaps = getNotebookBindingCapabilities(bindingType);
         const orderHasElastic = bindingCaps.hasElastic && hasElastic;
         const orderHasCorners = bindingCaps.hasCorners && hasCorners;
@@ -91,6 +102,7 @@ export const Order = ({ onBack, onSuccess }) => {
     const getProductName = () => {
         if (activeProduct === 'thermos') return t(language, 'thermos');
         if (activeProduct === 'powerbank') return t(language, 'powerbank');
+        if (activeProduct === 'sticker') return t(language, 'sticker3d');
         return t(language, 'notebook');
     };
 
@@ -159,14 +171,21 @@ export const Order = ({ onBack, onSuccess }) => {
                                             {activeProduct === 'notebook' && <Notebook />}
                                             {activeProduct === 'thermos' && <Thermos />}
                                             {activeProduct === 'powerbank' && <Powerbank />}
+                                            {activeProduct === 'sticker' && <Sticker preview />}
                                         </Stage>
                                     </PresentationControls>
                                 </Canvas>
                                 <SceneLoadingOverlay compact label="3D" />
-                                <div className="absolute bottom-3 right-3 flex items-center gap-2 bg-black/50 backdrop-blur-md rounded-[10px] px-3 py-2 border border-white/15 pointer-events-none">
-                                    <div className="w-7 h-7 text-white"><BlockIconPreview type={paperPattern} /></div>
-                                    <span className="text-white/70 text-xs font-bold uppercase tracking-wide">{patternNames[paperPattern]}</span>
-                                </div>
+                                {activeProduct === 'sticker' ? (
+                                    <div className="absolute bottom-3 right-3 flex items-center gap-2 bg-black/50 backdrop-blur-md rounded-[10px] px-3 py-2 border border-white/15 pointer-events-none">
+                                        <span className="text-white/70 text-xs font-bold uppercase tracking-wide">40 x 45 мм</span>
+                                    </div>
+                                ) : (
+                                    <div className="absolute bottom-3 right-3 flex items-center gap-2 bg-black/50 backdrop-blur-md rounded-[10px] px-3 py-2 border border-white/15 pointer-events-none">
+                                        <div className="w-7 h-7 text-white"><BlockIconPreview type={paperPattern} /></div>
+                                        <span className="text-white/70 text-xs font-bold uppercase tracking-wide">{patternNames[paperPattern]}</span>
+                                    </div>
+                                )}
                                 <div className="absolute top-3 left-3 text-white/30 text-[10px] font-bold tracking-wider pointer-events-none uppercase">{t(language, 'orderDragHint')}</div>
                             </div>
                         ) : (
@@ -184,17 +203,26 @@ export const Order = ({ onBack, onSuccess }) => {
                         )}
 
                         <div className="space-y-3 border-t border-gray-100 dark:border-white/8 p-6 text-sm font-bold text-[#1a1a1a] dark:text-white">
-                            <Row label={t(language, 'orderBindingLabel')} value={bindingNames[bindingType]} />
-                            {bindingCaps.hasSpiralColor && <Row label={t(language, 'orderSpiralLabel')} value={<ColorDot color={spiralColor} />} />}
-                            <Row label={t(language, 'orderFormatLabel')} value={format} />
-                            <Row label={bindingCaps.hasInnerCoverColor ? t(language, 'orderOuterCoverLabel') : t(language, 'orderCoverLabel')} value={<ColorDot color={coverColor} />} />
-                            {bindingCaps.hasInnerCoverColor && <Row label={t(language, 'orderInnerCoverLabel')} value={<ColorDot color={innerCoverColor} />} />}
-                            {bindingCaps.hasStitchColor && <Row label={t(language, 'orderThreadLabel')} value={<ColorDot color={stitchColor} />} />}
-                            {bindingCaps.hasElastic && <Row label={t(language, 'orderElasticLabel')} value={hasElastic ? <ColorDot color={elasticColor} /> : t(language, 'orderNo')} />}
-                            {bindingCaps.hasCorners && (
-                                <Row label={t(language, 'cornersLabel')} value={hasCorners ? t(language, 'orderYes') : t(language, 'orderNo')} />
+                            {activeProduct === 'sticker' ? (
+                                <>
+                                    <Row label={t(language, 'stickerCanvasSize')} value="40 x 45 мм" />
+                                    <Row label={t(language, 'printCanvasItems')} value={stickerImages.length} />
+                                </>
+                            ) : (
+                                <>
+                                    <Row label={t(language, 'orderBindingLabel')} value={bindingNames[bindingType]} />
+                                    {bindingCaps.hasSpiralColor && <Row label={t(language, 'orderSpiralLabel')} value={<ColorDot color={spiralColor} />} />}
+                                    <Row label={t(language, 'orderFormatLabel')} value={format} />
+                                    <Row label={bindingCaps.hasInnerCoverColor ? t(language, 'orderOuterCoverLabel') : t(language, 'orderCoverLabel')} value={<ColorDot color={coverColor} />} />
+                                    {bindingCaps.hasInnerCoverColor && <Row label={t(language, 'orderInnerCoverLabel')} value={<ColorDot color={innerCoverColor} />} />}
+                                    {bindingCaps.hasStitchColor && <Row label={t(language, 'orderThreadLabel')} value={<ColorDot color={stitchColor} />} />}
+                                    {bindingCaps.hasElastic && <Row label={t(language, 'orderElasticLabel')} value={hasElastic ? <ColorDot color={elasticColor} /> : t(language, 'orderNo')} />}
+                                    {bindingCaps.hasCorners && (
+                                        <Row label={t(language, 'cornersLabel')} value={hasCorners ? t(language, 'orderYes') : t(language, 'orderNo')} />
+                                    )}
+                                    <Row label={t(language, 'orderPatternLabel')} value={patternNames[paperPattern]} />
+                                </>
                             )}
-                            <Row label={t(language, 'orderPatternLabel')} value={patternNames[paperPattern]} />
                         </div>
                     </div>
                 </div>

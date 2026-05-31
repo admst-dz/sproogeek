@@ -1,12 +1,12 @@
 export const ORGANIZATION_INFO = {
     name: 'Sproogeek',
-    legalName: 'Sproogeek',
+    legalName: 'ООО "Cпругик"',
     email: 'info@sproogeek.com',
     phone: '+375 29 357-43-75',
     phoneHref: '+375293574375',
     telegram: 't.me/SprooGeek',
     telegramHref: 'https://t.me/SprooGeek',
-    legalAddress: 'Республика Беларусь, г. Минск',
+    legalAddress: '220036, г. Минск, Бетонный проезд, д. 19а, каб. 306',
     localized: {
         ru: {
             legalName: 'Sproogeek',

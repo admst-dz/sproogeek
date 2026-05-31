@@ -10,6 +10,17 @@ import re
 # уровня DevOps, а не повседневного управления.
 ADMIN_MANAGED_ROLES = {"client", "dealer", "manufacturer", "admin"}
 ADMIN_MANAGED_SUB_ROLES = {"PL", "PKL", "KL", "KPR", "PR", "TP"}
+SECTION_VISIBILITY_KEYS = {"notebook", "thermos", "powerbank", "sticker", "print_canvas"}
+
+
+def _normalize_visibility_overrides(value: Optional[Dict[str, Optional[bool]]]) -> Optional[Dict[str, Optional[bool]]]:
+    if value is None:
+        return None
+    return {
+        key: item
+        for key, item in value.items()
+        if key in SECTION_VISIBILITY_KEYS and item is not None
+    } or None
 
 
 class UserAdminResponse(BaseModel):
@@ -21,6 +32,7 @@ class UserAdminResponse(BaseModel):
     token_balance: float = 0.0
     company_name: Optional[str] = None
     print_canvas_enabled: bool = False
+    section_visibility_overrides: Optional[Dict[str, bool]] = None
     has_password: bool = False
     orders_count: int = 0
     last_order_at: Optional[datetime] = None
@@ -39,6 +51,7 @@ class UserAdminCreate(BaseModel):
     company_name: Optional[str] = Field(None, max_length=120)
     token_balance: float = Field(0.0, ge=0, le=1_000_000_000)
     print_canvas_enabled: bool = False
+    section_visibility_overrides: Optional[Dict[str, Optional[bool]]] = None
 
     @field_validator("password")
     @classmethod
@@ -63,6 +76,11 @@ class UserAdminCreate(BaseModel):
             raise ValueError(f"Sub-role must be one of {sorted(ADMIN_MANAGED_SUB_ROLES)}")
         return value
 
+    @field_validator("section_visibility_overrides")
+    @classmethod
+    def _visibility_overrides_allowed(cls, value: Optional[Dict[str, Optional[bool]]]) -> Optional[Dict[str, Optional[bool]]]:
+        return _normalize_visibility_overrides(value)
+
 
 class UserAdminPatch(BaseModel):
     display_name: Optional[str] = Field(None, max_length=80)
@@ -71,6 +89,7 @@ class UserAdminPatch(BaseModel):
     company_name: Optional[str] = Field(None, max_length=120)
     token_balance: Optional[float] = Field(None, ge=0, le=1_000_000_000)
     print_canvas_enabled: Optional[bool] = None
+    section_visibility_overrides: Optional[Dict[str, Optional[bool]]] = None
 
     @field_validator("role")
     @classmethod
@@ -89,6 +108,11 @@ class UserAdminPatch(BaseModel):
         if value not in ADMIN_MANAGED_SUB_ROLES:
             raise ValueError(f"Sub-role must be one of {sorted(ADMIN_MANAGED_SUB_ROLES)}")
         return value
+
+    @field_validator("section_visibility_overrides")
+    @classmethod
+    def _visibility_overrides_allowed(cls, value: Optional[Dict[str, Optional[bool]]]) -> Optional[Dict[str, Optional[bool]]]:
+        return _normalize_visibility_overrides(value)
 
 
 class UserAdminPasswordReset(BaseModel):
@@ -118,12 +142,40 @@ class AdminStatsResponse(BaseModel):
     new_orders_last_30d: int
 
 
+class SectionVisibilitySettings(BaseModel):
+    notebook: bool = True
+    thermos: bool = True
+    powerbank: bool = True
+    sticker: bool = True
+    print_canvas: bool = False
+
+
+class DashboardSectionVisibilitySettings(BaseModel):
+    notebook: bool = True
+    thermos: bool = True
+    powerbank: bool = True
+    sticker: bool = True
+    print_canvas: bool = True
+
+
+class SectionVisibilityPatch(BaseModel):
+    notebook: Optional[bool] = None
+    thermos: Optional[bool] = None
+    powerbank: Optional[bool] = None
+    sticker: Optional[bool] = None
+    print_canvas: Optional[bool] = None
+
+
 class AdminSettingsResponse(BaseModel):
     guest_approval_enabled: bool = True
+    home_sections: SectionVisibilitySettings = Field(default_factory=SectionVisibilitySettings)
+    dashboard_sections: DashboardSectionVisibilitySettings = Field(default_factory=DashboardSectionVisibilitySettings)
 
 
 class AdminSettingsPatch(BaseModel):
     guest_approval_enabled: Optional[bool] = None
+    home_sections: Optional[SectionVisibilityPatch] = None
+    dashboard_sections: Optional[SectionVisibilityPatch] = None
 
 
 class OrderTypeSummary(BaseModel):

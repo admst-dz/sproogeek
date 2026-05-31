@@ -423,22 +423,6 @@ const getItemFootprint = (item, rotated = false) => {
     };
 };
 
-const constrainFootprint = (footprint, maxWidth, maxHeight = Infinity) => {
-    const scale = Math.min(
-        1,
-        maxWidth / Math.max(1, footprint.drawWidth),
-        maxHeight / Math.max(1, footprint.drawHeight)
-    );
-    const drawWidth = footprint.drawWidth * scale;
-    const drawHeight = footprint.drawHeight * scale;
-    return {
-        drawWidth,
-        drawHeight,
-        width: drawWidth,
-        height: drawHeight,
-    };
-};
-
 const rectsIntersect = (a, b) => (
     a.x < b.x + b.width - RECT_EPSILON
     && a.x + a.width > b.x + RECT_EPSILON
@@ -612,7 +596,7 @@ const packRows = (instances, { sheetWidth, logoGapMm }) => {
     };
     const byHeight = (a, b) => (b.height - a.height) || byArea(a, b);
     const byWidth = (a, b) => (b.width - a.width) || byArea(a, b);
-    const byAspect = (a, b) => (b.width / Math.max(1, b.height)) - (a.width / Math.max(1, a.height)) || byArea(a, b);
+    const byAspect = (a, b) => Math.abs(1 - (a.width / Math.max(1, a.height))) - Math.abs(1 - (b.width / Math.max(1, b.height))) || byArea(a, b);
     const packingOrders = [
         [...instances].sort(byArea),
         [...instances].sort(byHeight),
@@ -623,119 +607,90 @@ const packRows = (instances, { sheetWidth, logoGapMm }) => {
 
     const packOrder = (sorted) => {
         const placements = [];
+        const unplaced = [];
         let freeRects = [{
             x: sheetPadding,
             y: sheetPadding,
             width: innerWidthLimit,
-            height: Math.max(1, maxLengthMm - sheetPadding * 2),
+            height: innerHeightLimit,
         }];
 
         sorted.forEach((item) => {
-            const orientationOptions = [false, true].filter((rotated, index) => (
-                index === 0 || (item.shape !== 'round' && Math.abs(item.width - item.height) > 0.1)
-            ));
-
             let best = null;
-            const currentRight = placements.length
-                ? Math.max(...placements.map((placed) => placed.x + placed.drawWidth))
-                : sheetPadding;
-            const currentBottom = placements.length
-                ? Math.max(...placements.map((placed) => placed.y + placed.drawHeight))
-                : sheetPadding;
+            const canRotate = item.shape !== 'round' && Math.abs(item.width - item.height) > 0.1;
+            const orientationOptions = canRotate ? [false, true] : [false];
+
             orientationOptions.forEach((rotated) => {
-                const footprint = constrainFootprint(
-                    getItemFootprint(item, rotated),
-                    innerWidthLimit,
-                    innerHeightLimit
-                );
+                const footprint = getItemFootprint(item, rotated);
                 const drawWidth = footprint.drawWidth;
                 const drawHeight = footprint.drawHeight;
+                if (drawWidth > innerWidthLimit + RECT_EPSILON || drawHeight > innerHeightLimit + RECT_EPSILON) return;
 
                 freeRects.forEach((rect) => {
                     if (drawWidth > rect.width + RECT_EPSILON || drawHeight > rect.height + RECT_EPSILON) return;
 
+                    const x = rect.x;
+                    const y = rect.y;
                     const maxRight = widthLimit - sheetPadding;
                     const maxBottom = maxLengthMm - sheetPadding;
-                    const basePlaceWidth = drawWidth + gap <= rect.width + RECT_EPSILON ? drawWidth + gap : drawWidth;
-                    const basePlaceHeight = drawHeight + gap <= rect.height + RECT_EPSILON ? drawHeight + gap : drawHeight;
-                    if (basePlaceWidth > rect.width + RECT_EPSILON || basePlaceHeight > rect.height + RECT_EPSILON) return;
+                    if (x + drawWidth > maxRight + RECT_EPSILON || y + drawHeight > maxBottom + RECT_EPSILON) return;
 
-                    const xPositions = uniqueNumbers([
-                        rect.x,
-                        rect.x + rect.width - basePlaceWidth,
-                    ]);
-                    const yPositions = uniqueNumbers([rect.y]);
+                    const placeWidth = Math.min(drawWidth + gap, maxRight - x);
+                    const placeHeight = Math.min(drawHeight + gap, maxBottom - y);
+                    if (placeWidth < drawWidth - RECT_EPSILON || placeHeight < drawHeight - RECT_EPSILON) return;
 
-                    yPositions.forEach((y) => {
-                        xPositions.forEach((x) => {
-                            if (x < sheetPadding - RECT_EPSILON || y < sheetPadding - RECT_EPSILON) return;
-                            if (x + drawWidth > maxRight + RECT_EPSILON || y + drawHeight > maxBottom + RECT_EPSILON) return;
-
-                            const placeWidth = Math.min(basePlaceWidth, maxRight - x);
-                            const placeHeight = Math.min(basePlaceHeight, maxBottom - y);
-                            if (placeWidth < drawWidth - RECT_EPSILON || placeHeight < drawHeight - RECT_EPSILON) return;
-                            if (x + placeWidth > rect.x + rect.width + RECT_EPSILON) return;
-                            if (y + placeHeight > rect.y + rect.height + RECT_EPSILON) return;
-
-                            const prospectiveRight = Math.max(currentRight, x + drawWidth);
-                            const prospectiveBottom = Math.max(currentBottom, y + drawHeight);
-                            const heightGrowth = Math.max(0, prospectiveBottom - currentBottom);
-                            const widthGrowth = Math.max(0, prospectiveRight - currentRight);
-                            const shortSideWaste = Math.min(rect.width - placeWidth, rect.height - placeHeight);
-                            const longSideWaste = Math.max(rect.width - placeWidth, rect.height - placeHeight);
-                            const areaWaste = (rect.width * rect.height) - (placeWidth * placeHeight);
-                            const rotationCost = rotated ? 0.04 : 0;
-                            const next = {
-                                x,
-                                y,
-                                rank: [
-                                    prospectiveBottom,
-                                    heightGrowth,
-                                    shortSideWaste,
-                                    longSideWaste,
-                                    areaWaste,
-                                    widthGrowth,
-                                    prospectiveRight,
-                                    rotationCost,
-                                    y,
-                                    x,
-                                ],
-                                placeWidth,
-                                placeHeight,
-                                drawWidth: footprint.drawWidth,
-                                drawHeight: footprint.drawHeight,
-                                rotated,
-                            };
-                            if (!best || comparePlacementRanks(next.rank, best.rank) < 0) {
-                                best = next;
-                            }
-                        });
-                    });
+                    const shortSideWaste = Math.min(rect.width - placeWidth, rect.height - placeHeight);
+                    const longSideWaste = Math.max(rect.width - placeWidth, rect.height - placeHeight);
+                    const areaWaste = (rect.width * rect.height) - (placeWidth * placeHeight);
+                    const usedBottom = y + drawHeight;
+                    const usedRight = x + drawWidth;
+                    const rotationCost = rotated ? 0.02 : 0;
+                    const next = {
+                        x,
+                        y,
+                        rank: [
+                            usedBottom,
+                            shortSideWaste,
+                            longSideWaste,
+                            areaWaste,
+                            usedRight,
+                            rotationCost,
+                            y,
+                            x,
+                        ],
+                        placeWidth,
+                        placeHeight,
+                        drawWidth,
+                        drawHeight,
+                        rotated,
+                    };
+                    if (!best || comparePlacementRanks(next.rank, best.rank) < 0) {
+                        best = next;
+                    }
                 });
             });
 
-            const fallbackFootprint = constrainFootprint(
-                getItemFootprint(item, false),
-                innerWidthLimit,
-                innerHeightLimit
-            );
-            const placement = best || {
-                x: sheetPadding,
-                y: placements.length
+            const placement = best || orientationOptions
+                .map((rotated) => ({ ...getItemFootprint(item, rotated), rotated }))
+                .filter((footprint) => footprint.drawWidth <= innerWidthLimit + RECT_EPSILON && footprint.drawHeight <= innerHeightLimit + RECT_EPSILON)
+                .sort((a, b) => (a.drawHeight - b.drawHeight) || (a.drawWidth - b.drawWidth))[0];
+            if (!placement) {
+                unplaced.push(item);
+                return;
+            }
+            if (!best) {
+                placement.x = sheetPadding;
+                placement.y = placements.length
                     ? Math.max(...placements.map((placed) => placed.y + placed.drawHeight + gap))
-                    : sheetPadding,
-                placeWidth: Math.min(fallbackFootprint.width + gap, innerWidthLimit),
-                placeHeight: fallbackFootprint.height + gap,
-                drawWidth: fallbackFootprint.drawWidth,
-                drawHeight: fallbackFootprint.drawHeight,
-                rotated: false,
-            };
-            const drawX = clamp(placement.x, sheetPadding, widthLimit - sheetPadding - placement.drawWidth);
-            const drawY = Math.max(sheetPadding, placement.y);
+                    : sheetPadding;
+                placement.placeWidth = Math.min(placement.drawWidth + gap, innerWidthLimit);
+                placement.placeHeight = placement.drawHeight + gap;
+            }
+
             placements.push({
                 ...item,
-                x: drawX,
-                y: drawY,
+                x: placement.x,
+                y: placement.y,
                 drawWidth: placement.drawWidth,
                 drawHeight: placement.drawHeight,
                 rotated: placement.rotated,
@@ -745,23 +700,19 @@ const packRows = (instances, { sheetWidth, logoGapMm }) => {
                 y: placement.y,
                 width: placement.placeWidth,
                 height: placement.placeHeight,
-            });
+            }).sort((a, b) => (a.y - b.y) || (a.x - b.x) || (a.height - b.height));
         });
 
-        const compactedPlacements = compactPlacements(placements, {
-            gap,
-            sheetPadding,
-            widthLimit,
-            maxLengthMm,
-        });
-        const usedHeight = compactedPlacements.length
-            ? Math.max(...compactedPlacements.map((item) => item.y + item.drawHeight)) + sheetPadding
+        const usedHeight = placements.length
+            ? Math.max(...placements.map((item) => item.y + item.drawHeight)) + sheetPadding
             : EMPTY_SHEET_HEIGHT_MM;
-        const usedWidth = compactedPlacements.length
-            ? Math.min(widthLimit, Math.max(...compactedPlacements.map((item) => item.x + item.drawWidth)) + sheetPadding)
+        const usedWidth = placements.length
+            ? Math.min(widthLimit, Math.max(...placements.map((item) => item.x + item.drawWidth)) + sheetPadding)
             : widthLimit;
+
         return {
-            placements: compactedPlacements,
+            placements,
+            unplaced,
             width: widthLimit,
             height: Math.max(260, Math.ceil(usedHeight)),
             usedWidth,
@@ -774,8 +725,10 @@ const packRows = (instances, { sheetWidth, logoGapMm }) => {
         .map(packOrder)
         .reduce((best, next) => {
             if (!best) return next;
-            if (next.usedHeight < best.usedHeight) return next;
-            if (next.usedHeight === best.usedHeight && next.usedWidth > best.usedWidth) return next;
+            if ((next.unplaced?.length || 0) < (best.unplaced?.length || 0)) return next;
+            if ((next.unplaced?.length || 0) > (best.unplaced?.length || 0)) return best;
+            if (next.usedHeight < best.usedHeight - RECT_EPSILON) return next;
+            if (Math.abs(next.usedHeight - best.usedHeight) <= RECT_EPSILON && next.usedWidth < best.usedWidth) return next;
             return best;
         }, null);
 };
@@ -881,6 +834,9 @@ export const PrintCanvas = ({ onBack }) => {
     const buildTiffExport = useCallback(async () => {
         if (!layout.placements.length) {
             throw new Error('empty-layout');
+        }
+        if (layout.unplaced?.length) {
+            throw new Error('items-not-fit');
         }
 
         const pxPerMm = TIFF_EXPORT_DPI / MM_PER_INCH;
@@ -989,7 +945,11 @@ export const PrintCanvas = ({ onBack }) => {
         } catch (err) {
             console.error(err);
             setExportMsg('');
-            setError(t(language, err?.message === 'empty-layout' ? 'printCanvasExportEmpty' : 'printCanvasExportError'));
+            setError(t(language, err?.message === 'empty-layout'
+                ? 'printCanvasExportEmpty'
+                : err?.message === 'items-not-fit'
+                    ? 'printCanvasItemsNotFit'
+                    : 'printCanvasExportError'));
         } finally {
             setExportBusy(false);
         }
@@ -1041,6 +1001,11 @@ export const PrintCanvas = ({ onBack }) => {
                             {error && (
                                 <div className="mt-3 rounded-[9px] border border-red-300/25 bg-red-500/12 px-3 py-2 text-[12px] font-bold text-red-100">
                                     {error}
+                                </div>
+                            )}
+                            {!!layout.unplaced?.length && (
+                                <div className="mt-3 rounded-[9px] border border-amber-300/25 bg-amber-500/12 px-3 py-2 text-[12px] font-bold text-amber-100">
+                                    {t(language, 'printCanvasItemsNotFit')}
                                 </div>
                             )}
 
@@ -1176,7 +1141,7 @@ export const PrintCanvas = ({ onBack }) => {
                                 <button
                                     type="button"
                                     onClick={exportTiff}
-                                    disabled={exportBusy || !layout.placements.length}
+                                    disabled={exportBusy || !layout.placements.length || !!layout.unplaced?.length}
                                     className="h-8 rounded-[8px] border border-[#fff9ec]/35 bg-[#fff9ec] px-3 text-[11px] font-black uppercase tracking-wider text-[#211a1d] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
                                 >
                                     {exportBusy ? t(language, 'printCanvasExporting') : t(language, 'printCanvasExportTiff')}
@@ -1244,9 +1209,7 @@ export const PrintCanvas = ({ onBack }) => {
                                 {layout.placements.map((item) => (
                                     <div
                                         key={item.id}
-                                        className={`absolute grid place-items-center bg-white/8 ${
-                                            item.rotated ? 'overflow-visible' : 'overflow-hidden'
-                                        }`}
+                                        className="absolute grid place-items-center overflow-hidden bg-white/8"
                                         title={`${item.name} #${item.copyIndex + 1}`}
                                         style={{
                                             left: item.x * previewScale,
@@ -1260,13 +1223,15 @@ export const PrintCanvas = ({ onBack }) => {
                                         <img
                                             src={item.src}
                                             alt=""
-                                            className="h-full w-full object-contain"
+                                            className={item.rotated ? 'absolute object-contain' : 'h-full w-full object-contain'}
                                             style={item.rotated ? {
+                                                left: '50%',
+                                                top: '50%',
                                                 width: item.drawHeight * previewScale,
                                                 height: item.drawWidth * previewScale,
                                                 maxWidth: 'none',
                                                 maxHeight: 'none',
-                                                transform: 'rotate(90deg)',
+                                                transform: 'translate(-50%, -50%) rotate(90deg)',
                                             } : undefined}
                                         />
                                     </div>

@@ -18,12 +18,13 @@ from starlette.concurrency import run_in_threadpool
 logger = logging.getLogger(__name__)
 
 from app.core.config import get_settings
-from app.core.deps import get_current_user, request_id
+from app.core.deps import get_current_user, get_current_user_optional, request_id
 from app.core.email import send_email
 from app.core.event_logger import event_logger
 from app.crud import print_canvas as crud_print_canvas
 from app.database import get_db
 from app.schemas.print_canvas import PrintCanvasExportResponse
+from app.services.settings_store import read_settings
 
 
 router = APIRouter()
@@ -36,10 +37,32 @@ TIFF_SIGNATURES = (b"II*\x00", b"MM\x00*")
 UPLOAD_CHUNK_SIZE = 1024 * 1024
 
 
+def _settings_section_enabled(section: str, key: str, default: bool = False) -> bool:
+    settings_data = read_settings()
+    section_data = settings_data.get(section) if isinstance(settings_data.get(section), dict) else {}
+    return section_data.get(key, default) is not False
+
+
+def _public_print_canvas_enabled() -> bool:
+    settings_data = read_settings()
+    home_sections = settings_data.get("home_sections") if isinstance(settings_data.get("home_sections"), dict) else {}
+    return bool(settings_data.get("print_canvas_public_enabled", False)) or home_sections.get("print_canvas", False) is not False
+
+
+def _client_print_canvas_enabled(current_user) -> bool:
+    enabled = _settings_section_enabled("dashboard_sections", "print_canvas", True)
+    overrides = getattr(current_user, "section_visibility_overrides", None) or {}
+    if isinstance(overrides, dict) and "print_canvas" in overrides:
+        enabled = overrides.get("print_canvas") is not False
+    return enabled
+
+
 def _ensure_can_use_print_canvas(current_user) -> None:
-    if current_user.role in {"admin", "owner"}:
+    if _public_print_canvas_enabled():
         return
-    if current_user.role == "client" and current_user.print_canvas_enabled:
+    if current_user and current_user.role in {"admin", "owner"}:
+        return
+    if current_user and current_user.role == "client" and _client_print_canvas_enabled(current_user):
         return
     raise HTTPException(status_code=403, detail="Print canvas is not enabled for this user")
 
@@ -211,7 +234,7 @@ async def create_print_canvas_export(
     metadata: str = Form(...),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_user_optional),
 ):
     _ensure_can_use_print_canvas(current_user)
     parsed = _metadata_from_form(metadata)
@@ -237,8 +260,8 @@ async def create_print_canvas_export(
 
     item = await crud_print_canvas.create_export(db, {
         "id": export_id,
-        "user_id": current_user.id,
-        "user_email": current_user.email,
+        "user_id": current_user.id if current_user else None,
+        "user_email": current_user.email if current_user else None,
         "filename": filename,
         "file_path": file_path,
         "file_size": file_size,
@@ -258,10 +281,10 @@ async def create_print_canvas_export(
     event_logger.log(
         "PRINT_CANVAS_EXPORT_CREATED",
         "Client exported print canvas TIFF",
-        direction="client->backend",
-        actor_type=current_user.role,
-        actor_id=str(current_user.id),
-        actor_email=current_user.email,
+        direction="client->backend" if current_user else "guest->backend",
+        actor_type=current_user.role if current_user else "anonymous",
+        actor_id=str(current_user.id) if current_user else None,
+        actor_email=current_user.email if current_user else None,
         method=request.method,
         path=request.url.path,
         status_code=201,
@@ -298,12 +321,15 @@ async def list_print_canvas_exports(
 async def download_print_canvas_export(
     export_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_user_optional),
 ):
     item = await crud_print_canvas.get_export(db, export_id)
     if not item:
         raise HTTPException(status_code=404, detail="Print canvas export not found")
-    if item.user_id != current_user.id and current_user.role not in {"admin", "owner"}:
+    is_owner = current_user and item.user_id == current_user.id
+    is_admin = current_user and current_user.role in {"admin", "owner"}
+    is_public_guest_export = item.user_id is None and _public_print_canvas_enabled()
+    if not (is_owner or is_admin or is_public_guest_export):
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(item.file_path):
         raise HTTPException(status_code=404, detail="TIFF file not found")

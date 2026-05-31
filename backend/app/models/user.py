@@ -23,6 +23,7 @@ class User(Base):
     token_balance = Column(Float, default=0.0, nullable=True)
     company_name = Column(String, nullable=True)
     print_canvas_enabled = Column(Boolean, default=False, nullable=False)
+    section_visibility_overrides = Column(JSON, nullable=True)
 
     orders = relationship("Order", back_populates="user", foreign_keys="Order.user_id", cascade="all, delete-orphan")
 

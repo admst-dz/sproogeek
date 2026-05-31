@@ -4,6 +4,7 @@ import { Experience } from './Experience'
 import { Interface, ZoomControls } from './Interface'
 import { ThermosInterface } from '../thermos/ThermosInterface'
 import { PowerbankInterface } from '../powerbank/PowerbankInterface'
+import { StickerInterface } from '../sticker/StickerInterface'
 import { SceneLoadingOverlay } from '../shared/VibeLoader'
 import { SceneHints } from '../shared/SceneHints'
 import { ConfirmModal } from '../shared/ConfirmModal'
@@ -105,6 +106,8 @@ export function ConfiguratorScreen({ currentUser, userRole, logout, onNavigate, 
                             <ThermosInterface onFinish={onFinish} />
                         ) : activeProduct === 'powerbank' ? (
                             <PowerbankInterface onFinish={onFinish} />
+                        ) : activeProduct === 'sticker' ? (
+                            <StickerInterface onFinish={onFinish} />
                         ) : (
                             <Interface
                                 onFinish={onFinish}

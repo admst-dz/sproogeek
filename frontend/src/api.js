@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { DEFAULT_APP_SETTINGS, normalizeAppSettings } from './store';
 import { getCookie, setCookie, deleteCookie, hasCookieConsent } from './utils/cookies';
 
 const AUTH_COOKIE = 'spruzhuk_auth';
@@ -404,7 +405,7 @@ export const requestGuestApproval = async (payload) => {
 
 export const fetchPublicSettings = async () => {
     const { data } = await apiClient.get('/approval/settings');
-    return data || { guest_approval_enabled: true };
+    return normalizeAppSettings(data || DEFAULT_APP_SETTINGS);
 };
 
 export default apiClient;

@@ -8,6 +8,20 @@ from fastapi import HTTPException
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "guest_approval_enabled": True,
+    "home_sections": {
+        "notebook": True,
+        "thermos": True,
+        "powerbank": True,
+        "sticker": True,
+        "print_canvas": False,
+    },
+    "dashboard_sections": {
+        "notebook": True,
+        "thermos": True,
+        "powerbank": True,
+        "sticker": True,
+        "print_canvas": True,
+    },
 }
 MAX_SETTINGS_FILE_BYTES = int(os.getenv("APP_SETTINGS_MAX_BYTES", "16384"))
 
@@ -32,7 +46,13 @@ def read_settings() -> Dict[str, Any]:
         raise HTTPException(status_code=422, detail="Settings JSON is invalid") from exc
     if not isinstance(data, dict):
         raise HTTPException(status_code=422, detail="Settings JSON must be an object")
-    return {**DEFAULT_SETTINGS, **data}
+    settings = {**DEFAULT_SETTINGS, **data}
+    for section_key in ("home_sections", "dashboard_sections"):
+        settings[section_key] = {
+            **DEFAULT_SETTINGS[section_key],
+            **(data.get(section_key) if isinstance(data.get(section_key), dict) else {}),
+        }
+    return settings
 
 
 def write_settings(patch: Dict[str, Any]) -> Dict[str, Any]:
