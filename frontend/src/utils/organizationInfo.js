@@ -9,8 +9,8 @@ export const ORGANIZATION_INFO = {
     legalAddress: '220036, г. Минск, Бетонный проезд, д. 19а, каб. 306',
     localized: {
         ru: {
-            legalName: 'Sproogeek',
-            legalAddress: 'Республика Беларусь, г. Минск',
+            legalName: 'ООО "Cпругик"',
+            legalAddress: '220036, г. Минск, Бетонный проезд, д. 19а, каб. 306',
         },
         en: {
             legalName: 'Sproogeek',

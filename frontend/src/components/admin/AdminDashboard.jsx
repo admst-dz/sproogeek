@@ -15,7 +15,16 @@ const STATUS_KEYS = {
 };
 const BINDING_KEYS = { hard: 'bindingHardShort', spiral: 'bindingSpiralShort', soft: 'bindingSoft' };
 const PATTERN_KEYS = { blank: 'patternBlank', lined: 'patternLined', tlined: 'patternTLined', grid: 'patternGrid', dotted: 'patternDotted' };
-const PRODUCT_KEYS = { notebook: 'notebook', thermos: 'thermos', powerbank: 'powerbank', sticker: 'sticker3d' };
+const PRODUCT_KEYS = {
+    notebook: 'notebook',
+    thermos: 'thermos',
+    powerbank: 'powerbank',
+    sticker: 'sticker3d',
+    shopper: 'shopper',
+    tshirt: 'tshirt',
+    hoodie: 'hoodie',
+    lanyard: 'lanyard',
+};
 
 function getStatusLabel(status, language) {
     const key = STATUS_KEYS[status];
@@ -1241,6 +1250,10 @@ const DEFAULT_ADMIN_SETTINGS = {
         thermos: true,
         powerbank: true,
         sticker: true,
+        shopper: true,
+        tshirt: true,
+        hoodie: true,
+        lanyard: true,
         print_canvas: false,
     },
     dashboard_sections: {
@@ -1248,6 +1261,10 @@ const DEFAULT_ADMIN_SETTINGS = {
         thermos: true,
         powerbank: true,
         sticker: true,
+        shopper: true,
+        tshirt: true,
+        hoodie: true,
+        lanyard: true,
         print_canvas: true,
     },
 };
@@ -1257,6 +1274,10 @@ const SECTION_LABELS = {
     thermos: 'Термос',
     powerbank: 'Повербанк',
     sticker: '3D стикер',
+    shopper: 'Шопер',
+    tshirt: 'Майка',
+    hoodie: 'Худи',
+    lanyard: 'Ланъярд',
     print_canvas: 'Полотно на печать',
 };
 
@@ -1605,13 +1626,122 @@ function JsonTab({ language }) {
 
 // ─── Продукты ────────────────────────────────────────────────────────────────
 
+function ProductVisibilitySettingsPanel({ language }) {
+    const [settings, setSettings] = useState(DEFAULT_ADMIN_SETTINGS);
+    const [loading, setLoading] = useState(true);
+    const [savingKey, setSavingKey] = useState(null);
+    const [msg, setMsg] = useState('');
+    const setAppSettings = useConfigurator((state) => state.setAppSettings);
+
+    useEffect(() => {
+        let alive = true;
+        adminApi.getSettings()
+            .then(({ data }) => {
+                if (!alive) return;
+                const nextSettings = normalizeAdminSettings(data);
+                setSettings(nextSettings);
+                setAppSettings(nextSettings);
+            })
+            .catch((err) => {
+                if (alive) setMsg('✗ ' + formatApiError(err, language));
+            })
+            .finally(() => {
+                if (alive) setLoading(false);
+            });
+        return () => { alive = false; };
+    }, [language, setAppSettings]);
+
+    const saveSectionPatch = async (scope, key) => {
+        if (savingKey) return;
+        const currentEnabled = settings[scope]?.[key] !== false;
+        const patch = { [scope]: { [key]: !currentEnabled } };
+        setSavingKey(`${scope}:${key}`);
+        setMsg('');
+        try {
+            const { data } = await adminApi.updateSettings(patch);
+            const nextSettings = normalizeAdminSettings(data);
+            setSettings(nextSettings);
+            setAppSettings(nextSettings);
+            setMsg(t(language, 'adminSaved'));
+        } catch (err) {
+            setMsg('✗ ' + formatApiError(err, language));
+        } finally {
+            setSavingKey(null);
+            setTimeout(() => setMsg(''), 2500);
+        }
+    };
+
+    return (
+        <div className="mb-6 rounded-[14px] border border-white/10 bg-white/[0.03] p-4">
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap items-center gap-3">
+                    <div>
+                        <h3 className="text-base font-bold">Видимость айтемов</h3>
+                        <p className="mt-1 text-xs text-white/38">Отключение карточек на главной и в каталоге личного кабинета.</p>
+                    </div>
+                    <span className={`ml-auto rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest ${
+                        savingKey
+                            ? 'border-yellow-500/25 bg-yellow-500/10 text-yellow-300'
+                            : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
+                    }`}>
+                        {savingKey ? t(language, 'adminSaving') : t(language, 'adminSaved')}
+                    </span>
+                </div>
+                {msg && (
+                    <p className={`text-xs font-bold ${msg.startsWith('✓') ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {msg}
+                    </p>
+                )}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest">Главная страница</p>
+                        {Object.entries(SECTION_LABELS).map(([key, label]) => (
+                            <SettingsSwitch
+                                key={`products-home-${key}`}
+                                label={label}
+                                enabled={settings.home_sections?.[key] !== false}
+                                loading={loading}
+                                saving={Boolean(savingKey)}
+                                onToggle={() => saveSectionPatch('home_sections', key)}
+                            />
+                        ))}
+                    </div>
+                    <div className="space-y-2">
+                        <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest">Личный кабинет</p>
+                        {Object.entries(SECTION_LABELS).map(([key, label]) => (
+                            <SettingsSwitch
+                                key={`products-dashboard-${key}`}
+                                label={label}
+                                enabled={settings.dashboard_sections?.[key] !== false}
+                                loading={loading}
+                                saving={Boolean(savingKey)}
+                                onToggle={() => saveSectionPatch('dashboard_sections', key)}
+                            />
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function ProductsTab({ language }) {
     const { data, setData, loading, error } = useData(() => productApi.getAll(true), language);
     const [savingId, setSavingId] = useState(null);
     const [saveError, setSaveError] = useState('');
 
-    if (loading) return <Loader language={language} />;
-    if (error) return <ErrBox msg={error} />;
+    if (loading) return (
+        <>
+            <ProductVisibilitySettingsPanel language={language} />
+            <Loader language={language} />
+        </>
+    );
+    if (error) return (
+        <>
+            <ProductVisibilitySettingsPanel language={language} />
+            <ErrBox msg={error} />
+        </>
+    );
     const products = Array.isArray(data) ? data : [];
 
     const payloadForProduct = (product, isActive) => ({
@@ -1652,6 +1782,7 @@ function ProductsTab({ language }) {
 
     return (
         <>
+            <ProductVisibilitySettingsPanel language={language} />
             <SectionHeader title={t(language, 'adminProductsHeader')} count={products.length} />
             {saveError && <ErrBox msg={saveError} />}
             <Table

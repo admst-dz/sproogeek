@@ -10,6 +10,10 @@ import { Notebook } from '../shared/Notebook';
 import { Thermos } from '../thermos/Thermos';
 import { Powerbank } from '../powerbank/Powerbank';
 import { Sticker } from '../sticker/Sticker';
+import { Shopper } from '../merch/Shopper';
+import { Tshirt } from '../merch/Tshirt';
+import { Hoodie } from '../merch/Hoodie';
+import { Lanyard } from '../merch/Lanyard';
 import { ConfiguratorProductMenu } from '../home/Home';
 import { getUserDisplayName, getUserSecondaryLabel } from '../../utils/user';
 import { SceneLoadingOverlay } from '../shared/VibeLoader';
@@ -818,8 +822,12 @@ const ClientOrder3DPreview = ({ configuration, productName, language = 'ru' }) =
     const isThermos = productName?.toLowerCase().includes('термос') || cfg.activeProduct === 'thermos' || cfg.type === 'thermos';
     const isPowerbank = productName?.toLowerCase().includes('повербанк') || productName?.toLowerCase().includes('power') || cfg.activeProduct === 'powerbank' || cfg.type === 'powerbank';
     const isSticker = productName?.toLowerCase().includes('стикер') || cfg.activeProduct === 'sticker' || cfg.type === 'sticker';
+    const isShopper = cfg.activeProduct === 'shopper' || cfg.type === 'shopper';
+    const isTshirt = cfg.activeProduct === 'tshirt' || cfg.type === 'tshirt';
+    const isHoodie = cfg.activeProduct === 'hoodie' || cfg.type === 'hoodie';
+    const isLanyard = cfg.activeProduct === 'lanyard' || cfg.type === 'lanyard';
 
-    if (!isNote && !isThermos && !isPowerbank && !isSticker) {
+    if (!isNote && !isThermos && !isPowerbank && !isSticker && !isShopper && !isTshirt && !isHoodie && !isLanyard) {
         return (
             <div className="w-full h-40 rounded-[14px] bg-white/[0.03] border border-white/8 flex items-center justify-center">
                 <span className="text-gray-600 text-xs font-bold uppercase tracking-widest">{t(language, 'noLayout')}</span>
@@ -839,6 +847,10 @@ const ClientOrder3DPreview = ({ configuration, productName, language = 'ru' }) =
                         {isThermos && <Thermos config={cfg} />}
                         {isPowerbank && <Powerbank config={cfg} />}
                         {isSticker && <Sticker config={cfg} preview />}
+                        {isShopper && <Shopper config={cfg} />}
+                        {isTshirt && <Tshirt config={cfg} />}
+                        {isHoodie && <Hoodie config={cfg} />}
+                        {isLanyard && <Lanyard config={cfg} />}
                     </Stage>
                 </PresentationControls>
             </Canvas>

@@ -164,26 +164,43 @@ export const MerchInterface = ({ onFinish }) => {
     const selectLogo = state[config.selectLogoAction];
     const removeLogo = state[config.removeLogoAction];
 
-    const buildCartItem = (snapshot) => ({
-        productName: t(language, config.titleKey),
-        design: `${t(language, 'merchColor')}: ${color}, ${t(language, 'merchMaterial')}: ${MATERIAL_LABELS[material] || material}`,
-        priceBYN: 0,
-        type: activeProduct,
-        activeProduct,
-        color,
-        material,
-        printSide,
-        size: state.tshirtSize || state.hoodieSize || null,
-        handleType: state.shopperHandleType || null,
-        lengthMm: state.lanyardLengthMm || null,
-        widthMm: state.lanyardWidthMm || null,
-        carabiner: state.lanyardCarabiner || null,
-        logos,
-        status: 'draft',
-        rendersGenerated: 0,
-        quantity,
-        renderUrl: snapshot || null,
-    });
+    const buildCartItem = (snapshot) => {
+        const item = {
+            productName: t(language, config.titleKey),
+            design: `${t(language, 'merchColor')}: ${color}, ${t(language, 'merchMaterial')}: ${MATERIAL_LABELS[material] || material}`,
+            priceBYN: 0,
+            type: activeProduct,
+            activeProduct,
+            color,
+            material,
+            printSide,
+            size: state.tshirtSize || state.hoodieSize || null,
+            handleType: state.shopperHandleType || null,
+            lengthMm: state.lanyardLengthMm || null,
+            widthMm: state.lanyardWidthMm || null,
+            carabiner: state.lanyardCarabiner || null,
+            logos,
+            status: 'draft',
+            rendersGenerated: 0,
+            quantity,
+            renderUrl: snapshot || null,
+        };
+        return {
+            ...item,
+            [config.colorKey]: color,
+            [config.materialKey]: material,
+            ...(config.printSideKey ? { [config.printSideKey]: printSide } : {}),
+            [config.logosKey]: logos,
+            ...(activeProduct === 'shopper' ? { shopperHandleType: state.shopperHandleType } : {}),
+            ...(activeProduct === 'tshirt' ? { tshirtSize: state.tshirtSize } : {}),
+            ...(activeProduct === 'hoodie' ? { hoodieSize: state.hoodieSize } : {}),
+            ...(activeProduct === 'lanyard' ? {
+                lanyardLengthMm: state.lanyardLengthMm,
+                lanyardWidthMm: state.lanyardWidthMm,
+                lanyardCarabiner: state.lanyardCarabiner,
+            } : {}),
+        };
+    };
 
     const handleAddToCart = () => {
         const snapshot = captureRender();

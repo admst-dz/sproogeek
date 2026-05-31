@@ -126,6 +126,9 @@ function HomeFallbackCard({ title, actionLabel, tone, onClick }) {
         emerald: 'bg-emerald-500/10 dark:bg-emerald-400/15',
         amber: 'bg-amber-500/10 dark:bg-amber-400/15',
         pink: 'bg-pink-500/10 dark:bg-pink-400/15',
+        sky: 'bg-sky-500/10 dark:bg-sky-400/15',
+        violet: 'bg-violet-500/10 dark:bg-violet-400/15',
+        teal: 'bg-teal-500/10 dark:bg-teal-400/15',
     }[tone] || 'bg-gray-500/10 dark:bg-white/10';
 
     return (
@@ -261,6 +264,38 @@ function HomeRouteFallback({ onStart, onAuth, user, logout, openCommandPalette, 
                             actionLabel={t(language, 'openBtn')}
                             tone="pink"
                             onClick={() => handleSelect('sticker')}
+                        />
+                    )}
+                    {sectionVisibility?.shopper !== false && (
+                        <HomeFallbackCard
+                            title={t(language, 'shopper')}
+                            actionLabel={t(language, 'openBtn')}
+                            tone="amber"
+                            onClick={() => handleSelect('shopper')}
+                        />
+                    )}
+                    {sectionVisibility?.tshirt !== false && (
+                        <HomeFallbackCard
+                            title={t(language, 'tshirt')}
+                            actionLabel={t(language, 'openBtn')}
+                            tone="sky"
+                            onClick={() => handleSelect('tshirt')}
+                        />
+                    )}
+                    {sectionVisibility?.hoodie !== false && (
+                        <HomeFallbackCard
+                            title={t(language, 'hoodie')}
+                            actionLabel={t(language, 'openBtn')}
+                            tone="violet"
+                            onClick={() => handleSelect('hoodie')}
+                        />
+                    )}
+                    {sectionVisibility?.lanyard !== false && (
+                        <HomeFallbackCard
+                            title={t(language, 'lanyard')}
+                            actionLabel={t(language, 'openBtn')}
+                            tone="teal"
+                            onClick={() => handleSelect('lanyard')}
                         />
                     )}
                     {sectionVisibility?.print_canvas !== false && onPrintCanvas && (

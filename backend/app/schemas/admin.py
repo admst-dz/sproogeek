@@ -10,7 +10,17 @@ import re
 # уровня DevOps, а не повседневного управления.
 ADMIN_MANAGED_ROLES = {"client", "dealer", "manufacturer", "admin"}
 ADMIN_MANAGED_SUB_ROLES = {"PL", "PKL", "KL", "KPR", "PR", "TP"}
-SECTION_VISIBILITY_KEYS = {"notebook", "thermos", "powerbank", "sticker", "print_canvas"}
+SECTION_VISIBILITY_KEYS = {
+    "notebook",
+    "thermos",
+    "powerbank",
+    "sticker",
+    "shopper",
+    "tshirt",
+    "hoodie",
+    "lanyard",
+    "print_canvas",
+}
 
 
 def _normalize_visibility_overrides(value: Optional[Dict[str, Optional[bool]]]) -> Optional[Dict[str, Optional[bool]]]:
@@ -147,6 +157,10 @@ class SectionVisibilitySettings(BaseModel):
     thermos: bool = True
     powerbank: bool = True
     sticker: bool = True
+    shopper: bool = True
+    tshirt: bool = True
+    hoodie: bool = True
+    lanyard: bool = True
     print_canvas: bool = False
 
 
@@ -155,6 +169,10 @@ class DashboardSectionVisibilitySettings(BaseModel):
     thermos: bool = True
     powerbank: bool = True
     sticker: bool = True
+    shopper: bool = True
+    tshirt: bool = True
+    hoodie: bool = True
+    lanyard: bool = True
     print_canvas: bool = True
 
 
@@ -163,6 +181,10 @@ class SectionVisibilityPatch(BaseModel):
     thermos: Optional[bool] = None
     powerbank: Optional[bool] = None
     sticker: Optional[bool] = None
+    shopper: Optional[bool] = None
+    tshirt: Optional[bool] = None
+    hoodie: Optional[bool] = None
+    lanyard: Optional[bool] = None
     print_canvas: Optional[bool] = None
 
 
