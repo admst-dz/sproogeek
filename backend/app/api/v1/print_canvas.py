@@ -24,6 +24,7 @@ from app.core.event_logger import event_logger
 from app.crud import print_canvas as crud_print_canvas
 from app.database import get_db
 from app.schemas.print_canvas import PrintCanvasExportResponse
+from app.services.settings_store import read_settings
 
 
 router = APIRouter()
@@ -36,10 +37,32 @@ TIFF_SIGNATURES = (b"II*\x00", b"MM\x00*")
 UPLOAD_CHUNK_SIZE = 1024 * 1024
 
 
+def _settings_section_enabled(section: str, key: str, default: bool = False) -> bool:
+    settings_data = read_settings()
+    section_data = settings_data.get(section) if isinstance(settings_data.get(section), dict) else {}
+    return section_data.get(key, default) is not False
+
+
+def _public_print_canvas_enabled() -> bool:
+    settings_data = read_settings()
+    home_sections = settings_data.get("home_sections") if isinstance(settings_data.get("home_sections"), dict) else {}
+    return bool(settings_data.get("print_canvas_public_enabled", False)) or home_sections.get("print_canvas", False) is not False
+
+
+def _client_print_canvas_enabled(current_user) -> bool:
+    enabled = _settings_section_enabled("dashboard_sections", "print_canvas", True)
+    overrides = getattr(current_user, "section_visibility_overrides", None) or {}
+    if isinstance(overrides, dict) and "print_canvas" in overrides:
+        enabled = overrides.get("print_canvas") is not False
+    return enabled
+
+
 def _ensure_can_use_print_canvas(current_user) -> None:
+    if _public_print_canvas_enabled():
+        return
     if current_user and current_user.role in {"admin", "owner"}:
         return
-    if current_user and current_user.role == "client" and current_user.print_canvas_enabled:
+    if current_user and current_user.role == "client" and _client_print_canvas_enabled(current_user):
         return
     raise HTTPException(status_code=403, detail="Print canvas is not enabled for this user")
 
@@ -305,7 +328,8 @@ async def download_print_canvas_export(
         raise HTTPException(status_code=404, detail="Print canvas export not found")
     is_owner = current_user and item.user_id == current_user.id
     is_admin = current_user and current_user.role in {"admin", "owner"}
-    if not (is_owner or is_admin):
+    is_public_guest_export = item.user_id is None and _public_print_canvas_enabled()
+    if not (is_owner or is_admin or is_public_guest_export):
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(item.file_path):
         raise HTTPException(status_code=404, detail="TIFF file not found")

@@ -230,7 +230,7 @@ function HomeRouteFallback({ onStart, onAuth, user, logout, openCommandPalette, 
                     {t(language, 'subtitle')}
                 </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6 w-full max-w-5xl">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6 w-full max-w-7xl">
                     {sectionVisibility?.notebook !== false && (
                         <HomeFallbackCard
                             title={t(language, 'notebook')}
@@ -354,16 +354,19 @@ function MainApp() {
         appSettings,
     } = useConfigurator();
 
-    const printCanvasEnabledForCurrentUser = Boolean(
-        (currentUser?.role === 'client' && currentUser?.print_canvas_enabled)
-        || ['admin', 'owner'].includes(currentUser?.role)
-    );
     const effectiveDashboardSections = useMemo(() => (
         mergeSectionVisibility(
             appSettings.dashboard_sections,
             currentUser?.section_visibility_overrides
         )
     ), [appSettings.dashboard_sections, currentUser?.section_visibility_overrides]);
+    const homePrintCanvasEnabled = appSettings.home_sections?.print_canvas !== false;
+    const dashboardPrintCanvasEnabled = effectiveDashboardSections?.print_canvas !== false;
+    const printCanvasEnabledForCurrentUser = Boolean(
+        homePrintCanvasEnabled
+        || ['admin', 'owner'].includes(currentUser?.role)
+        || (currentUser?.role === 'client' && dashboardPrintCanvasEnabled)
+    );
     const visibleConfiguratorSections = useMemo(() => (
         currentUser?.role === 'client' ? effectiveDashboardSections : appSettings.home_sections
     ), [appSettings.home_sections, currentUser?.role, effectiveDashboardSections]);
@@ -551,6 +554,17 @@ function MainApp() {
         }
     };
 
+    const handleOpenPrintCanvas = () => {
+        if (printCanvasEnabledForCurrentUser) {
+            setScreen('print_canvas');
+        } else if (currentUser) {
+            setClientTab('catalog');
+            setScreen('client_dashboard');
+        } else {
+            setShowAuth(true);
+        }
+    };
+
     const openCommandPalette = () => {
         window.dispatchEvent(new Event('spruzhuk:open-command-palette'));
     };
@@ -677,8 +691,8 @@ function MainApp() {
                             openCommandPalette={openCommandPalette}
                             sectionVisibility={appSettings.home_sections}
                             onPrintCanvas={
-                                appSettings.home_sections?.print_canvas !== false && printCanvasEnabledForCurrentUser
-                                    ? () => setScreen('print_canvas')
+                                homePrintCanvasEnabled
+                                    ? handleOpenPrintCanvas
                                     : null
                             }
                         />
@@ -690,8 +704,8 @@ function MainApp() {
                             setScreen('configurator');
                         }}
                         onPrintCanvas={
-                            appSettings.home_sections?.print_canvas !== false && printCanvasEnabledForCurrentUser
-                                ? () => setScreen('print_canvas')
+                            homePrintCanvasEnabled
+                                ? handleOpenPrintCanvas
                                 : null
                         }
                         sectionVisibility={appSettings.home_sections}
@@ -776,7 +790,7 @@ function MainApp() {
                         onTabChange={setClientTab}
                         onPrintCanvas={() => setScreen('print_canvas')}
                         sectionVisibility={effectiveDashboardSections}
-                        printCanvasEnabled={printCanvasEnabledForCurrentUser}
+                        printCanvasEnabled={dashboardPrintCanvasEnabled}
                     />
                 </RouteSuspense>
             )}
