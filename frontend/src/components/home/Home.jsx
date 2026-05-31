@@ -11,6 +11,10 @@ import powerbankModelUrl from '../../assets/poverbank.glb?url';
 import { FeedbackPanel } from './FeedbackPanel';
 import { Notebook } from '../shared/Notebook';
 import { Sticker } from '../sticker/Sticker';
+import { Shopper } from '../merch/Shopper';
+import { Tshirt } from '../merch/Tshirt';
+import { Hoodie } from '../merch/Hoodie';
+import { Lanyard } from '../merch/Lanyard';
 import { SiteFooter } from '../shared/SiteFooter';
 
 const NOTEBOOK_PREVIEW_CONFIG = {
@@ -243,6 +247,54 @@ function NotebookPreview() {
     );
 }
 
+function MerchPreview({ model: Model, previewConfig }) {
+    return (
+        <div className="relative h-full w-full">
+            <Canvas camera={{ position: [0, 0.2, 5.4], fov: 36 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
+                <ambientLight intensity={0.78} />
+                <directionalLight position={[4, 6, 5]} intensity={1.4} />
+                <directionalLight position={[-4, 3, 2]} intensity={0.55} />
+                <Suspense fallback={null}>
+                    <Stage environment="city" intensity={0.22} shadows={false} adjustCamera>
+                        <Model config={previewConfig} preview />
+                    </Stage>
+                </Suspense>
+            </Canvas>
+            <SceneLoadingOverlay compact label="3D" />
+        </div>
+    );
+}
+
+const SHOPPER_PREVIEW_CONFIG = {
+    shopperColor: '#F5F0E1',
+    shopperMaterial: 'canvas_220',
+    shopperHandleType: 'long',
+    shopperPrintSide: 'front',
+    shopperLogos: [],
+};
+const TSHIRT_PREVIEW_CONFIG = {
+    tshirtColor: '#FFFFFF',
+    tshirtMaterial: 'cotton_180',
+    tshirtSize: 'M',
+    tshirtPrintSide: 'front',
+    tshirtLogos: [],
+};
+const HOODIE_PREVIEW_CONFIG = {
+    hoodieColor: '#1A1A1A',
+    hoodieMaterial: 'fleece_280',
+    hoodieSize: 'M',
+    hoodiePrintSide: 'front',
+    hoodieLogos: [],
+};
+const LANYARD_PREVIEW_CONFIG = {
+    lanyardColor: '#1565C0',
+    lanyardMaterial: 'polyester_15',
+    lanyardLengthMm: 450,
+    lanyardWidthMm: 15,
+    lanyardCarabiner: 'carabiner',
+    lanyardLogos: [],
+};
+
 function StickerPreview() {
     return (
         <div className="relative h-full w-full">
@@ -360,6 +412,10 @@ const DEFAULT_SECTION_VISIBILITY = {
     thermos: true,
     powerbank: true,
     sticker: true,
+    shopper: true,
+    tshirt: true,
+    hoodie: true,
+    lanyard: true,
     print_canvas: false,
 };
 
@@ -455,6 +511,74 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas, visibility = D
                     <div className="relative z-10 mt-2 text-center">
                         <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'sticker3d')}</h3>
                         <span className="mt-4 inline-flex max-w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-center text-[11px] font-bold text-gray-600 transition-colors sm:mt-5 sm:px-5 sm:text-xs group-hover:bg-pink-50 group-hover:text-pink-700 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
+                            {t(language, 'openBtn')}
+                        </span>
+                    </div>
+                </ProductCard>
+            )}
+
+            {visibility.shopper !== false && (
+                <ProductCard
+                    glowColor="rgba(202, 138, 4, 0.18)"
+                    onClick={() => handleSelect('shopper', {})}
+                >
+                    <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
+                        <MerchPreview model={Shopper} previewConfig={SHOPPER_PREVIEW_CONFIG} />
+                    </div>
+                    <div className="relative z-10 mt-2 text-center">
+                        <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'shopper')}</h3>
+                        <span className="mt-4 inline-flex max-w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-center text-[11px] font-bold text-gray-600 transition-colors sm:mt-5 sm:px-5 sm:text-xs group-hover:bg-amber-50 group-hover:text-amber-700 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
+                            {t(language, 'openBtn')}
+                        </span>
+                    </div>
+                </ProductCard>
+            )}
+
+            {visibility.tshirt !== false && (
+                <ProductCard
+                    glowColor="rgba(14, 165, 233, 0.18)"
+                    onClick={() => handleSelect('tshirt', {})}
+                >
+                    <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
+                        <MerchPreview model={Tshirt} previewConfig={TSHIRT_PREVIEW_CONFIG} />
+                    </div>
+                    <div className="relative z-10 mt-2 text-center">
+                        <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'tshirt')}</h3>
+                        <span className="mt-4 inline-flex max-w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-center text-[11px] font-bold text-gray-600 transition-colors sm:mt-5 sm:px-5 sm:text-xs group-hover:bg-sky-50 group-hover:text-sky-700 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
+                            {t(language, 'openBtn')}
+                        </span>
+                    </div>
+                </ProductCard>
+            )}
+
+            {visibility.hoodie !== false && (
+                <ProductCard
+                    glowColor="rgba(124, 58, 237, 0.18)"
+                    onClick={() => handleSelect('hoodie', {})}
+                >
+                    <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
+                        <MerchPreview model={Hoodie} previewConfig={HOODIE_PREVIEW_CONFIG} />
+                    </div>
+                    <div className="relative z-10 mt-2 text-center">
+                        <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'hoodie')}</h3>
+                        <span className="mt-4 inline-flex max-w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-center text-[11px] font-bold text-gray-600 transition-colors sm:mt-5 sm:px-5 sm:text-xs group-hover:bg-violet-50 group-hover:text-violet-700 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
+                            {t(language, 'openBtn')}
+                        </span>
+                    </div>
+                </ProductCard>
+            )}
+
+            {visibility.lanyard !== false && (
+                <ProductCard
+                    glowColor="rgba(20, 184, 166, 0.18)"
+                    onClick={() => handleSelect('lanyard', {})}
+                >
+                    <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
+                        <MerchPreview model={Lanyard} previewConfig={LANYARD_PREVIEW_CONFIG} />
+                    </div>
+                    <div className="relative z-10 mt-2 text-center">
+                        <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'lanyard')}</h3>
+                        <span className="mt-4 inline-flex max-w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-center text-[11px] font-bold text-gray-600 transition-colors sm:mt-5 sm:px-5 sm:text-xs group-hover:bg-teal-50 group-hover:text-teal-700 dark:border-white/5 dark:bg-white/10 dark:text-gray-300 dark:group-hover:bg-white/20 dark:group-hover:text-white">
                             {t(language, 'openBtn')}
                         </span>
                     </div>

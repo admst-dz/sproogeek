@@ -4,12 +4,16 @@ import { Calendar } from '../shared/Calendar'
 import { Thermos } from '../thermos/Thermos'
 import { Powerbank } from '../powerbank/Powerbank'
 import { Sticker } from '../sticker/Sticker'
+import { Shopper } from '../merch/Shopper'
+import { Tshirt } from '../merch/Tshirt'
+import { Hoodie } from '../merch/Hoodie'
+import { Lanyard } from '../merch/Lanyard'
 import { useConfigurator, registerWebGLCanvas } from '../../store'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useThree, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 
-const ORBIT_PRODUCTS = new Set(['thermos', 'powerbank', 'sticker'])
+const ORBIT_PRODUCTS = new Set(['thermos', 'powerbank', 'sticker', 'shopper', 'tshirt', 'hoodie', 'lanyard'])
 const MIN_ZOOM = 0.35
 const MAX_ZOOM = 2.5
 const clampZoom = (value) => Math.min(Math.max(value, MIN_ZOOM), MAX_ZOOM)
@@ -91,6 +95,22 @@ const ORBIT_VIEW_CONFIG = {
             rotateSpeed: 0.92,
             zoomSpeed: 0.82,
         },
+    },
+    shopper: {
+        desktop: { baseDistance: 6.4, minDistance: 2.8, maxDistance: 14, target: [0, 0, 0], defaultDirection: [0, 0.05, 1], minPolarAngle: FULL_POLAR_MIN, maxPolarAngle: FULL_POLAR_MAX, rotateSpeed: 0.72, zoomSpeed: 0.78 },
+        mobile: { baseDistance: 7.2, minDistance: 3.0, maxDistance: 16, target: [0, 0, 0], defaultDirection: [0, 0.05, 1], minPolarAngle: FULL_POLAR_MIN, maxPolarAngle: FULL_POLAR_MAX, rotateSpeed: 0.92, zoomSpeed: 0.82 },
+    },
+    tshirt: {
+        desktop: { baseDistance: 6.2, minDistance: 2.8, maxDistance: 14, target: [0, 0, 0], defaultDirection: [0, 0.05, 1], minPolarAngle: FULL_POLAR_MIN, maxPolarAngle: FULL_POLAR_MAX, rotateSpeed: 0.72, zoomSpeed: 0.78 },
+        mobile: { baseDistance: 7.0, minDistance: 3.0, maxDistance: 16, target: [0, 0, 0], defaultDirection: [0, 0.05, 1], minPolarAngle: FULL_POLAR_MIN, maxPolarAngle: FULL_POLAR_MAX, rotateSpeed: 0.92, zoomSpeed: 0.82 },
+    },
+    hoodie: {
+        desktop: { baseDistance: 6.8, minDistance: 3.0, maxDistance: 15, target: [0, 0, 0], defaultDirection: [0, 0.05, 1], minPolarAngle: FULL_POLAR_MIN, maxPolarAngle: FULL_POLAR_MAX, rotateSpeed: 0.72, zoomSpeed: 0.78 },
+        mobile: { baseDistance: 7.6, minDistance: 3.2, maxDistance: 17, target: [0, 0, 0], defaultDirection: [0, 0.05, 1], minPolarAngle: FULL_POLAR_MIN, maxPolarAngle: FULL_POLAR_MAX, rotateSpeed: 0.92, zoomSpeed: 0.82 },
+    },
+    lanyard: {
+        desktop: { baseDistance: 5.4, minDistance: 2.6, maxDistance: 12, target: [0, -0.2, 0], defaultDirection: [0, 0.04, 1], minPolarAngle: FULL_POLAR_MIN, maxPolarAngle: FULL_POLAR_MAX, rotateSpeed: 0.72, zoomSpeed: 0.78 },
+        mobile: { baseDistance: 6.0, minDistance: 2.8, maxDistance: 14, target: [0, -0.2, 0], defaultDirection: [0, 0.04, 1], minPolarAngle: FULL_POLAR_MIN, maxPolarAngle: FULL_POLAR_MAX, rotateSpeed: 0.92, zoomSpeed: 0.82 },
     },
 }
 
@@ -235,9 +255,12 @@ export const Experience = () => {
     // Notebook побольше, Calendar поменьше.
     const notebookBaseZoom = 1.0;
     const notebookPositionY = 0.28;
+    const MERCH_BASE = { shopper: 0.78, tshirt: 0.78, hoodie: 0.72, lanyard: 0.72 };
+    const merchMobileBase = MERCH_BASE[activeProduct];
+    const merchDesktopBase = MERCH_BASE[activeProduct];
     const baseZoom = isMobile
-        ? (activeProduct === 'calendar' ? 0.6 : activeProduct === 'thermos' ? 0.5 : activeProduct === 'powerbank' ? 0.65 : activeProduct === 'sticker' ? 0.72 : 0.8)
-        : (activeProduct === 'calendar' ? 0.8 : activeProduct === 'thermos' ? 0.68 : activeProduct === 'powerbank' ? 0.85 : activeProduct === 'sticker' ? 0.9 : notebookBaseZoom);
+        ? (merchMobileBase ?? (activeProduct === 'calendar' ? 0.6 : activeProduct === 'thermos' ? 0.5 : activeProduct === 'powerbank' ? 0.65 : activeProduct === 'sticker' ? 0.72 : 0.8))
+        : (merchDesktopBase ?? (activeProduct === 'calendar' ? 0.8 : activeProduct === 'thermos' ? 0.68 : activeProduct === 'powerbank' ? 0.85 : activeProduct === 'sticker' ? 0.9 : notebookBaseZoom));
 
     // Итоговый зум = База * То, что накликали кнопками
     const finalZoom = isOrbitProduct ? 1 : baseZoom * zoomLevel;
@@ -278,7 +301,7 @@ export const Experience = () => {
             <directionalLight position={[10, 10, 5]} intensity={1.5} />
             <directionalLight position={[-10, 5, 2]} intensity={0.5} />
 
-            {(activeProduct === 'thermos' || activeProduct === 'powerbank' || activeProduct === 'sticker') ? (
+            {ORBIT_PRODUCTS.has(activeProduct) ? (
                 <>
                     <OrbitControls
                         key={activeProduct}
@@ -310,6 +333,10 @@ export const Experience = () => {
                         {activeProduct === 'thermos' && <Thermos />}
                         {activeProduct === 'powerbank' && <Powerbank />}
                         {activeProduct === 'sticker' && <Sticker />}
+                        {activeProduct === 'shopper' && <Shopper />}
+                        {activeProduct === 'tshirt' && <Tshirt />}
+                        {activeProduct === 'hoodie' && <Hoodie />}
+                        {activeProduct === 'lanyard' && <Lanyard />}
                     </group>
                 </>
             ) : (

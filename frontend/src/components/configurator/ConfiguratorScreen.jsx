@@ -5,6 +5,9 @@ import { Interface, ZoomControls } from './Interface'
 import { ThermosInterface } from '../thermos/ThermosInterface'
 import { PowerbankInterface } from '../powerbank/PowerbankInterface'
 import { StickerInterface } from '../sticker/StickerInterface'
+import { MerchInterface } from '../merch/MerchInterface'
+
+const MERCH_PRODUCTS = new Set(['shopper', 'tshirt', 'hoodie', 'lanyard'])
 import { SceneLoadingOverlay } from '../shared/VibeLoader'
 import { SceneHints } from '../shared/SceneHints'
 import { ConfirmModal } from '../shared/ConfirmModal'
@@ -30,7 +33,7 @@ export function ConfiguratorScreen({ currentUser, userRole, logout, onNavigate, 
     useUndoRedoHotkeys(true);
 
     const handleSceneWheel = useCallback((event) => {
-        if (activeProduct === 'thermos' || activeProduct === 'powerbank') return;
+        if (activeProduct === 'thermos' || activeProduct === 'powerbank' || MERCH_PRODUCTS.has(activeProduct)) return;
 
         event.preventDefault();
         const modeMultiplier = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 80 : 1;
@@ -108,6 +111,8 @@ export function ConfiguratorScreen({ currentUser, userRole, logout, onNavigate, 
                             <PowerbankInterface onFinish={onFinish} />
                         ) : activeProduct === 'sticker' ? (
                             <StickerInterface onFinish={onFinish} />
+                        ) : MERCH_PRODUCTS.has(activeProduct) ? (
+                            <MerchInterface onFinish={onFinish} />
                         ) : (
                             <Interface
                                 onFinish={onFinish}

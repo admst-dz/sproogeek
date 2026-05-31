@@ -26,11 +26,11 @@ def _can_manage_product(product, current_user) -> bool:
 
 
 @cached(prefix=_PRODUCTS_CACHE_PREFIX, ttl=_PRODUCTS_CACHE_TTL)
-async def _cached_products(dealer_id: Optional[str], db: AsyncSession):
+async def _cached_products(dealer_id: Optional[str], product_type: Optional[str], db: AsyncSession):
     items = (
-        await crud_product.get_products_by_dealer(db, dealer_id)
+        await crud_product.get_products_by_dealer(db, dealer_id, product_type=product_type)
         if dealer_id
-        else await crud_product.get_products(db)
+        else await crud_product.get_products(db, product_type=product_type)
     )
     # ORM-объекты не сериализуются orjson — переводим в dict через
     # Pydantic-схему ответа, она же гарантирует стабильную форму.
@@ -40,9 +40,10 @@ async def _cached_products(dealer_id: Optional[str], db: AsyncSession):
 @router.get("/", response_model=list[ProductResponse])
 async def get_products(
     dealer_id: Optional[str] = Query(None),
+    type: Optional[str] = Query(None, description="Фильтр по типу: notebook/shopper/tshirt/hoodie/lanyard/..."),
     db: AsyncSession = Depends(get_db),
 ):
-    return await _cached_products(dealer_id, db)
+    return await _cached_products(dealer_id, type, db)
 
 
 @router.post("/", response_model=ProductResponse)

@@ -13,7 +13,17 @@ export const SCREEN_TO_PATH = {
     admin_dashboard: '/borodaadmin',
 };
 
-export const CONFIGURATOR_PRODUCTS = new Set(['notebook', 'calendar', 'thermos', 'powerbank', 'sticker']);
+export const CONFIGURATOR_PRODUCTS = new Set([
+    'notebook',
+    'calendar',
+    'thermos',
+    'powerbank',
+    'sticker',
+    'shopper',
+    'tshirt',
+    'hoodie',
+    'lanyard',
+]);
 
 export const PATH_TO_SCREEN = Object.fromEntries(
     Object.entries(SCREEN_TO_PATH).map(([k, v]) => [v, k])
