@@ -1322,11 +1322,20 @@ const normalizeAdminSettings = (data) => ({
     dashboard_sections: { ...DEFAULT_ADMIN_SETTINGS.dashboard_sections, ...(data?.dashboard_sections || {}) },
 });
 
-function SettingsSwitch({ label, description, enabled, loading, saving, onToggle }) {
+const settingsEqual = (left, right) => JSON.stringify(normalizeAdminSettings(left)) === JSON.stringify(normalizeAdminSettings(right));
+
+function SettingsSwitch({ label, description, enabled, loading, saving, dirty, onToggle }) {
     return (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-[12px] border border-white/8 bg-black/15 px-3 py-3">
+        <div className={`flex flex-col sm:flex-row sm:items-center gap-4 rounded-[12px] border px-3 py-3 transition-colors ${
+            dirty
+                ? 'border-yellow-400/25 bg-yellow-500/8'
+                : 'border-white/8 bg-black/15'
+        }`}>
             <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-white/85">{label}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-bold text-white/85">{label}</p>
+                    {dirty && <span className="rounded-full bg-yellow-500/12 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-yellow-300">изменено</span>}
+                </div>
                 {description && <p className="mt-1 text-xs leading-relaxed text-white/38">{description}</p>}
             </div>
             <button
@@ -1353,6 +1362,7 @@ function SettingsSwitch({ label, description, enabled, loading, saving, onToggle
 
 function AdminSettingsPanel({ language, showGuestMode = true }) {
     const [settings, setSettings] = useState(DEFAULT_ADMIN_SETTINGS);
+    const [draftSettings, setDraftSettings] = useState(DEFAULT_ADMIN_SETTINGS);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState('');
@@ -1365,6 +1375,7 @@ function AdminSettingsPanel({ language, showGuestMode = true }) {
                 if (!alive) return;
                 const nextSettings = normalizeAdminSettings(data);
                 setSettings(nextSettings);
+                setDraftSettings(nextSettings);
                 setAppSettings(nextSettings);
             })
             .catch((err) => {
@@ -1376,13 +1387,18 @@ function AdminSettingsPanel({ language, showGuestMode = true }) {
         return () => { alive = false; };
     }, [language, setAppSettings]);
 
-    const saveSettingsPatch = async (patch) => {
+    const saveSettings = async () => {
         setSaving(true);
         setMsg('');
         try {
-            const { data } = await adminApi.updateSettings(patch);
+            const { data } = await adminApi.updateSettings({
+                guest_approval_enabled: draftSettings.guest_approval_enabled !== false,
+                home_sections: draftSettings.home_sections,
+                dashboard_sections: draftSettings.dashboard_sections,
+            });
             const nextSettings = normalizeAdminSettings(data);
             setSettings(nextSettings);
+            setDraftSettings(nextSettings);
             setAppSettings(nextSettings);
             setMsg(t(language, 'adminSaved'));
         } catch (err) {
@@ -1393,7 +1409,27 @@ function AdminSettingsPanel({ language, showGuestMode = true }) {
         }
     };
 
-    const enabled = settings.guest_approval_enabled !== false;
+    const updateDraft = (patch) => {
+        setDraftSettings((current) => normalizeAdminSettings({
+            ...current,
+            ...patch,
+            home_sections: patch.home_sections
+                ? { ...current.home_sections, ...patch.home_sections }
+                : current.home_sections,
+            dashboard_sections: patch.dashboard_sections
+                ? { ...current.dashboard_sections, ...patch.dashboard_sections }
+                : current.dashboard_sections,
+        }));
+        setMsg('');
+    };
+
+    const resetDraft = () => {
+        setDraftSettings(settings);
+        setMsg('');
+    };
+
+    const enabled = draftSettings.guest_approval_enabled !== false;
+    const hasChanges = !settingsEqual(settings, draftSettings);
 
     return (
         <div className="mt-6 rounded-[14px] border border-white/10 bg-white/[0.03] p-4">
@@ -1404,11 +1440,11 @@ function AdminSettingsPanel({ language, showGuestMode = true }) {
                         <span className={`text-[10px] font-bold uppercase tracking-widest rounded-full border px-2 py-0.5 ${
                             saving
                                 ? 'text-yellow-300 bg-yellow-500/10 border-yellow-500/25'
-                                : enabled
-                                ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25'
-                                : 'text-white/35 bg-white/5 border-white/10'
+                                : hasChanges
+                                ? 'text-yellow-300 bg-yellow-500/10 border-yellow-500/25'
+                                : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25'
                         }`}>
-                            {saving ? t(language, 'adminSaving') : t(language, 'adminSaved')}
+                            {saving ? t(language, 'adminSaving') : hasChanges ? 'есть изменения' : t(language, 'adminSaved')}
                         </span>
                     </div>
                     {msg && (
@@ -1426,7 +1462,8 @@ function AdminSettingsPanel({ language, showGuestMode = true }) {
                             enabled={enabled}
                             loading={loading}
                             saving={saving}
-                            onToggle={() => saveSettingsPatch({ guest_approval_enabled: !enabled })}
+                            dirty={(settings.guest_approval_enabled !== false) !== enabled}
+                            onToggle={() => updateDraft({ guest_approval_enabled: !enabled })}
                         />
                     </div>
                 )}
@@ -1438,11 +1475,12 @@ function AdminSettingsPanel({ language, showGuestMode = true }) {
                             <SettingsSwitch
                                 key={`home-${key}`}
                                 label={label}
-                                enabled={settings.home_sections?.[key] !== false}
+                                enabled={draftSettings.home_sections?.[key] !== false}
                                 loading={loading}
                                 saving={saving}
-                                onToggle={() => saveSettingsPatch({
-                                    home_sections: { [key]: !(settings.home_sections?.[key] !== false) },
+                                dirty={(settings.home_sections?.[key] !== false) !== (draftSettings.home_sections?.[key] !== false)}
+                                onToggle={() => updateDraft({
+                                    home_sections: { [key]: !(draftSettings.home_sections?.[key] !== false) },
                                 })}
                             />
                         ))}
@@ -1453,17 +1491,36 @@ function AdminSettingsPanel({ language, showGuestMode = true }) {
                             <SettingsSwitch
                                 key={`dashboard-${key}`}
                                 label={label}
-                                enabled={settings.dashboard_sections?.[key] !== false}
+                                enabled={draftSettings.dashboard_sections?.[key] !== false}
                                 loading={loading}
                                 saving={saving}
-                                onToggle={() => saveSettingsPatch({
-                                    dashboard_sections: { [key]: !(settings.dashboard_sections?.[key] !== false) },
+                                dirty={(settings.dashboard_sections?.[key] !== false) !== (draftSettings.dashboard_sections?.[key] !== false)}
+                                onToggle={() => updateDraft({
+                                    dashboard_sections: { [key]: !(draftSettings.dashboard_sections?.[key] !== false) },
                                 })}
                             />
                         ))}
                     </div>
                 </div>
 
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 border-t border-white/8 pt-4">
+                    <button
+                        type="button"
+                        onClick={resetDraft}
+                        disabled={loading || saving || !hasChanges}
+                        className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold uppercase tracking-widest text-white/55 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        Отменить
+                    </button>
+                    <button
+                        type="button"
+                        onClick={saveSettings}
+                        disabled={loading || saving || !hasChanges}
+                        className="rounded-full bg-white px-5 py-2 text-xs font-black uppercase tracking-widest text-[#080B13] transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        {saving ? t(language, 'adminSaving') : t(language, 'adminSaveBtn')}
+                    </button>
+                </div>
             </div>
         </div>
     );
