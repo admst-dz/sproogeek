@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator
-from typing import Optional
+from typing import Dict, Optional
 import re
 
 class UserRegister(BaseModel):
@@ -40,6 +40,7 @@ class UserResponse(BaseModel):
     sub_role: Optional[str] = None
     token_balance: float = 0.0
     print_canvas_enabled: bool = False
+    section_visibility_overrides: Optional[Dict[str, bool]] = None
 
     model_config = ConfigDict(from_attributes=True)
 

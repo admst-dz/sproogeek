@@ -3,7 +3,7 @@ import { Command } from 'cmdk';
 import { THEME_SWITCHING_ENABLED, useConfigurator } from '../../store';
 import { t } from '../../i18n';
 
-export const CommandPalette = ({ navigate, screen, onClose, openAuth, open: controlledOpen, onOpenChange }) => {
+export const CommandPalette = ({ navigate, screen, onClose, openAuth, open: controlledOpen, onOpenChange, productVisibility }) => {
     const isControlled = typeof controlledOpen === 'boolean';
     const [internalOpen, setInternalOpen] = useState(false);
     const open = isControlled ? controlledOpen : internalOpen;
@@ -84,10 +84,15 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth, open: cont
                 list.push({ group: nav, id: 'nav-admin', label: t(language, 'cmdAdminPanel'), onSelect: () => go('admin_dashboard') });
             }
         }
-        list.push({ group: cfg, id: 'cfg-notebook', label: t(language, 'notebook'), onSelect: () => goConfigurator('notebook') });
-        list.push({ group: cfg, id: 'cfg-thermos', label: t(language, 'thermos'), onSelect: () => goConfigurator('thermos') });
-        list.push({ group: cfg, id: 'cfg-powerbank', label: t(language, 'powerbank'), onSelect: () => goConfigurator('powerbank') });
-        list.push({ group: cfg, id: 'cfg-sticker', label: t(language, 'sticker3d'), onSelect: () => goConfigurator('sticker') });
+        [
+            ['notebook', t(language, 'notebook')],
+            ['thermos', t(language, 'thermos')],
+            ['powerbank', t(language, 'powerbank')],
+            ['sticker', t(language, 'sticker3d')],
+        ].forEach(([product, label]) => {
+            if (productVisibility?.[product] === false) return;
+            list.push({ group: cfg, id: `cfg-${product}`, label, onSelect: () => goConfigurator(product) });
+        });
         if (THEME_SWITCHING_ENABLED) {
             list.push({
                 group: actions,
@@ -120,7 +125,7 @@ export const CommandPalette = ({ navigate, screen, onClose, openAuth, open: cont
             });
         }
         return list;
-    }, [currentUser, userRole, theme, screen, activeProduct, language]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [currentUser, userRole, theme, screen, activeProduct, language, productVisibility]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (!open) return null;
 

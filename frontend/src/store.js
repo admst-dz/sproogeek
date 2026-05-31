@@ -103,6 +103,17 @@ export const normalizeAppSettings = (settings = {}) => ({
     },
 });
 
+export const SECTION_VISIBILITY_KEYS = ['notebook', 'thermos', 'powerbank', 'sticker', 'print_canvas'];
+
+export const mergeSectionVisibility = (base = {}, overrides = null) => (
+    SECTION_VISIBILITY_KEYS.reduce((acc, key) => {
+        acc[key] = overrides && Object.prototype.hasOwnProperty.call(overrides, key)
+            ? overrides[key] !== false
+            : base?.[key] !== false;
+        return acc;
+    }, {})
+);
+
 // Поля, которые откатываются по Undo/Redo и сравниваются с defaults для "грязного" состояния.
 // Сюда НЕ попадают auth/UI-state/корзина/тема/zoom — они не должны влиять на историю конструктора.
 export const NOTEBOOK_DEFAULTS = {

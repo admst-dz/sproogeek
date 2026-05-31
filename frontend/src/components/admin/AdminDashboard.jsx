@@ -557,6 +557,7 @@ function CreateUserDialog({ initialRole = 'dealer', onClose, onCreated }) {
         company_name: '',
         token_balance: 0,
         print_canvas_enabled: false,
+        section_visibility_overrides: {},
     });
     const [showPassword, setShowPassword] = useState(true);
     const [busy, setBusy] = useState(false);
@@ -588,6 +589,7 @@ function CreateUserDialog({ initialRole = 'dealer', onClose, onCreated }) {
                 company_name: form.company_name || null,
                 token_balance: Number(form.token_balance) || 0,
                 print_canvas_enabled: Boolean(form.print_canvas_enabled),
+                section_visibility_overrides: normalizeOverrides(form.section_visibility_overrides),
             };
             const { data } = await adminApi.createUser(payload);
             onCreated(data, form.password);
@@ -647,6 +649,25 @@ function CreateUserDialog({ initialRole = 'dealer', onClose, onCreated }) {
                         />
                         <span className="text-sm font-bold text-white/75">Включить полотно на печать</span>
                     </label>
+                    <div className="md:col-span-2 rounded-[12px] border border-white/10 bg-white/[0.03] p-3 space-y-3">
+                        <div>
+                            <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest">Индивидуальная видимость в кабинете</p>
+                            <p className="mt-1 text-xs text-white/35">Исключения поверх общих настроек личного кабинета.</p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {SECTION_KEYS.map(key => (
+                                <SectionOverrideSelect
+                                    key={key}
+                                    label={SECTION_LABELS[key]}
+                                    value={form.section_visibility_overrides?.[key]}
+                                    onChange={(value) => update('section_visibility_overrides', {
+                                        ...(form.section_visibility_overrides || {}),
+                                        [key]: value,
+                                    })}
+                                />
+                            ))}
+                        </div>
+                    </div>
                 </div>
 
                 <div>
@@ -795,6 +816,7 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
         company_name: user.company_name || '',
         token_balance: user.token_balance ?? 0,
         print_canvas_enabled: Boolean(user.print_canvas_enabled),
+        section_visibility_overrides: normalizeOverrides(user.section_visibility_overrides),
     }));
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState('');
@@ -809,6 +831,7 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
             company_name: user.company_name || '',
             token_balance: user.token_balance ?? 0,
             print_canvas_enabled: Boolean(user.print_canvas_enabled),
+            section_visibility_overrides: normalizeOverrides(user.section_visibility_overrides),
         });
     }, [
         user.company_name,
@@ -818,6 +841,7 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
         user.sub_role,
         user.token_balance,
         user.print_canvas_enabled,
+        user.section_visibility_overrides,
     ]);
 
     const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
@@ -833,6 +857,7 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
                 company_name: form.company_name || null,
                 token_balance: Number(form.token_balance) || 0,
                 print_canvas_enabled: Boolean(form.print_canvas_enabled),
+                section_visibility_overrides: normalizeOverrides(form.section_visibility_overrides),
             };
             const { data } = await adminApi.updateUser(user.id, payload);
             onSaved(data);
@@ -928,6 +953,25 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
                             />
                             <span className="text-sm font-bold text-white/75">Полотно на печать включено</span>
                         </label>
+                        <div className="md:col-span-2 rounded-[12px] border border-white/10 bg-white/[0.03] p-3 space-y-3">
+                            <div>
+                                <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest">Индивидуальная видимость в кабинете</p>
+                                <p className="mt-1 text-xs text-white/35">Исключения поверх общих настроек личного кабинета.</p>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {SECTION_KEYS.map(key => (
+                                    <SectionOverrideSelect
+                                        key={key}
+                                        label={SECTION_LABELS[key]}
+                                        value={form.section_visibility_overrides?.[key]}
+                                        onChange={(value) => update('section_visibility_overrides', {
+                                            ...(form.section_visibility_overrides || {}),
+                                            [key]: value,
+                                        })}
+                                    />
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -938,6 +982,12 @@ function UserDetails({ user, onSaved, onDeleted, onResetRequested }) {
                         <ValueRow label="Компания" value={user.company_name} />
                         <ValueRow label="Баланс" value={`${user.token_balance ?? 0}`} />
                         <ValueRow label="Полотно на печать" value={user.print_canvas_enabled ? 'Включено' : 'Выключено'} />
+                        <ValueRow
+                            label="Исключения видимости"
+                            value={Object.entries(normalizeOverrides(user.section_visibility_overrides))
+                                .map(([key, value]) => `${SECTION_LABELS[key] || key}: ${value ? 'показать' : 'скрыть'}`)
+                                .join('; ') || '—'}
+                        />
                         <ValueRow label="Заказов" value={`${user.orders_count ?? 0}`} />
                         <ValueRow label="Последний заказ" value={user.last_order_at ? new Date(user.last_order_at).toLocaleString('ru') : '—'} />
                         <ValueRow label="Пароль установлен" value={user.has_password ? 'Да' : 'Нет (только OAuth)'} />
@@ -1211,6 +1261,58 @@ const SECTION_LABELS = {
     print_canvas: 'Полотно на печать',
 };
 
+const SECTION_KEYS = Object.keys(SECTION_LABELS);
+
+const normalizeOverrides = (value) => (
+    SECTION_KEYS.reduce((acc, key) => {
+        if (value?.[key] === true || value?.[key] === false) acc[key] = value[key];
+        return acc;
+    }, {})
+);
+
+const overrideValueForSelect = (value) => (
+    value === true ? 'show' : value === false ? 'hide' : 'inherit'
+);
+
+const selectValueToOverride = (value) => (
+    value === 'show' ? true : value === 'hide' ? false : null
+);
+
+function SectionOverrideSelect({ label, value, onChange }) {
+    return (
+        <label className="flex flex-col gap-1.5">
+            <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">{label}</span>
+            <select
+                value={overrideValueForSelect(value)}
+                onChange={(event) => onChange(selectValueToOverride(event.target.value))}
+                className="bg-black/30 border border-white/10 rounded-[8px] px-3 py-2 text-sm text-white outline-none focus:border-white/30"
+            >
+                <option value="inherit">Наследовать общую настройку</option>
+                <option value="show">Показать этому пользователю</option>
+                <option value="hide">Скрыть у этого пользователя</option>
+            </select>
+        </label>
+    );
+}
+
+const normalizeAdminSettings = (data) => ({
+    ...DEFAULT_ADMIN_SETTINGS,
+    ...(data || {}),
+    home_sections: { ...DEFAULT_ADMIN_SETTINGS.home_sections, ...(data?.home_sections || {}) },
+    dashboard_sections: { ...DEFAULT_ADMIN_SETTINGS.dashboard_sections, ...(data?.dashboard_sections || {}) },
+});
+
+const mergeSettingsPatch = (current, patch) => ({
+    ...current,
+    ...patch,
+    home_sections: patch.home_sections
+        ? { ...current.home_sections, ...patch.home_sections }
+        : current.home_sections,
+    dashboard_sections: patch.dashboard_sections
+        ? { ...current.dashboard_sections, ...patch.dashboard_sections }
+        : current.dashboard_sections,
+});
+
 function SettingsSwitch({ label, description, enabled, loading, saving, onToggle }) {
     return (
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-[12px] border border-white/8 bg-black/15 px-3 py-3">
@@ -1252,12 +1354,7 @@ function AdminSettingsPanel({ language }) {
         adminApi.getSettings()
             .then(({ data }) => {
                 if (!alive) return;
-                const nextSettings = {
-                    ...DEFAULT_ADMIN_SETTINGS,
-                    ...(data || {}),
-                    home_sections: { ...DEFAULT_ADMIN_SETTINGS.home_sections, ...(data?.home_sections || {}) },
-                    dashboard_sections: { ...DEFAULT_ADMIN_SETTINGS.dashboard_sections, ...(data?.dashboard_sections || {}) },
-                };
+                const nextSettings = normalizeAdminSettings(data);
                 setSettings(nextSettings);
                 setAppSettings(nextSettings);
             })
@@ -1271,20 +1368,21 @@ function AdminSettingsPanel({ language }) {
     }, [language, setAppSettings]);
 
     const saveSettingsPatch = async (patch) => {
+        const previousSettings = settings;
+        const optimisticSettings = mergeSettingsPatch(settings, patch);
+        setSettings(optimisticSettings);
+        setAppSettings(optimisticSettings);
         setSaving(true);
         setMsg('');
         try {
             const { data } = await adminApi.updateSettings(patch);
-            const nextSettings = {
-                ...DEFAULT_ADMIN_SETTINGS,
-                ...(data || {}),
-                home_sections: { ...DEFAULT_ADMIN_SETTINGS.home_sections, ...(data?.home_sections || {}) },
-                dashboard_sections: { ...DEFAULT_ADMIN_SETTINGS.dashboard_sections, ...(data?.dashboard_sections || {}) },
-            };
+            const nextSettings = normalizeAdminSettings(data);
             setSettings(nextSettings);
             setAppSettings(nextSettings);
             setMsg(t(language, 'adminSaved'));
         } catch (err) {
+            setSettings(previousSettings);
+            setAppSettings(previousSettings);
             setMsg('✗ ' + formatApiError(err, language));
         } finally {
             setSaving(false);
@@ -1316,14 +1414,27 @@ function AdminSettingsPanel({ language }) {
                         </p>
                     )}
                 </div>
-                <SettingsSwitch
-                    label={t(language, 'adminGuestModeTitle')}
-                    description={t(language, 'adminGuestModeDesc')}
-                    enabled={enabled}
-                    loading={loading}
-                    saving={saving}
-                    onToggle={() => saveSettingsPatch({ guest_approval_enabled: !enabled })}
-                />
+                <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest">Основные настройки</p>
+                    <SettingsSwitch
+                        label={t(language, 'adminGuestModeTitle')}
+                        description={t(language, 'adminGuestModeDesc')}
+                        enabled={enabled}
+                        loading={loading}
+                        saving={saving}
+                        onToggle={() => saveSettingsPatch({ guest_approval_enabled: !enabled })}
+                    />
+                    <SettingsSwitch
+                        label="Публичный доступ к полотну на печать"
+                        description="Это не про карточку на главной. Флаг разрешает открыть и выгрузить полотно без логина и без персонального доступа пользователя."
+                        enabled={settings.print_canvas_public_enabled !== false}
+                        loading={loading}
+                        saving={saving}
+                        onToggle={() => saveSettingsPatch({
+                            print_canvas_public_enabled: !(settings.print_canvas_public_enabled !== false),
+                        })}
+                    />
+                </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -1358,16 +1469,6 @@ function AdminSettingsPanel({ language }) {
                     </div>
                 </div>
 
-                <SettingsSwitch
-                    label="Публичное полотно на печать"
-                    description="Разрешает открывать и выгружать полотно без персонального доступа пользователя."
-                    enabled={settings.print_canvas_public_enabled !== false}
-                    loading={loading}
-                    saving={saving}
-                    onToggle={() => saveSettingsPatch({
-                        print_canvas_public_enabled: !(settings.print_canvas_public_enabled !== false),
-                    })}
-                />
             </div>
         </div>
     );

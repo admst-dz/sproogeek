@@ -53,6 +53,7 @@ def _to_user_response(user: User, stats_map: dict | None = None) -> dict:
         "token_balance": user.token_balance or 0.0,
         "company_name": user.company_name,
         "print_canvas_enabled": bool(user.print_canvas_enabled),
+        "section_visibility_overrides": user.section_visibility_overrides or None,
         "has_password": bool(user.password_hash),
         "orders_count": int(stats.get("count", 0)),
         "last_order_at": stats.get("last_at"),
@@ -125,6 +126,7 @@ async def create_admin_user(
         company_name=payload.company_name,
         token_balance=payload.token_balance or 0.0,
         print_canvas_enabled=payload.print_canvas_enabled,
+        section_visibility_overrides=payload.section_visibility_overrides,
     )
     event_logger.log(
         "USER_CREATED_BY_ADMIN",

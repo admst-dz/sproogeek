@@ -202,13 +202,17 @@ export const ClientDashboard = ({
     }, [activeTab, currentUser]);
 
     useEffect(() => {
+        if (activeTab === 'printCanvas' && sectionVisibility?.print_canvas === false) {
+            changeTab('catalog');
+            return;
+        }
         if (activeTab === 'printCanvas' && printCanvasEnabled) {
             setPrintCanvasLoading(true);
             fetchPrintCanvasExports()
                 .then((data) => setPrintCanvasExports(data || []))
                 .finally(() => setPrintCanvasLoading(false));
         }
-    }, [activeTab, printCanvasEnabled]);
+    }, [activeTab, changeTab, printCanvasEnabled, sectionVisibility?.print_canvas]);
 
     const downloadPrintCanvasTiff = useCallback(async (exportItem) => {
         try {
@@ -645,7 +649,7 @@ export const ClientDashboard = ({
                 )}
 
                 {/* PRINT CANVAS EXPORTS TAB */}
-                {activeTab === 'printCanvas' && printCanvasEnabled && (
+                {activeTab === 'printCanvas' && sectionVisibility?.print_canvas !== false && printCanvasEnabled && (
                     <div>
                         <h2 className="text-xl font-bold uppercase tracking-widest mb-6 text-white">{t(language, 'printCanvasHistoryTitle')}</h2>
                         <div className="bg-white/[0.03] border border-white/10 backdrop-blur-xl rounded-[20px] md:rounded-[24px] overflow-hidden">
