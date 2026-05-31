@@ -7,7 +7,6 @@ import {
     useConfigurator,
 } from '../../store';
 import { logoSizeFromTexture, useLogoTexture } from '../../utils/threeTextures';
-import listModelUrl from '../../assets/list.glb?url';
 import squareStickerModelUrl from '../../assets/kvadrat_for_list.glb?url';
 import circleStickerModelUrl from '../../assets/crug_for_list.glb?url';
 
@@ -18,12 +17,12 @@ const LOGO_RENDER_ORDER = 24;
 const GLASS_RENDER_ORDER = 42;
 
 const SLOT_LAYOUT = [
-    { x: -0.78, y: 1.88, rotation: -0.12 },
-    { x: 0.73, y: 1.61, rotation: 0.11 },
-    { x: -0.67, y: 0.24, rotation: 0.07 },
-    { x: 0.81, y: -0.08, rotation: -0.15 },
-    { x: -0.77, y: -1.45, rotation: 0.16 },
-    { x: 0.68, y: -1.74, rotation: -0.08 },
+    { x: -1.08, y: 2.05 },
+    { x: 1.08, y: 1.52 },
+    { x: -1.08, y: 0.28 },
+    { x: 1.08, y: -0.34 },
+    { x: -1.08, y: -1.58 },
+    { x: 1.08, y: -2.05 },
 ];
 
 const SAMPLE_COLORS = ['#38BDF8', '#F97316', '#111827', '#EC407A', '#43A047', '#1565C0'];
@@ -44,11 +43,11 @@ function materialForNode(node, variant, color) {
     const isGlass = /_2$/.test(node.name);
     if (isGlass) {
         return new THREE.MeshPhysicalMaterial({
-            color: '#ffffff',
+            color: '#D8DEE6',
             transparent: true,
-            opacity: 0.34,
+            opacity: 0.46,
             depthWrite: false,
-            roughness: 0.08,
+            roughness: 0.12,
             metalness: 0.02,
             clearcoat: 0.95,
             clearcoatRoughness: 0.08,
@@ -85,9 +84,31 @@ function useCenteredScene(sourceScene, variant, color = '#ffffff') {
     }, [color, sourceScene, variant]);
 }
 
-function SheetModel({ sourceScene, color }) {
-    const { scene, offset } = useCenteredScene(sourceScene, 'sheet', color);
-    return <primitive object={scene} position={offset} />;
+function SheetModel({ color }) {
+    return (
+        <group>
+            <mesh position={[0, 0, -0.014]} castShadow receiveShadow>
+                <boxGeometry args={[4.2, 5.92, 0.012]} />
+                <meshStandardMaterial
+                    color="#F7F3EA"
+                    roughness={0.82}
+                    metalness={0.01}
+                />
+            </mesh>
+            <mesh position={[0, 0, -0.0072]} receiveShadow renderOrder={2}>
+                <planeGeometry args={[4.2, 5.92]} />
+                <meshStandardMaterial
+                    color={color}
+                    roughness={0.78}
+                    metalness={0.02}
+                    side={THREE.FrontSide}
+                    polygonOffset
+                    polygonOffsetFactor={-2}
+                    polygonOffsetUnits={-2}
+                />
+            </mesh>
+        </group>
+    );
 }
 
 function StickerShell({ sourceScene }) {
@@ -204,7 +225,6 @@ export function Sticker({ config = null, preview = false, position = [0, 0, 0] }
     const images = useMemo(() => (
         hasConfig ? (configuredImages ?? EMPTY_IMAGES) : stickerImages
     ), [configuredImages, hasConfig, stickerImages]);
-    const { scene: sheetScene } = useGLTF(listModelUrl);
     const { scene: squareScene } = useGLTF(squareStickerModelUrl);
     const { scene: circleScene } = useGLTF(circleStickerModelUrl);
     const imagesBySlot = useMemo(() => normalizeImagesBySlot(images), [images]);
@@ -213,10 +233,10 @@ export function Sticker({ config = null, preview = false, position = [0, 0, 0] }
     return (
         <group
             position={position}
-            rotation={preview ? [0.18, -0.34, 0.08] : [0.08, -0.16, 0]}
+            rotation={preview ? [0.12, -0.18, 0.04] : [0, 0, 0]}
             scale={MODEL_SCALE}
         >
-            <SheetModel sourceScene={sheetScene} color={sheetColor} />
+            <SheetModel color={sheetColor} />
             <group position={[0, 0, STICKER_Z]}>
                 {SLOT_LAYOUT.map((slot, index) => {
                     const image = imagesBySlot.get(index);
@@ -226,7 +246,6 @@ export function Sticker({ config = null, preview = false, position = [0, 0, 0] }
                         <group
                             key={index}
                             position={[slot.x, slot.y, 0]}
-                            rotation={[0, 0, slot.rotation]}
                         >
                             <StickerShell sourceScene={sourceScene} />
                             {image?.texture ? (
@@ -242,6 +261,5 @@ export function Sticker({ config = null, preview = false, position = [0, 0, 0] }
     );
 }
 
-useGLTF.preload(listModelUrl);
 useGLTF.preload(squareStickerModelUrl);
 useGLTF.preload(circleStickerModelUrl);

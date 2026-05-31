@@ -373,12 +373,12 @@ export const ClientDashboard = ({
 
             {/* MAIN */}
             <main className={`flex-1 min-h-0 overflow-y-auto custom-scrollbar mx-auto w-full px-4 sm:px-6 py-5 sm:py-8 pb-24 flex flex-col ${
-                activeTab === 'catalog' ? 'max-w-[1500px]' : 'max-w-6xl'
+                activeTab === 'catalog' ? 'max-w-none lg:px-8 2xl:px-10' : 'max-w-6xl'
             }`}>
 
                 {/* CATALOG TAB */}
                 {activeTab === 'catalog' && (
-                    <div className="flex flex-col items-center">
+                    <div className="w-full">
                         <ConfiguratorProductMenu
                             onStart={onEdit}
                             onPrintCanvas={sectionVisibility?.print_canvas !== false && printCanvasEnabled ? onPrintCanvas : null}

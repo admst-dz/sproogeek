@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useMemo, useRef } from 'react'
-import { ALL_PRODUCT_DEFAULTS, THEME_SWITCHING_ENABLED, getNotebookBindingCapabilities, mergeSectionVisibility, useConfigurator } from './store'
+import { ALL_PRODUCT_DEFAULTS, DEFAULT_APP_SETTINGS, THEME_SWITCHING_ENABLED, getNotebookBindingCapabilities, mergeSectionVisibility, useConfigurator } from './store'
 import { t } from './i18n'
 import { CookieBanner } from './components/shared/CookieBanner'
 import { getInitialRouteState, getPathForRouteState } from './config/routes'
@@ -23,6 +23,10 @@ const CommandPalette = lazy(() => import('./components/shared/CommandPalette').t
 const METRIKA_COUNTER_ID = 109128387;
 const CONFIGURATOR_DRAFT_KEY = 'spruzhuk_configurator_draft';
 const CONFIGURATOR_DRAFT_FIELDS = ['activeProduct', 'zoomLevel', ...Object.keys(ALL_PRODUCT_DEFAULTS)];
+const HIDDEN_HOME_SECTIONS = Object.keys(DEFAULT_APP_SETTINGS.home_sections).reduce((acc, key) => {
+    acc[key] = false;
+    return acc;
+}, {});
 
 function sendMetrikaHit(url = window.location.href) {
     if (typeof window === 'undefined' || typeof window.ym !== 'function') return;
@@ -366,6 +370,7 @@ function MainApp() {
     const [showAuth, setShowAuth] = useState(false);
     const [pendingSuccessToast, setPendingSuccessToast] = useState(false);
     const [configuratorDraft, setConfiguratorDraft] = useState(() => readConfiguratorDraft());
+    const [publicSettingsReady, setPublicSettingsReady] = useState(false);
 
     const skipNextDraftSaveRef = useRef(false);
     const lastMetrikaUrlRef = useRef(typeof window !== 'undefined' ? window.location.href : '');
@@ -442,9 +447,24 @@ function MainApp() {
     };
 
     useEffect(() => {
+        let cancelled = false;
+        setPublicSettingsReady(false);
         fetchPublicSettings()
-            .then((settings) => setAppSettings(settings))
-            .catch(() => setAppSettings({ guest_approval_enabled: true }));
+            .then((settings) => {
+                if (cancelled) return;
+                setAppSettings(settings);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setAppSettings({
+                    ...DEFAULT_APP_SETTINGS,
+                    home_sections: HIDDEN_HOME_SECTIONS,
+                });
+            })
+            .finally(() => {
+                if (!cancelled) setPublicSettingsReady(true);
+            });
+        return () => { cancelled = true; };
     }, [setAppSettings]);
 
     useEffect(() => {
@@ -612,7 +632,7 @@ function MainApp() {
                 navigate={guardedNavigate}
                 screen={screen}
                 openAuth={() => setShowAuth(true)}
-                productVisibility={visibleConfiguratorSections}
+                productVisibility={publicSettingsReady ? visibleConfiguratorSections : HIDDEN_HOME_SECTIONS}
             />
 
             {/* --- МОДАЛЬНОЕ ОКНО АВТОРИЗАЦИИ --- */}
@@ -713,42 +733,46 @@ function MainApp() {
 
             {/* --- ЭКРАН: ГЛАВНАЯ СТРАНИЦА --- */}
             {screen === 'home' && (
-                <RouteSuspense
-                    fallback={(
-                        <HomeRouteFallback
+                publicSettingsReady ? (
+                    <RouteSuspense
+                        fallback={(
+                            <HomeRouteFallback
+                                onStart={() => {
+                                    setClientTab(null);
+                                    setScreen('configurator');
+                                }}
+                                onAuth={() => setShowAuth(true)}
+                                user={currentUser}
+                                logout={logout}
+                                openCommandPalette={openCommandPalette}
+                                sectionVisibility={appSettings.home_sections}
+                                onPrintCanvas={
+                                    homePrintCanvasEnabled
+                                        ? handleOpenPrintCanvas
+                                        : null
+                                }
+                            />
+                        )}
+                    >
+                        <Home
                             onStart={() => {
                                 setClientTab(null);
                                 setScreen('configurator');
                             }}
-                            onAuth={() => setShowAuth(true)}
-                            user={currentUser}
-                            logout={logout}
-                            openCommandPalette={openCommandPalette}
-                            sectionVisibility={appSettings.home_sections}
                             onPrintCanvas={
                                 homePrintCanvasEnabled
                                     ? handleOpenPrintCanvas
                                     : null
                             }
+                            sectionVisibility={appSettings.home_sections}
+                            onAuth={() => setShowAuth(true)}
+                            user={currentUser}
+                            logout={logout}
                         />
-                    )}
-                >
-                    <Home
-                        onStart={() => {
-                            setClientTab(null);
-                            setScreen('configurator');
-                        }}
-                        onPrintCanvas={
-                            homePrintCanvasEnabled
-                                ? handleOpenPrintCanvas
-                                : null
-                        }
-                        sectionVisibility={appSettings.home_sections}
-                        onAuth={() => setShowAuth(true)}
-                        user={currentUser}
-                        logout={logout}
-                    />
-                </RouteSuspense>
+                    </RouteSuspense>
+                ) : (
+                    <RouteLoader />
+                )
             )}
 
             {/* --- ЭКРАН: ПОЛОТНО НА ПЕЧАТЬ --- */}

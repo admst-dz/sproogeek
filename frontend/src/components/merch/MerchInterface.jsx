@@ -241,7 +241,7 @@ export const MerchInterface = ({ onFinish }) => {
                 </SettingGroup>
 
                 <SettingGroup title={t(language, 'merchColor')}>
-                    <ColorSwatches colors={config.palette} currentColor={color} onSelect={(c) => setColor(c.bg)} />
+                    <ColorSwatches colors={config.palette} currentColor={color} onSelect={setColor} />
                 </SettingGroup>
 
                 <SettingGroup title={t(language, 'merchMaterial')}>

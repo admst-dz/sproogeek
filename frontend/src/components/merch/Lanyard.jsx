@@ -54,7 +54,8 @@ export function Lanyard({ config = null, preview = false, position = [0, 0, 0] }
         <group position={position} rotation={preview ? [0.1, -0.28, 0] : [0.04, -0.14, 0]}>
             <group scale={scaled} position={[-center.x * scaled[0], -center.y * scaled[1], -center.z * scaled[2]]}>
                 {meshes.map(({ name, geometry }) => {
-                    const isAttachment = name.toLowerCase().includes('string');
+                    const isBadge = name.toLowerCase().includes('badge');
+                    const materialColor = isBadge ? BADGE_COLOR : color;
                     return (
                         <mesh
                             key={name}
@@ -63,10 +64,10 @@ export function Lanyard({ config = null, preview = false, position = [0, 0, 0] }
                             receiveShadow
                         >
                             <meshStandardMaterial
-                                key={`lanyard-${name}-${isAttachment ? color : BADGE_COLOR}`}
-                                color={isAttachment ? color : BADGE_COLOR}
-                                roughness={isAttachment ? ATTACHMENT_ROUGHNESS : BADGE_ROUGHNESS}
-                                metalness={isAttachment ? ATTACHMENT_METALNESS : BADGE_METALNESS}
+                                key={`lanyard-${name}-${materialColor}`}
+                                color={materialColor}
+                                roughness={isBadge ? BADGE_ROUGHNESS : ATTACHMENT_ROUGHNESS}
+                                metalness={isBadge ? BADGE_METALNESS : ATTACHMENT_METALNESS}
                                 side={THREE.DoubleSide}
                             />
                         </mesh>
