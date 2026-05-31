@@ -294,15 +294,17 @@ const LANYARD_PREVIEW_CONFIG = {
     lanyardCarabiner: 'carabiner',
     lanyardLogos: [],
 };
-const makeStickerPreviewLogo = (label, color) => (
-    `data:image/svg+xml;base64,${btoa(`
+const makeStickerPreviewLogo = (label, color) => {
+    const svg = `
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
             <rect width="256" height="256" rx="48" fill="${color}"/>
             <circle cx="128" cy="90" r="38" fill="white" opacity="0.92"/>
             <text x="128" y="176" text-anchor="middle" font-family="Arial, sans-serif" font-size="58" font-weight="900" fill="white">${label}</text>
         </svg>
-    `)}`
-);
+    `;
+
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+};
 const STICKER_PREVIEW_CONFIG = {
     stickerSheetColor: '#FDD835',
     stickerImages: [
