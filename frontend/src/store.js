@@ -162,6 +162,7 @@ export const POWERBANK_DEFAULTS = {
     selectedPowerbankLogoId: null,
 };
 export const STICKER_DEFAULTS = {
+    stickerSheetColor: '#F6F1E7',
     stickerImages: [],
     selectedStickerImageId: null,
 };
@@ -245,6 +246,22 @@ const makeLogoId = () => (
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`
 );
 
+export const STICKER_SLOT_COUNT = 6;
+export const STICKER_DEFAULT_SLOT_SHAPES = ['circle', 'square', 'circle', 'square', 'square', 'circle'];
+
+const normalizeStickerShape = (shape) => (shape === 'square' ? 'square' : 'circle');
+
+const getNextStickerSlot = (images = []) => {
+    const occupied = new Set(images.map((image, index) => {
+        const slot = Number(image?.slot);
+        return Number.isInteger(slot) && slot >= 0 && slot < STICKER_SLOT_COUNT ? slot : index;
+    }));
+    for (let slot = 0; slot < STICKER_SLOT_COUNT; slot += 1) {
+        if (!occupied.has(slot)) return slot;
+    }
+    return -1;
+};
+
 const THERMOS_LOGO_START_POSITIONS = {
     body: [[0, 0], [0.08, 0.46], [-0.08, -0.46], [0.16, -0.92], [-0.16, 0.92]],
     capTop: [[0, 0], [0.16, 0.16], [-0.16, -0.16], [0.16, -0.16], [-0.16, 0.16]],
@@ -298,6 +315,7 @@ export const useConfigurator = create(temporal((set, get) => ({
     selectedPowerbankLogoId: null,
 
     // --- Параметры 3D стикера ---
+    stickerSheetColor: '#F6F1E7',
     stickerImages: [],
     selectedStickerImageId: null,
 
@@ -635,14 +653,33 @@ export const useConfigurator = create(temporal((set, get) => ({
     }),
 
     // --- ACTIONS: 3D СТИКЕР ---
+    setStickerSheetColor: (color) => set({ stickerSheetColor: color }),
     addStickerImage: async (file) => {
         if (file instanceof File) {
             const id = makeLogoId();
             try {
                 const texture = await normalizeImageFile(file);
                 set((state) => ({
-                    stickerImages: [...state.stickerImages, { id, texture, filename: file.name, position: [0, 0], rotation: 0, scale: 0.72 }],
-                    selectedStickerImageId: id
+                    ...(() => {
+                        const slot = getNextStickerSlot(state.stickerImages);
+                        if (slot < 0) return {};
+                        return {
+                            stickerImages: [
+                                ...state.stickerImages,
+                                {
+                                    id,
+                                    texture,
+                                    filename: file.name,
+                                    slot,
+                                    shape: STICKER_DEFAULT_SLOT_SHAPES[slot],
+                                    position: [0, 0],
+                                    rotation: 0,
+                                    scale: 0.72,
+                                },
+                            ],
+                            selectedStickerImageId: id,
+                        };
+                    })(),
                 }));
             } catch (error) {
                 console.error('Failed to prepare sticker image', error);
@@ -670,6 +707,9 @@ export const useConfigurator = create(temporal((set, get) => ({
     })),
     setStickerImageScale: (scale) => set((state) => ({
         stickerImages: state.stickerImages.map(l => l.id === state.selectedStickerImageId ? { ...l, scale } : l)
+    })),
+    setStickerImageShape: (shape) => set((state) => ({
+        stickerImages: state.stickerImages.map(l => l.id === state.selectedStickerImageId ? { ...l, shape: normalizeStickerShape(shape) } : l)
     })),
     resetStickerImageTransform: () => set((state) => ({
         stickerImages: state.stickerImages.map(l => l.id === state.selectedStickerImageId ? { ...l, position: [0, 0], rotation: 0, scale: 0.72 } : l)

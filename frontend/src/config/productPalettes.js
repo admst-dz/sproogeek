@@ -23,6 +23,16 @@ export const POWERBANK_COLOR_PALETTE = [
     { bg: '#75787B', name: 'Серебристый' },
 ];
 
+export const STICKER_SHEET_COLOR_PALETTE = [
+    { bg: '#F6F1E7', name: 'Молочный' },
+    { bg: '#FFFFFF', name: 'Белый' },
+    { bg: '#FDD835', name: 'Жёлтый' },
+    { bg: '#EC407A', name: 'Розовый' },
+    { bg: '#1565C0', name: 'Синий' },
+    { bg: '#43A047', name: 'Зелёный' },
+    { bg: '#1A1A1A', name: 'Чёрный' },
+];
+
 // Палитры для мерч-товаров. Соответствуют бэкенду (seed migration).
 export const SHOPPER_COLOR_PALETTE = [
     { bg: '#F5F0E1', name: 'Натуральный' },

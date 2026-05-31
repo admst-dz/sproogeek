@@ -26,7 +26,7 @@ export const Order = ({ onBack, onSuccess }) => {
         activeProduct, language,
         thermosBodyColor, thermosCapVisible, thermosLogos,
         powerbankBodyColor, powerbankLogos,
-        stickerImages,
+        stickerSheetColor, stickerImages,
         shopperColor, shopperMaterial, shopperHandleType, shopperPrintSide, shopperLogos,
         tshirtColor, tshirtMaterial, tshirtSize, tshirtPrintSide, tshirtLogos,
         hoodieColor, hoodieMaterial, hoodieSize, hoodiePrintSide, hoodieLogos,
@@ -81,6 +81,7 @@ export const Order = ({ onBack, onSuccess }) => {
                 activeProduct: 'sticker',
                 stickerWidthMm: 40,
                 stickerHeightMm: 45,
+                stickerSheetColor,
                 stickerImages,
             };
         }
@@ -262,7 +263,7 @@ export const Order = ({ onBack, onSuccess }) => {
                                 <SceneLoadingOverlay compact label="3D" />
                                 {activeProduct === 'sticker' ? (
                                     <div className="absolute bottom-3 right-3 flex items-center gap-2 bg-black/50 backdrop-blur-md rounded-[10px] px-3 py-2 border border-white/15 pointer-events-none">
-                                        <span className="text-white/70 text-xs font-bold uppercase tracking-wide">40 x 45 мм</span>
+                                        <span className="text-white/70 text-xs font-bold uppercase tracking-wide">6 3D</span>
                                     </div>
                                 ) : MERCH_PRODUCTS.has(activeProduct) ? (
                                     <div className="absolute bottom-3 right-3 flex items-center gap-2 bg-black/50 backdrop-blur-md rounded-[10px] px-3 py-2 border border-white/15 pointer-events-none">
@@ -293,8 +294,9 @@ export const Order = ({ onBack, onSuccess }) => {
                         <div className="space-y-3 border-t border-gray-100 dark:border-white/8 p-6 text-sm font-bold text-[#1a1a1a] dark:text-white">
                             {activeProduct === 'sticker' ? (
                                 <>
-                                    <Row label={t(language, 'stickerCanvasSize')} value="40 x 45 мм" />
-                                    <Row label={t(language, 'printCanvasItems')} value={stickerImages.length} />
+                                    <Row label={t(language, 'stickerCanvasSize')} value={t(language, 'stickerSheetFormat')} />
+                                    <Row label={t(language, 'stickerSheetColor')} value={<ColorDot color={stickerSheetColor} />} />
+                                    <Row label={t(language, 'printCanvasItems')} value={`${stickerImages.length}/6`} />
                                 </>
                             ) : activeProduct === 'shopper' ? (
                                 <>
