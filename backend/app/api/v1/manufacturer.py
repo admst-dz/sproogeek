@@ -20,6 +20,7 @@ from app.database import get_db
 from app.models.order import Order
 from app.schemas.order import OrderResponse
 from app.services.event_hub import event_hub
+from app.services.order_service import OrderService
 from app.services.imposition import plan_for_order, qr_png_bytes
 from app.services.glb_unwrapper_client import (
     GlbUnwrapperError,
@@ -34,7 +35,9 @@ router = APIRouter(dependencies=[Depends(get_manufacturer_user)])
 
 
 QUOTE_STATUSES = {"awaiting_quotes", "quotes_ready"}
-PRODUCTION_STATUSES = {"processing", "production", "in_delivery"}
+PRODUCTION_STATUS_FLOW = ("processing", "production", "in_delivery", "done")
+PRODUCTION_STATUSES = set(PRODUCTION_STATUS_FLOW)
+PRODUCTION_STATUS_INDEX = {status: idx for idx, status in enumerate(PRODUCTION_STATUS_FLOW)}
 
 
 def _visible_for_manufacturer(order: Order, user) -> bool:
@@ -176,11 +179,20 @@ async def manufacturer_update_status(
         raise HTTPException(status_code=404, detail="Order not found")
     if current_user.role in {"manufacturer", "dealer"} and existing.selected_manufacturer_id != current_user.id:
         raise HTTPException(status_code=403, detail="Order is assigned to another manufacturer")
-    if existing.status in QUOTE_STATUSES:
+    if existing.status in QUOTE_STATUSES or not existing.selected_manufacturer_id:
         raise HTTPException(status_code=409, detail="Client must select a manufacturer before production status changes")
+    if payload.status not in PRODUCTION_STATUSES:
+        raise HTTPException(status_code=409, detail="Manufacturer can change only production statuses")
+    if existing.status not in PRODUCTION_STATUSES:
+        raise HTTPException(status_code=409, detail="Order is not in production workflow")
+    if payload.status == existing.status:
+        return existing
+    if abs(PRODUCTION_STATUS_INDEX[payload.status] - PRODUCTION_STATUS_INDEX[existing.status]) != 1:
+        raise HTTPException(status_code=409, detail="Manufacturer can move only to next or previous status")
     order = await crud_order.update_status(db, order_id, payload.status, payload.comment)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    OrderService.notify_bitrix_updated(request, order.id, comment=payload.comment)
 
     deduction_summary = None
     if payload.status == "production":
@@ -215,7 +227,7 @@ async def manufacturer_update_status(
         "status": order.status,
         "comment": payload.comment,
         "actor_id": current_user.id,
-        "actor_role": "manufacturer",
+        "actor_role": current_user.role,
         "warehouse_deductions": deduction_summary,
     })
     return order

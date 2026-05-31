@@ -7,7 +7,12 @@ import { getUserSecondaryLabel } from '../../utils/user';
 import { LiveOrderToasts } from '../shared/LiveOrderToasts';
 import { OrderQrTile } from '../shared/OrderQrTile';
 import { SiteFooter } from '../shared/SiteFooter';
-import { PRODUCTION_STAGE_INDEX, PRODUCTION_STAGES } from '../../config/orderStages';
+import {
+    MANUFACTURER_WORKFLOW_STAGE_INDEX,
+    MANUFACTURER_WORKFLOW_STAGES,
+    PRODUCTION_STAGE_INDEX,
+    PRODUCTION_STAGES,
+} from '../../config/orderStages';
 
 const StatusBadge = ({ status, language }) => {
     const s = PRODUCTION_STAGES.find(x => x.key === status) || { textKey: null, color: 'bg-white/10 text-gray-400 border-white/10' };
@@ -374,11 +379,14 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
                             const isExpanded = expanded.has(orderId);
                             const isUpdating = updating === orderId;
                             const isTcBusy = techcardBusy === orderId;
-                            const currentStageIdx = PRODUCTION_STAGE_INDEX[order.status] ?? 0;
+                            const workflowStageIdx = MANUFACTURER_WORKFLOW_STAGE_INDEX[order.status] ?? -1;
                             const isQuoteStage = order.status === 'awaiting_quotes' || order.status === 'quotes_ready';
                             const isSelectedManufacturer = order.selected_manufacturer_id === currentUser?.id;
                             const myQuote = (order.manufacturer_quotes || []).find(q => q.manufacturer_id === currentUser?.id);
-                            const PRODUCTION_ONLY_STAGES = PRODUCTION_STAGES.filter(s => !['awaiting_quotes', 'quotes_ready'].includes(s.key));
+                            const previousStage = workflowStageIdx > 0 ? MANUFACTURER_WORKFLOW_STAGES[workflowStageIdx - 1] : null;
+                            const nextStage = workflowStageIdx >= 0 && workflowStageIdx < MANUFACTURER_WORKFLOW_STAGES.length - 1
+                                ? MANUFACTURER_WORKFLOW_STAGES[workflowStageIdx + 1]
+                                : null;
                             return (
                                 <div key={orderId} className={i !== orders.length - 1 ? 'border-b border-white/5' : ''}>
                                     {/* Summary row */}
@@ -463,28 +471,26 @@ export const ManufacturerDashboard = ({ onBack, initialTab, onTabChange }) => {
                                                     ) : isSelectedManufacturer ? (
                                                         <div className="rounded-[12px] border border-indigo-500/20 bg-indigo-500/[0.08] p-4 space-y-3">
                                                             <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-300">{t(language, 'updateStage')}</p>
-                                                            <div className="flex flex-wrap gap-2">
-                                                                {PRODUCTION_ONLY_STAGES.map((stage) => {
-                                                                    const isCurrent = stage.key === order.status;
-                                                                    const stageIdx = PRODUCTION_STAGE_INDEX[stage.key];
-                                                                    const isPast = stageIdx < currentStageIdx;
-                                                                    return (
-                                                                        <button
-                                                                            key={stage.key}
-                                                                            disabled={isCurrent || isUpdating}
-                                                                            onClick={(e) => { e.stopPropagation(); setStage(orderId, stage.key); }}
-                                                                            className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all
-                                                                                ${isCurrent
-                                                                                    ? `${stage.color} cursor-default ring-1 ring-white/20`
-                                                                                    : isPast
-                                                                                        ? 'bg-white/5 text-gray-600 border-white/5 hover:bg-white/10 hover:text-gray-400'
-                                                                                        : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/15 hover:text-white'
-                                                                                } ${isUpdating ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                                                        >
-                                                                            {stage.icon} {t(language, stage.textKey)}{isCurrent && ' ✓'}
-                                                                        </button>
-                                                                    );
-                                                                })}
+                                                            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={!previousStage || isUpdating}
+                                                                    onClick={(e) => { e.stopPropagation(); previousStage && setStage(orderId, previousStage.key); }}
+                                                                    className="px-3 py-2 rounded-[10px] bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10 hover:text-white text-[10px] font-bold uppercase tracking-wider transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                >
+                                                                    ← {previousStage ? t(language, previousStage.textKey) : t(language, 'statusProcessing')}
+                                                                </button>
+                                                                <div className="px-3 py-2 rounded-[10px] border border-indigo-500/30 bg-indigo-500/15 text-indigo-100 text-center text-[10px] font-bold uppercase tracking-wider">
+                                                                    {(MANUFACTURER_WORKFLOW_STAGES[workflowStageIdx]?.icon || '•')} {t(language, MANUFACTURER_WORKFLOW_STAGES[workflowStageIdx]?.textKey || 'statusProcessing')}
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={!nextStage || isUpdating}
+                                                                    onClick={(e) => { e.stopPropagation(); nextStage && setStage(orderId, nextStage.key); }}
+                                                                    className="px-3 py-2 rounded-[10px] bg-indigo-500/20 text-indigo-100 border border-indigo-500/40 hover:bg-indigo-500/30 text-[10px] font-bold uppercase tracking-wider transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                >
+                                                                    {nextStage ? t(language, nextStage.textKey) : t(language, 'statusDone')} →
+                                                                </button>
                                                             </div>
                                                             <textarea
                                                                 value={commentDraft[orderId] || ''}

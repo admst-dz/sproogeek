@@ -24,6 +24,11 @@ export const PRODUCTION_STAGES = ORDER_STAGES.filter(stage => (
     ['awaiting_quotes', 'quotes_ready', 'processing', 'production', 'in_delivery', 'done'].includes(stage.key)
 ));
 
+export const MANUFACTURER_WORKFLOW_STAGES = ORDER_STAGES.filter(stage => (
+    ['processing', 'production', 'in_delivery', 'done'].includes(stage.key)
+));
+
 export const ORDER_STAGE_INDEX = Object.fromEntries(ORDER_STAGES.map((stage, index) => [stage.key, index]));
 export const CLIENT_ORDER_STAGE_INDEX = Object.fromEntries(CLIENT_ORDER_STAGES.map((stage, index) => [stage.key, index]));
 export const PRODUCTION_STAGE_INDEX = Object.fromEntries(PRODUCTION_STAGES.map((stage, index) => [stage.key, index]));
+export const MANUFACTURER_WORKFLOW_STAGE_INDEX = Object.fromEntries(MANUFACTURER_WORKFLOW_STAGES.map((stage, index) => [stage.key, index]));
