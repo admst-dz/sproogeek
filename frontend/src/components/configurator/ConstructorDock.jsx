@@ -275,6 +275,7 @@ export const ColorSwatches = ({ colors, currentColor, onSelect }) => (
     <div className="flex w-full max-w-full flex-wrap justify-start gap-2">
         {colors.map(color => {
             const value = color.bg ?? color;
+            const name = color.name ?? value;
             return (
                 <button
                     key={value}
@@ -284,7 +285,8 @@ export const ColorSwatches = ({ colors, currentColor, onSelect }) => (
                         currentColor === value ? 'border-[#fff9ec] ring-2 ring-[#fff9ec]/35' : 'border-white/45 hover:border-white'
                     }`}
                     style={{ backgroundColor: value }}
-                    aria-label={value}
+                    aria-label={name}
+                    title={name}
                 />
             );
         })}

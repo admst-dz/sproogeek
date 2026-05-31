@@ -7,6 +7,11 @@ import { MerchLogoPlane } from './MerchLogoPlane';
 
 const MODEL_SCALE = 0.72;
 const LOGO_SURFACE_OFFSET = 0.018;
+const BADGE_COLOR = '#ffffff';
+const BADGE_METALNESS = 0.04;
+const BADGE_ROUGHNESS = 0.56;
+const ATTACHMENT_METALNESS = 0.02;
+const ATTACHMENT_ROUGHNESS = 0.78;
 
 export function Lanyard({ config = null, preview = false, position = [0, 0, 0] }) {
     const state = useConfigurator();
@@ -49,7 +54,7 @@ export function Lanyard({ config = null, preview = false, position = [0, 0, 0] }
         <group position={position} rotation={preview ? [0.1, -0.28, 0] : [0.04, -0.14, 0]}>
             <group scale={scaled} position={[-center.x * scaled[0], -center.y * scaled[1], -center.z * scaled[2]]}>
                 {meshes.map(({ name, geometry }) => {
-                    const isString = name.toLowerCase().includes('string');
+                    const isAttachment = name.toLowerCase().includes('string');
                     return (
                         <mesh
                             key={name}
@@ -58,9 +63,10 @@ export function Lanyard({ config = null, preview = false, position = [0, 0, 0] }
                             receiveShadow
                         >
                             <meshStandardMaterial
-                                color={isString ? color : '#d5d9df'}
-                                roughness={isString ? 0.78 : 0.34}
-                                metalness={isString ? 0.02 : 0.58}
+                                key={`lanyard-${name}-${isAttachment ? color : BADGE_COLOR}`}
+                                color={isAttachment ? color : BADGE_COLOR}
+                                roughness={isAttachment ? ATTACHMENT_ROUGHNESS : BADGE_ROUGHNESS}
+                                metalness={isAttachment ? ATTACHMENT_METALNESS : BADGE_METALNESS}
                                 side={THREE.DoubleSide}
                             />
                         </mesh>

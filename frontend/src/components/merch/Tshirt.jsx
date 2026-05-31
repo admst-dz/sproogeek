@@ -53,7 +53,13 @@ export function Tshirt({ config = null, preview = false, position = [0, 0, 0] })
             <group scale={MODEL_SCALE} position={[-center.x * MODEL_SCALE, -center.y * MODEL_SCALE, -center.z * MODEL_SCALE]}>
                 {geometries.map(({ name, geometry }) => (
                     <mesh key={name} geometry={geometry} castShadow receiveShadow>
-                        <meshStandardMaterial color={color} roughness={0.82} metalness={0.02} side={THREE.DoubleSide} />
+                        <meshStandardMaterial
+                            key={`tshirt-material-${color}`}
+                            color={color}
+                            roughness={0.82}
+                            metalness={0.02}
+                            side={THREE.DoubleSide}
+                        />
                     </mesh>
                 ))}
 
