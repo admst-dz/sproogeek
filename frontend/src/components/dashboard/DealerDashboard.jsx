@@ -898,7 +898,7 @@ export const DealerDashboard = ({ onBack, initialTab, onTabChange }) => {
         }
         if (activeTab === 'products' && currentUser && !isAdmin) {
             setLoading(true);
-            fetchDealerProducts(currentUser.id).then(data => {
+            fetchDealerProducts(currentUser.id, true).then(data => {
                 setProducts(data);
                 setLoading(false);
             }).catch(() => setLoading(false));
@@ -1022,7 +1022,7 @@ export const DealerDashboard = ({ onBack, initialTab, onTabChange }) => {
         setShowModal(false);
         setEditingProduct(null);
         if (currentUser) {
-            fetchDealerProducts(currentUser.id).then(setProducts);
+            fetchDealerProducts(currentUser.id, true).then(setProducts);
         }
     };
 

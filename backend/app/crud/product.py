@@ -37,10 +37,13 @@ async def get_products(
     skip: int = 0,
     limit: int = 100,
     product_type: Optional[str] = None,
+    active_only: bool = False,
 ) -> list[Product]:
     stmt = select(Product)
     if product_type:
         stmt = stmt.where(Product.type == product_type)
+    if active_only:
+        stmt = stmt.where(Product.is_active.is_(True))
     stmt = stmt.offset(skip).limit(limit)
     result = await db.execute(stmt)
     return result.scalars().all()
@@ -50,10 +53,13 @@ async def get_products_by_dealer(
     db: AsyncSession,
     dealer_id: str,
     product_type: Optional[str] = None,
+    active_only: bool = False,
 ) -> list[Product]:
     stmt = select(Product).where(Product.dealer_id == dealer_id)
     if product_type:
         stmt = stmt.where(Product.type == product_type)
+    if active_only:
+        stmt = stmt.where(Product.is_active.is_(True))
     result = await db.execute(stmt)
     return result.scalars().all()
 

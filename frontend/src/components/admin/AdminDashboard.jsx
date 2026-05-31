@@ -1301,17 +1301,6 @@ const normalizeAdminSettings = (data) => ({
     dashboard_sections: { ...DEFAULT_ADMIN_SETTINGS.dashboard_sections, ...(data?.dashboard_sections || {}) },
 });
 
-const mergeSettingsPatch = (current, patch) => ({
-    ...current,
-    ...patch,
-    home_sections: patch.home_sections
-        ? { ...current.home_sections, ...patch.home_sections }
-        : current.home_sections,
-    dashboard_sections: patch.dashboard_sections
-        ? { ...current.dashboard_sections, ...patch.dashboard_sections }
-        : current.dashboard_sections,
-});
-
 function SettingsSwitch({ label, description, enabled, loading, saving, onToggle }) {
     return (
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-[12px] border border-white/8 bg-black/15 px-3 py-3">
@@ -1367,10 +1356,6 @@ function AdminSettingsPanel({ language }) {
     }, [language, setAppSettings]);
 
     const saveSettingsPatch = async (patch) => {
-        const previousSettings = settings;
-        const optimisticSettings = mergeSettingsPatch(settings, patch);
-        setSettings(optimisticSettings);
-        setAppSettings(optimisticSettings);
         setSaving(true);
         setMsg('');
         try {
@@ -1380,8 +1365,6 @@ function AdminSettingsPanel({ language }) {
             setAppSettings(nextSettings);
             setMsg(t(language, 'adminSaved'));
         } catch (err) {
-            setSettings(previousSettings);
-            setAppSettings(previousSettings);
             setMsg('✗ ' + formatApiError(err, language));
         } finally {
             setSaving(false);
@@ -1623,18 +1606,59 @@ function JsonTab({ language }) {
 // ─── Продукты ────────────────────────────────────────────────────────────────
 
 function ProductsTab({ language }) {
-    const { data, loading, error } = useData(() => productApi.getAll(), language);
+    const { data, setData, loading, error } = useData(() => productApi.getAll(true), language);
+    const [savingId, setSavingId] = useState(null);
+    const [saveError, setSaveError] = useState('');
 
     if (loading) return <Loader language={language} />;
     if (error) return <ErrBox msg={error} />;
     const products = Array.isArray(data) ? data : [];
 
+    const payloadForProduct = (product, isActive) => ({
+        type: product.type || 'notebook',
+        name: product.name,
+        description: product.description || null,
+        isActive,
+        dealerId: product.dealer_id || product.dealerId || null,
+        retailPrice: product.retailPrice ?? product.retail_price ?? 0,
+        imageUrl: product.imageUrl || product.image_url || null,
+        modelUrl: product.modelUrl || product.model_url || null,
+        binding: product.binding || [],
+        spiralColors: product.spiralColors || product.spiral_colors || [],
+        hasElastic: product.hasElastic ?? product.has_elastic ?? false,
+        elasticColors: product.elasticColors || product.elastic_colors || [],
+        formats: product.formats || [],
+        coverColors: product.coverColors || product.cover_colors || [],
+        wholesaleTiers: product.wholesaleTiers || product.wholesale_tiers || [],
+        attributes: product.attributes || {},
+    });
+
+    const toggleProductVisibility = async (product) => {
+        if (savingId !== null) return;
+        const nextActive = product.isActive === false;
+        setSavingId(product.id);
+        setSaveError('');
+        try {
+            const { data: updated } = await productApi.update(product.id, payloadForProduct(product, nextActive));
+            setData((current) => (Array.isArray(current)
+                ? current.map((item) => item.id === product.id ? updated : item)
+                : current));
+        } catch (err) {
+            setSaveError(formatApiError(err, language));
+        } finally {
+            setSavingId(null);
+        }
+    };
+
     return (
         <>
             <SectionHeader title={t(language, 'adminProductsHeader')} count={products.length} />
+            {saveError && <ErrBox msg={saveError} />}
             <Table
                 headers={[
                     t(language, 'adminColProduct'),
+                    'Тип',
+                    'Видимость',
                     t(language, 'adminColDealer'),
                     t(language, 'adminColPrice'),
                     t(language, 'adminColBinding'),
@@ -1646,6 +1670,41 @@ function ProductsTab({ language }) {
                 {products.map(p => (
                     <tr key={p.id} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors">
                         <td className="px-4 py-2.5 text-sm font-bold text-white/80">{p.name}</td>
+                        <td className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white/45">{p.type || 'notebook'}</td>
+                        <td className="px-4 py-2.5">
+                            <button
+                                type="button"
+                                disabled={savingId !== null}
+                                onClick={() => toggleProductVisibility(p)}
+                                role="switch"
+                                aria-checked={p.isActive !== false}
+                                aria-busy={savingId === p.id}
+                                className={`inline-flex min-w-[132px] items-center gap-2 rounded-full border px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest transition disabled:cursor-wait disabled:opacity-60 ${
+                                    p.isActive === false
+                                        ? 'border-white/12 bg-white/5 text-white/35 hover:text-white/60'
+                                        : 'border-emerald-400/30 bg-emerald-500/12 text-emerald-300 hover:bg-emerald-500/18'
+                                }`}
+                            >
+                                <span
+                                    className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors ${
+                                        p.isActive === false
+                                            ? 'border-white/12 bg-white/10'
+                                            : 'border-emerald-400/35 bg-emerald-500/30'
+                                    }`}
+                                >
+                                    <span
+                                        className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full shadow-lg transition-transform ${
+                                            p.isActive === false
+                                                ? 'translate-x-0 bg-slate-400'
+                                                : 'translate-x-5 bg-emerald-300'
+                                        }`}
+                                    />
+                                </span>
+                                <span className="flex-1 text-center">
+                                    {savingId === p.id ? t(language, 'adminSaving') : p.isActive === false ? 'Скрыта' : 'Видна'}
+                                </span>
+                            </button>
+                        </td>
                         <td className="px-4 py-2.5 font-mono text-xs text-white/40">{p.dealer_id || '—'}</td>
                         <td className="px-4 py-2.5 text-sm text-white/60">
                             {(p.retailPrice ?? p.retail_price) != null ? `${p.retailPrice ?? p.retail_price} BYN` : '—'}
