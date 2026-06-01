@@ -19,8 +19,6 @@ const LOGO_Z = -0.011;
 const LOGO_RENDER_ORDER = 24;
 const GLASS_RENDER_ORDER = 42;
 const SHEET_STENCIL_REF = 7;
-const STICKER_MASK_SIZE = 1.396;
-const STICKER_MASK_RADIUS = 0.696;
 const SHEET_BACKGROUND_MAX_SIDE = 3.2;
 
 const SLOT_LAYOUT = [
@@ -180,28 +178,48 @@ function StickerShell({ sourceScene }) {
     return <primitive object={scene} position={offset} />;
 }
 
-function StickerStencilMask({ shape, stencilRef }) {
-    return (
-        <mesh position={[0, 0, LOGO_Z - 0.0004]} renderOrder={18}>
-            {shape === 'circle' ? (
-                <circleGeometry args={[STICKER_MASK_RADIUS, 96]} />
-            ) : (
-                <planeGeometry args={[STICKER_MASK_SIZE, STICKER_MASK_SIZE]} />
-            )}
-            <meshBasicMaterial
-                colorWrite={false}
-                depthWrite={false}
-                depthTest={false}
-                side={THREE.DoubleSide}
-                stencilWrite
-                stencilRef={stencilRef}
-                stencilFunc={THREE.AlwaysStencilFunc}
-                stencilFail={THREE.ReplaceStencilOp}
-                stencilZFail={THREE.ReplaceStencilOp}
-                stencilZPass={THREE.ReplaceStencilOp}
-            />
-        </mesh>
-    );
+function useStickerGlassStencil(sourceScene, stencilRef) {
+    return useMemo(() => {
+        sourceScene.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(sourceScene);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+
+        const scene = sourceScene.clone(true);
+        const maskMaterial = new THREE.MeshBasicMaterial({
+            colorWrite: false,
+            depthWrite: false,
+            depthTest: false,
+            side: THREE.DoubleSide,
+            stencilWrite: true,
+            stencilRef,
+            stencilFunc: THREE.AlwaysStencilFunc,
+            stencilFail: THREE.ReplaceStencilOp,
+            stencilZFail: THREE.ReplaceStencilOp,
+            stencilZPass: THREE.ReplaceStencilOp,
+        });
+
+        scene.traverse((node) => {
+            if (!node.isMesh) return;
+            const isGlass = /_2$/.test(node.name);
+            node.visible = isGlass;
+            node.castShadow = false;
+            node.receiveShadow = false;
+            node.renderOrder = 18;
+            node.frustumCulled = false;
+            if (isGlass) node.material = maskMaterial;
+        });
+
+        return {
+            scene,
+            offset: center.multiplyScalar(-1).toArray(),
+        };
+    }, [sourceScene, stencilRef]);
+}
+
+function StickerGlassStencilMask({ sourceScene, stencilRef }) {
+    const { scene, offset } = useStickerGlassStencil(sourceScene, stencilRef);
+    return <primitive object={scene} position={offset} />;
 }
 
 function StickerLogo({ image, shape, stencilRef }) {
@@ -329,7 +347,7 @@ export function Sticker({ config = null, preview = false, position = [0, 0, 0] }
                             position={[slot.x, slot.y, 0]}
                         >
                             <StickerShell sourceScene={sourceScene} />
-                            <StickerStencilMask shape={shape} stencilRef={stencilRef} />
+                            <StickerGlassStencilMask sourceScene={sourceScene} stencilRef={stencilRef} />
                             {image?.texture ? (
                                 <StickerLogo image={image} shape={shape} stencilRef={stencilRef} />
                             ) : showSamples ? (
