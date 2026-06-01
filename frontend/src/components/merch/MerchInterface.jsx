@@ -8,8 +8,11 @@ import {
     FileUploadChip,
     LogoList,
     MiniSegment,
+    RotationScrub,
     SettingGroup,
     SettingRow,
+    SizeSlider,
+    TransformPad,
 } from '../configurator/ConstructorDock';
 import { GuestApprovalModal } from '../shared/GuestApprovalModal';
 import {
@@ -18,6 +21,7 @@ import {
     LANYARD_CARABINERS,
     LANYARD_COLOR_PALETTE,
     LANYARD_LENGTHS_MM,
+    LANYARD_REPEAT_OPTIONS_MM,
     SHOPPER_COLOR_PALETTE,
     SHOPPER_HANDLE_TYPES,
     TSHIRT_COLOR_PALETTE,
@@ -28,7 +32,7 @@ import {
 // одновременно (поэтому селектор не показываем).
 const PRINT_SIDES = {
     shopper: ['front', 'back'],
-    tshirt: ['front', 'back', 'leftSleeve', 'rightSleeve'],
+    tshirt: ['front', 'back'],
     hoodie: ['front', 'back', 'chest'],
 };
 
@@ -72,6 +76,10 @@ const PRODUCT_CONFIG = {
         addLogoAction: 'addShopperLogo',
         selectLogoAction: 'selectShopperLogo',
         removeLogoAction: 'removeShopperLogo',
+        setLogoPositionAction: 'setShopperLogoPosition',
+        setLogoRotationAction: 'setShopperLogoRotation',
+        setLogoScaleAction: 'setShopperLogoScale',
+        resetLogoTransformAction: 'resetShopperLogoTransform',
         extras: ['handleType'],
     },
     tshirt: {
@@ -90,6 +98,10 @@ const PRODUCT_CONFIG = {
         addLogoAction: 'addTshirtLogo',
         selectLogoAction: 'selectTshirtLogo',
         removeLogoAction: 'removeTshirtLogo',
+        setLogoPositionAction: 'setTshirtLogoPosition',
+        setLogoRotationAction: 'setTshirtLogoRotation',
+        setLogoScaleAction: 'setTshirtLogoScale',
+        resetLogoTransformAction: 'resetTshirtLogoTransform',
         extras: ['size'],
     },
     hoodie: {
@@ -108,6 +120,10 @@ const PRODUCT_CONFIG = {
         addLogoAction: 'addHoodieLogo',
         selectLogoAction: 'selectHoodieLogo',
         removeLogoAction: 'removeHoodieLogo',
+        setLogoPositionAction: 'setHoodieLogoPosition',
+        setLogoRotationAction: 'setHoodieLogoRotation',
+        setLogoScaleAction: 'setHoodieLogoScale',
+        resetLogoTransformAction: 'resetHoodieLogoTransform',
         extras: ['size'],
     },
     lanyard: {
@@ -126,7 +142,11 @@ const PRODUCT_CONFIG = {
         addLogoAction: 'addLanyardLogo',
         selectLogoAction: 'selectLanyardLogo',
         removeLogoAction: 'removeLanyardLogo',
-        extras: ['length', 'carabiner'],
+        setLogoPositionAction: 'setLanyardLogoPosition',
+        setLogoRotationAction: 'setLanyardLogoRotation',
+        setLogoScaleAction: 'setLanyardLogoScale',
+        resetLogoTransformAction: 'resetLanyardLogoTransform',
+        extras: ['length', 'repeat', 'carabiner'],
     },
 };
 
@@ -153,7 +173,8 @@ export const MerchInterface = ({ onFinish }) => {
 
     const color = state[config.colorKey];
     const material = state[config.materialKey];
-    const printSide = config.printSideKey ? state[config.printSideKey] : null;
+    const rawPrintSide = config.printSideKey ? state[config.printSideKey] : null;
+    const printSide = activeProduct === 'tshirt' && rawPrintSide !== 'back' ? 'front' : rawPrintSide;
     const logos = state[config.logosKey] || [];
     const selectedLogoId = state[config.selectedLogoKey];
 
@@ -163,27 +184,51 @@ export const MerchInterface = ({ onFinish }) => {
     const addLogo = state[config.addLogoAction];
     const selectLogo = state[config.selectLogoAction];
     const removeLogo = state[config.removeLogoAction];
+    const selectedLogo = logos.find(l => l.id === selectedLogoId) || null;
+    const setLogoPosition = state[config.setLogoPositionAction];
+    const setLogoRotation = state[config.setLogoRotationAction];
+    const setLogoScale = state[config.setLogoScaleAction];
+    const resetLogoTransform = state[config.resetLogoTransformAction];
 
-    const buildCartItem = (snapshot) => ({
-        productName: t(language, config.titleKey),
-        design: `${t(language, 'merchColor')}: ${color}, ${t(language, 'merchMaterial')}: ${MATERIAL_LABELS[material] || material}`,
-        priceBYN: 0,
-        type: activeProduct,
-        activeProduct,
-        color,
-        material,
-        printSide,
-        size: state.tshirtSize || state.hoodieSize || null,
-        handleType: state.shopperHandleType || null,
-        lengthMm: state.lanyardLengthMm || null,
-        widthMm: state.lanyardWidthMm || null,
-        carabiner: state.lanyardCarabiner || null,
-        logos,
-        status: 'draft',
-        rendersGenerated: 0,
-        quantity,
-        renderUrl: snapshot || null,
-    });
+    const buildCartItem = (snapshot) => {
+        const item = {
+            productName: t(language, config.titleKey),
+            design: `${t(language, 'merchColor')}: ${color}, ${t(language, 'merchMaterial')}: ${MATERIAL_LABELS[material] || material}`,
+            priceBYN: 0,
+            type: activeProduct,
+            activeProduct,
+            color,
+            material,
+            printSide,
+            size: state.tshirtSize || state.hoodieSize || null,
+            handleType: state.shopperHandleType || null,
+            lengthMm: state.lanyardLengthMm || null,
+            widthMm: state.lanyardWidthMm || null,
+            repeatMm: activeProduct === 'lanyard' ? state.lanyardRepeatMm || 50 : null,
+            carabiner: state.lanyardCarabiner || null,
+            logos,
+            status: 'draft',
+            rendersGenerated: 0,
+            quantity,
+            renderUrl: snapshot || null,
+        };
+        return {
+            ...item,
+            [config.colorKey]: color,
+            [config.materialKey]: material,
+            ...(config.printSideKey ? { [config.printSideKey]: printSide } : {}),
+            [config.logosKey]: logos,
+            ...(activeProduct === 'shopper' ? { shopperHandleType: state.shopperHandleType } : {}),
+            ...(activeProduct === 'tshirt' ? { tshirtSize: state.tshirtSize } : {}),
+            ...(activeProduct === 'hoodie' ? { hoodieSize: state.hoodieSize } : {}),
+            ...(activeProduct === 'lanyard' ? {
+                lanyardLengthMm: state.lanyardLengthMm,
+                lanyardWidthMm: state.lanyardWidthMm,
+                lanyardRepeatMm: state.lanyardRepeatMm,
+                lanyardCarabiner: state.lanyardCarabiner,
+            } : {}),
+        };
+    };
 
     const handleAddToCart = () => {
         const snapshot = captureRender();
@@ -224,7 +269,7 @@ export const MerchInterface = ({ onFinish }) => {
                 </SettingGroup>
 
                 <SettingGroup title={t(language, 'merchColor')}>
-                    <ColorSwatches colors={config.palette} currentColor={color} onSelect={(c) => setColor(c.bg)} />
+                    <ColorSwatches colors={config.palette} currentColor={color} onSelect={setColor} />
                 </SettingGroup>
 
                 <SettingGroup title={t(language, 'merchMaterial')}>
@@ -281,6 +326,16 @@ export const MerchInterface = ({ onFinish }) => {
                     </SettingGroup>
                 )}
 
+                {config.extras.includes('repeat') && (
+                    <SettingGroup title={t(language, 'lanyardRepeat')}>
+                        <MiniSegment
+                            value={state.lanyardRepeatMm}
+                            onChange={state.setLanyardRepeatMm}
+                            options={LANYARD_REPEAT_OPTIONS_MM.map((mm) => ({ value: mm, label: `${mm / 10} см` }))}
+                        />
+                    </SettingGroup>
+                )}
+
                 {config.extras.includes('carabiner') && (
                     <SettingGroup title={t(language, 'lanyardCarabiner')}>
                         <div className="flex flex-wrap gap-1.5">
@@ -317,6 +372,32 @@ export const MerchInterface = ({ onFinish }) => {
                         selectLogo={selectLogo}
                         removeLogo={removeLogo}
                     />
+                    {selectedLogo && (
+                        <div className="mt-3 grid gap-3 border-t border-white/10 pt-3">
+                            {activeProduct !== 'lanyard' && (
+                                <TransformPad
+                                    label={t(language, 'position')}
+                                    value={selectedLogo.position}
+                                    onChange={setLogoPosition}
+                                    onReset={resetLogoTransform}
+                                    yRange={1}
+                                />
+                            )}
+                            <RotationScrub
+                                label={t(language, 'rotation')}
+                                value={selectedLogo.rotation ?? 0}
+                                onChange={setLogoRotation}
+                            />
+                            <SizeSlider
+                                label={t(language, 'size')}
+                                value={selectedLogo.scale ?? 0.6}
+                                min={activeProduct === 'tshirt' ? 0.08 : activeProduct === 'lanyard' ? 0.28 : 0.2}
+                                max={activeProduct === 'tshirt' ? 1 : activeProduct === 'lanyard' ? 1.8 : 4}
+                                step={0.05}
+                                onChange={setLogoScale}
+                            />
+                        </div>
+                    )}
                 </SettingGroup>
             </DockGrid>
 

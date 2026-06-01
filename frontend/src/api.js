@@ -164,8 +164,15 @@ export const fetchManufacturerStats = async () => {
 };
 
 export const productApi = {
-    getAll: () => apiClient.get('/products/'),
-    getByDealer: (dealerId) => apiClient.get(`/products/?dealer_id=${encodeURIComponent(dealerId)}`),
+    getAll: (includeInactive = false) => apiClient.get('/products/', {
+        params: includeInactive ? { include_inactive: true } : {},
+    }),
+    getByDealer: (dealerId, includeInactive = false) => apiClient.get('/products/', {
+        params: {
+            dealer_id: dealerId,
+            ...(includeInactive ? { include_inactive: true } : {}),
+        },
+    }),
     create: (data) => apiClient.post('/products/', data),
     update: (id, data) => apiClient.put(`/products/${id}`, data),
     delete: (id) => apiClient.delete(`/products/${id}`),
@@ -356,13 +363,13 @@ export const updateOrderStatus = async (orderId, status, comment = null) => {
 
 // ─── Product helpers ──────────────────────────────────────────────────────────
 
-export const fetchAllProducts = async () => {
-    const { data } = await productApi.getAll();
+export const fetchAllProducts = async (includeInactive = false) => {
+    const { data } = await productApi.getAll(includeInactive);
     return data || [];
 };
 
-export const fetchDealerProducts = async (dealerId) => {
-    const { data } = await productApi.getByDealer(dealerId);
+export const fetchDealerProducts = async (dealerId, includeInactive = false) => {
+    const { data } = await productApi.getByDealer(dealerId, includeInactive);
     return data || [];
 };
 

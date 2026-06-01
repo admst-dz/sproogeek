@@ -1,110 +1,365 @@
-import { useEffect, useMemo } from 'react';
-import { useLoader } from '@react-three/fiber';
+import { useMemo } from 'react';
+import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { useConfigurator } from '../../store';
+import {
+    STICKER_DEFAULT_SLOT_SHAPES,
+    STICKER_SLOT_COUNT,
+    useConfigurator,
+} from '../../store';
+import { logoSizeFromTexture, useLogoTexture } from '../../utils/threeTextures';
+import squareStickerModelUrl from '../../assets/kvadrat_for_list.glb?url';
+import circleStickerModelUrl from '../../assets/crug_for_list.glb?url';
 
-const STICKER_WIDTH = 2.4;
-const STICKER_HEIGHT = 2.7;
-const CORNER_RADIUS = 0.18;
+const MODEL_SCALE = 0.7;
+const SHEET_WIDTH = 4.2;
+const SHEET_HEIGHT = 5.92;
+const STICKER_Z = 0.034;
+const SHEET_BACKGROUND_Z = -0.0056;
+const LOGO_Z = -0.011;
+const LOGO_RENDER_ORDER = 24;
+const GLASS_RENDER_ORDER = 42;
+const SHEET_STENCIL_REF = 7;
+const SHEET_BACKGROUND_MAX_SIDE = 3.2;
 
-function roundedRectShape(width, height, radius) {
-    const x = -width / 2;
-    const y = -height / 2;
-    const r = Math.min(radius, width / 2, height / 2);
-    const shape = new THREE.Shape();
-    shape.moveTo(x + r, y);
-    shape.lineTo(x + width - r, y);
-    shape.quadraticCurveTo(x + width, y, x + width, y + r);
-    shape.lineTo(x + width, y + height - r);
-    shape.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
-    shape.lineTo(x + r, y + height);
-    shape.quadraticCurveTo(x, y + height, x, y + height - r);
-    shape.lineTo(x, y + r);
-    shape.quadraticCurveTo(x, y, x + r, y);
-    return shape;
+const SLOT_LAYOUT = [
+    { x: -1.08, y: 2.05 },
+    { x: 1.08, y: 1.52 },
+    { x: -1.08, y: 0.28 },
+    { x: 1.08, y: -0.34 },
+    { x: -1.08, y: -1.58 },
+    { x: 1.08, y: -2.05 },
+];
+
+const SAMPLE_COLORS = ['#38BDF8', '#F97316', '#111827', '#EC407A', '#43A047', '#1565C0'];
+const EMPTY_IMAGES = [];
+
+const normalizeShape = (shape) => (shape === 'square' ? 'square' : 'circle');
+
+function materialForNode(node, variant, color) {
+    if (variant === 'sheet') {
+        return new THREE.MeshStandardMaterial({
+            color,
+            roughness: 0.78,
+            metalness: 0.02,
+            side: THREE.DoubleSide,
+        });
+    }
+
+    const isGlass = /_2$/.test(node.name);
+    if (isGlass) {
+        return new THREE.MeshPhysicalMaterial({
+            color: '#D8DEE6',
+            transparent: true,
+            opacity: 0.46,
+            depthWrite: false,
+            roughness: 0.12,
+            metalness: 0.02,
+            clearcoat: 0.95,
+            clearcoatRoughness: 0.08,
+            side: THREE.DoubleSide,
+        });
+    }
+
+    return new THREE.MeshStandardMaterial({
+        color: '#F7F0E6',
+        roughness: 0.66,
+        metalness: 0.02,
+        side: THREE.DoubleSide,
+    });
 }
 
-function StickerImagePlane({ image, index }) {
-    const texture = useLoader(THREE.TextureLoader, image.texture);
-    const aspect = texture.image?.width && texture.image?.height
-        ? texture.image.width / texture.image.height
-        : 1;
-    const base = Math.max(0.18, Number(image.scale) || 0.72);
-    const height = Math.min(STICKER_HEIGHT * 0.86, base);
-    const width = Math.min(STICKER_WIDTH * 0.86, height * aspect);
-    const [x = 0, y = 0] = image.position || [];
+function useCenteredScene(sourceScene, variant, color = '#ffffff') {
+    return useMemo(() => {
+        const scene = sourceScene.clone(true);
+        scene.traverse((node) => {
+            if (!node.isMesh) return;
+            node.castShadow = true;
+            node.receiveShadow = true;
+            node.material = materialForNode(node, variant, color);
+            node.renderOrder = /_2$/.test(node.name) ? GLASS_RENDER_ORDER : 8;
+        });
+        scene.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(scene);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        return {
+            scene,
+            offset: center.multiplyScalar(-1).toArray(),
+        };
+    }, [color, sourceScene, variant]);
+}
 
-    useEffect(() => {
-        texture.colorSpace = THREE.SRGBColorSpace;
-        texture.anisotropy = 8;
-        texture.needsUpdate = true;
-    }, [texture]);
-
+function SheetModel({ color }) {
     return (
-        <mesh
-            position={[
-                THREE.MathUtils.clamp(x, -0.82, 0.82),
-                THREE.MathUtils.clamp(y, -0.95, 0.95),
-                0.048 + index * 0.006,
-            ]}
-            rotation={[0, 0, image.rotation || 0]}
-            renderOrder={10 + index}
-        >
-            <planeGeometry args={[width, height]} />
-            <meshStandardMaterial
-                map={texture}
-                transparent
-                roughness={0.42}
-                metalness={0.02}
-                polygonOffset
-                polygonOffsetFactor={-1}
+        <group>
+            <mesh position={[0, 0, -0.014]} castShadow receiveShadow>
+                <boxGeometry args={[SHEET_WIDTH, SHEET_HEIGHT, 0.012]} />
+                <meshStandardMaterial
+                    color="#F7F3EA"
+                    roughness={0.82}
+                    metalness={0.01}
+                />
+            </mesh>
+            <mesh position={[0, 0, -0.0072]} receiveShadow renderOrder={2}>
+                <planeGeometry args={[SHEET_WIDTH, SHEET_HEIGHT]} />
+                <meshStandardMaterial
+                    color={color}
+                    roughness={0.78}
+                    metalness={0.02}
+                    side={THREE.FrontSide}
+                    polygonOffset
+                    polygonOffsetFactor={-2}
+                    polygonOffsetUnits={-2}
+                />
+            </mesh>
+        </group>
+    );
+}
+
+function SheetStencilMask() {
+    return (
+        <mesh position={[0, 0, SHEET_BACKGROUND_Z - 0.0002]} renderOrder={10}>
+            <planeGeometry args={[SHEET_WIDTH, SHEET_HEIGHT]} />
+            <meshBasicMaterial
+                colorWrite={false}
+                depthWrite={false}
+                depthTest={false}
+                side={THREE.DoubleSide}
+                stencilWrite
+                stencilRef={SHEET_STENCIL_REF}
+                stencilFunc={THREE.AlwaysStencilFunc}
+                stencilFail={THREE.ReplaceStencilOp}
+                stencilZFail={THREE.ReplaceStencilOp}
+                stencilZPass={THREE.ReplaceStencilOp}
             />
         </mesh>
     );
 }
 
-function SampleStickerArt() {
+function SheetBackgroundImage({ image }) {
+    const map = useLogoTexture(image.texture);
+    const rotation = image.rotation ?? 0;
+    const scale = THREE.MathUtils.clamp(Number(image.scale) || 1, 0.1, 3);
+    const size = logoSizeFromTexture(map, SHEET_BACKGROUND_MAX_SIDE * scale);
+    const x = Number(image.position?.[0]) || 0;
+    const y = Number(image.position?.[1]) || 0;
+
     return (
-        <group>
-            <mesh position={[-0.36, 0.18, 0.052]} rotation={[0, 0, -0.18]}>
-                <circleGeometry args={[0.42, 64]} />
-                <meshStandardMaterial color="#38bdf8" roughness={0.36} metalness={0.04} />
-            </mesh>
-            <mesh position={[0.32, -0.2, 0.056]} rotation={[0, 0, 0.22]}>
-                <planeGeometry args={[0.74, 0.54]} />
-                <meshStandardMaterial color="#f97316" roughness={0.42} metalness={0.03} />
-            </mesh>
-            <mesh position={[0.08, 0.46, 0.06]} rotation={[0, 0, 0.35]}>
-                <ringGeometry args={[0.17, 0.26, 48]} />
-                <meshStandardMaterial color="#111827" roughness={0.5} metalness={0.02} />
-            </mesh>
+        <mesh
+            position={[x, y, SHEET_BACKGROUND_Z]}
+            rotation={[0, 0, rotation]}
+            renderOrder={12}
+        >
+            <planeGeometry args={[size.width, size.height]} />
+            <meshStandardMaterial
+                map={map}
+                transparent
+                alphaTest={0.02}
+                depthWrite={false}
+                polygonOffset
+                polygonOffsetFactor={-4}
+                polygonOffsetUnits={-4}
+                roughness={0.68}
+                metalness={0.02}
+                side={THREE.DoubleSide}
+                stencilWrite
+                stencilRef={SHEET_STENCIL_REF}
+                stencilFunc={THREE.EqualStencilFunc}
+                stencilFail={THREE.KeepStencilOp}
+                stencilZFail={THREE.KeepStencilOp}
+                stencilZPass={THREE.KeepStencilOp}
+            />
+        </mesh>
+    );
+}
+
+function StickerShell({ sourceScene }) {
+    const { scene, offset } = useCenteredScene(sourceScene, 'sticker');
+    return <primitive object={scene} position={offset} />;
+}
+
+function useStickerGlassStencil(sourceScene, stencilRef) {
+    return useMemo(() => {
+        sourceScene.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(sourceScene);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+
+        const scene = sourceScene.clone(true);
+        const maskMaterial = new THREE.MeshBasicMaterial({
+            colorWrite: false,
+            depthWrite: false,
+            depthTest: false,
+            side: THREE.DoubleSide,
+            stencilWrite: true,
+            stencilRef,
+            stencilFunc: THREE.AlwaysStencilFunc,
+            stencilFail: THREE.ReplaceStencilOp,
+            stencilZFail: THREE.ReplaceStencilOp,
+            stencilZPass: THREE.ReplaceStencilOp,
+        });
+
+        scene.traverse((node) => {
+            if (!node.isMesh) return;
+            const isGlass = /_2$/.test(node.name);
+            node.visible = isGlass;
+            node.castShadow = false;
+            node.receiveShadow = false;
+            node.renderOrder = 18;
+            node.frustumCulled = false;
+            if (isGlass) node.material = maskMaterial;
+        });
+
+        return {
+            scene,
+            offset: center.multiplyScalar(-1).toArray(),
+        };
+    }, [sourceScene, stencilRef]);
+}
+
+function StickerGlassStencilMask({ sourceScene, stencilRef }) {
+    const { scene, offset } = useStickerGlassStencil(sourceScene, stencilRef);
+    return <primitive object={scene} position={offset} />;
+}
+
+function StickerLogo({ image, shape, stencilRef }) {
+    const map = useLogoTexture(image.texture);
+    const rotation = image.rotation ?? 0;
+    const scale = THREE.MathUtils.clamp(Number(image.scale) || 0.72, 0.18, 3);
+    const maxLogoSide = shape === 'square' ? 0.78 : 0.74;
+    const size = logoSizeFromTexture(map, maxLogoSide * scale);
+    const x = Number(image.position?.[0]) || 0;
+    const y = Number(image.position?.[1]) || 0;
+
+    return (
+        <mesh
+            position={[x, y, LOGO_Z]}
+            rotation={[0, 0, rotation]}
+            renderOrder={LOGO_RENDER_ORDER}
+        >
+            <planeGeometry args={[size.width, size.height]} />
+            <meshStandardMaterial
+                map={map}
+                transparent
+                alphaTest={0.04}
+                depthWrite={false}
+                polygonOffset
+                polygonOffsetFactor={-10}
+                polygonOffsetUnits={-10}
+                roughness={0.42}
+                metalness={0.02}
+                side={THREE.DoubleSide}
+                stencilWrite
+                stencilRef={stencilRef}
+                stencilFunc={THREE.EqualStencilFunc}
+                stencilFail={THREE.KeepStencilOp}
+                stencilZFail={THREE.KeepStencilOp}
+                stencilZPass={THREE.KeepStencilOp}
+            />
+        </mesh>
+    );
+}
+
+function SampleLogoMark({ shape, index }) {
+    const color = SAMPLE_COLORS[index % SAMPLE_COLORS.length];
+    return (
+        <group position={[0, 0, LOGO_Z]} rotation={[0, 0, index % 2 ? 0.28 : -0.2]}>
+            {shape === 'circle' ? (
+                <mesh renderOrder={LOGO_RENDER_ORDER}>
+                    <circleGeometry args={[0.27, 48]} />
+                    <meshStandardMaterial color={color} roughness={0.46} metalness={0.02} />
+                </mesh>
+            ) : (
+                <mesh renderOrder={LOGO_RENDER_ORDER}>
+                    <planeGeometry args={[0.46, 0.32]} />
+                    <meshStandardMaterial color={color} roughness={0.46} metalness={0.02} />
+                </mesh>
+            )}
         </group>
     );
+}
+
+function normalizeImagesBySlot(images = []) {
+    const bySlot = new Map();
+    const usedSlots = new Set();
+
+    images.slice(0, STICKER_SLOT_COUNT).forEach((image, index) => {
+        const storedSlot = Number(image?.slot);
+        let slot = Number.isInteger(storedSlot) && storedSlot >= 0 && storedSlot < STICKER_SLOT_COUNT
+            ? storedSlot
+            : index;
+
+        if (usedSlots.has(slot)) {
+            slot = SLOT_LAYOUT.findIndex((_, candidate) => !usedSlots.has(candidate));
+        }
+        if (slot < 0) return;
+
+        usedSlots.add(slot);
+        bySlot.set(slot, {
+            ...image,
+            slot,
+            shape: normalizeShape(image.shape ?? STICKER_DEFAULT_SLOT_SHAPES[slot]),
+        });
+    });
+
+    return bySlot;
 }
 
 export function Sticker({ config = null, preview = false, position = [0, 0, 0] }) {
+    const stickerSheetColor = useConfigurator((state) => state.stickerSheetColor);
+    const stickerBackgroundImages = useConfigurator((state) => state.stickerBackgroundImages);
     const stickerImages = useConfigurator((state) => state.stickerImages);
-    const images = config?.stickerImages ?? stickerImages;
-    const bodyShape = useMemo(() => roundedRectShape(STICKER_WIDTH, STICKER_HEIGHT, CORNER_RADIUS), []);
-    const edgeShape = useMemo(() => roundedRectShape(STICKER_WIDTH + 0.08, STICKER_HEIGHT + 0.08, CORNER_RADIUS + 0.03), []);
+    const hasConfig = Boolean(config);
+    const configuredBackgroundImages = config?.stickerBackgroundImages;
+    const configuredImages = config?.stickerImages;
+    const sheetColor = hasConfig ? (config.stickerSheetColor ?? '#F6F1E7') : stickerSheetColor;
+    const backgroundImages = useMemo(() => (
+        hasConfig ? (configuredBackgroundImages ?? EMPTY_IMAGES) : stickerBackgroundImages
+    ), [configuredBackgroundImages, hasConfig, stickerBackgroundImages]);
+    const images = useMemo(() => (
+        hasConfig ? (configuredImages ?? EMPTY_IMAGES) : stickerImages
+    ), [configuredImages, hasConfig, stickerImages]);
+    const { scene: squareScene } = useGLTF(squareStickerModelUrl);
+    const { scene: circleScene } = useGLTF(circleStickerModelUrl);
+    const imagesBySlot = useMemo(() => normalizeImagesBySlot(images), [images]);
+    const showSamples = preview && imagesBySlot.size === 0;
 
     return (
-        <group position={position} rotation={preview ? [0.18, -0.38, 0.08] : [0.08, -0.18, 0]}>
-            <mesh position={[0, 0, -0.028]} castShadow receiveShadow>
-                <extrudeGeometry args={[edgeShape, { depth: 0.045, bevelEnabled: true, bevelSegments: 4, bevelSize: 0.018, bevelThickness: 0.016 }]} />
-                <meshStandardMaterial color="#e5e7eb" roughness={0.72} metalness={0.01} />
-            </mesh>
-            <mesh position={[0, 0, 0.018]} castShadow receiveShadow>
-                <shapeGeometry args={[bodyShape]} />
-                <meshStandardMaterial color="#fffaf0" roughness={0.48} metalness={0.02} />
-            </mesh>
-            <mesh position={[0, 0, 0.04]}>
-                <shapeGeometry args={[bodyShape]} />
-                <meshStandardMaterial color="#ffffff" roughness={0.28} metalness={0.04} transparent opacity={0.36} />
-            </mesh>
-            {images.length > 0
-                ? images.map((image, index) => <StickerImagePlane key={image.id || index} image={image} index={index} />)
-                : <SampleStickerArt />}
+        <group
+            position={position}
+            rotation={preview ? [0.12, -0.18, 0.04] : [0, 0, 0]}
+            scale={MODEL_SCALE}
+        >
+            <SheetModel color={sheetColor} />
+            <SheetStencilMask />
+            {backgroundImages.map((image) => (
+                image?.texture ? <SheetBackgroundImage key={image.id} image={image} /> : null
+            ))}
+            <group position={[0, 0, STICKER_Z]}>
+                {SLOT_LAYOUT.map((slot, index) => {
+                    const image = imagesBySlot.get(index);
+                    const shape = normalizeShape(image?.shape ?? STICKER_DEFAULT_SLOT_SHAPES[index]);
+                    const sourceScene = shape === 'square' ? squareScene : circleScene;
+                    const stencilRef = index + 1;
+                    return (
+                        <group
+                            key={index}
+                            position={[slot.x, slot.y, 0]}
+                        >
+                            <StickerShell sourceScene={sourceScene} />
+                            <StickerGlassStencilMask sourceScene={sourceScene} stencilRef={stencilRef} />
+                            {image?.texture ? (
+                                <StickerLogo image={image} shape={shape} stencilRef={stencilRef} />
+                            ) : showSamples ? (
+                                <SampleLogoMark shape={shape} index={index} />
+                            ) : null}
+                        </group>
+                    );
+                })}
+            </group>
         </group>
     );
 }
+
+useGLTF.preload(squareStickerModelUrl);
+useGLTF.preload(circleStickerModelUrl);

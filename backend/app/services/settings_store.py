@@ -13,6 +13,10 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "thermos": True,
         "powerbank": True,
         "sticker": True,
+        "shopper": True,
+        "tshirt": True,
+        "hoodie": True,
+        "lanyard": True,
         "print_canvas": False,
     },
     "dashboard_sections": {
@@ -20,6 +24,10 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "thermos": True,
         "powerbank": True,
         "sticker": True,
+        "shopper": True,
+        "tshirt": True,
+        "hoodie": True,
+        "lanyard": True,
         "print_canvas": True,
     },
 }

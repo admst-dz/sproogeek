@@ -23,6 +23,16 @@ export const POWERBANK_COLOR_PALETTE = [
     { bg: '#75787B', name: 'Серебристый' },
 ];
 
+export const STICKER_SHEET_COLOR_PALETTE = [
+    { bg: '#F6F1E7', name: 'Молочный' },
+    { bg: '#FFFFFF', name: 'Белый' },
+    { bg: '#FDD835', name: 'Жёлтый' },
+    { bg: '#EC407A', name: 'Розовый' },
+    { bg: '#1565C0', name: 'Синий' },
+    { bg: '#43A047', name: 'Зелёный' },
+    { bg: '#1A1A1A', name: 'Чёрный' },
+];
+
 // Палитры для мерч-товаров. Соответствуют бэкенду (seed migration).
 export const SHOPPER_COLOR_PALETTE = [
     { bg: '#F5F0E1', name: 'Натуральный' },
@@ -61,5 +71,6 @@ export const LANYARD_COLOR_PALETTE = [
 
 export const APPAREL_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
 export const LANYARD_LENGTHS_MM = [400, 450, 500];
+export const LANYARD_REPEAT_OPTIONS_MM = [50, 70];
 export const LANYARD_CARABINERS = ['hook', 'carabiner', 'swivel', 'j_hook'];
 export const SHOPPER_HANDLE_TYPES = ['short', 'long'];

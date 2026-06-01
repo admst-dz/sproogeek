@@ -22,7 +22,7 @@ export function RenderModeView({ configBase64 }) {
                 shadows
                 dpr={[1, 2]}
                 camera={{ position: [0, 0, 4.5], fov: 45 }}
-                gl={{ preserveDrawingBuffer: true, antialias: true, alpha: false, powerPreference: 'high-performance' }}
+                gl={{ preserveDrawingBuffer: true, antialias: true, alpha: false, stencil: true, powerPreference: 'high-performance' }}
             >
                 <Experience />
             </Canvas>

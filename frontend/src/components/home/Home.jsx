@@ -1,4 +1,4 @@
-import { useEffect, Suspense, useMemo, useRef } from 'react';
+import { createElement, useEffect, Suspense, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF, Stage } from '@react-three/drei';
 import * as THREE from 'three';
@@ -83,7 +83,7 @@ function ThermosPreviewScene() {
 function ThermosPreview() {
     return (
         <div className="relative w-full h-full">
-            <Canvas camera={{ position: [0, 0.5, 4], fov: 40 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
+            <Canvas camera={{ position: [0, 0.5, 4], fov: 40 }} gl={{ antialias: true, stencil: true }} style={{ pointerEvents: 'none' }}>
                 <ambientLight intensity={0.7} />
                 <directionalLight position={[5, 8, 5]} intensity={1.5} />
                 <directionalLight position={[-4, 3, 2]} intensity={0.6} />
@@ -188,7 +188,7 @@ function PowerbankPreview() {
         <div className="relative w-full h-full">
             <Canvas
                 camera={{ position: POWERBANK_PREVIEW_POSE.cameraPosition, fov: POWERBANK_PREVIEW_POSE.cameraFov }}
-                gl={{ antialias: true }}
+                gl={{ antialias: true, stencil: true }}
                 style={{ pointerEvents: 'none' }}
             >
                 <ambientLight intensity={0.7} />
@@ -232,7 +232,7 @@ function NotebookPreview() {
         <div className="relative w-full h-full">
             <Canvas
                 camera={{ position: NOTEBOOK_PREVIEW_POSE.cameraPosition, fov: NOTEBOOK_PREVIEW_POSE.cameraFov }}
-                gl={{ antialias: true }}
+                gl={{ antialias: true, stencil: true }}
                 style={{ pointerEvents: 'none' }}
             >
                 <ambientLight intensity={0.75} />
@@ -247,16 +247,16 @@ function NotebookPreview() {
     );
 }
 
-function MerchPreview({ model: Model, previewConfig }) {
+function MerchPreview({ model, previewConfig }) {
     return (
         <div className="relative h-full w-full">
-            <Canvas camera={{ position: [0, 0.2, 5.4], fov: 36 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
+            <Canvas camera={{ position: [0, 0.2, 5.4], fov: 36 }} gl={{ antialias: true, stencil: true }} style={{ pointerEvents: 'none' }}>
                 <ambientLight intensity={0.78} />
                 <directionalLight position={[4, 6, 5]} intensity={1.4} />
                 <directionalLight position={[-4, 3, 2]} intensity={0.55} />
                 <Suspense fallback={null}>
                     <Stage environment="city" intensity={0.22} shadows={false} adjustCamera>
-                        <Model config={previewConfig} preview />
+                        {createElement(model, { config: previewConfig, preview: true })}
                     </Stage>
                 </Suspense>
             </Canvas>
@@ -294,17 +294,39 @@ const LANYARD_PREVIEW_CONFIG = {
     lanyardCarabiner: 'carabiner',
     lanyardLogos: [],
 };
+const makeStickerPreviewLogo = (label, color) => {
+    const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+            <rect width="256" height="256" rx="48" fill="${color}"/>
+            <circle cx="128" cy="90" r="38" fill="white" opacity="0.92"/>
+            <text x="128" y="176" text-anchor="middle" font-family="Arial, sans-serif" font-size="58" font-weight="900" fill="white">${label}</text>
+        </svg>
+    `;
+
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+};
+const STICKER_PREVIEW_CONFIG = {
+    stickerSheetColor: '#FDD835',
+    stickerImages: [
+        { id: 'preview-sticker-1', texture: makeStickerPreviewLogo('S', '#1565C0'), filename: 'S', slot: 0, shape: 'circle', position: [0, 0], rotation: 0, scale: 0.86 },
+        { id: 'preview-sticker-2', texture: makeStickerPreviewLogo('P', '#EC407A'), filename: 'P', slot: 1, shape: 'square', position: [0, 0], rotation: 0, scale: 0.86 },
+        { id: 'preview-sticker-3', texture: makeStickerPreviewLogo('3D', '#43A047'), filename: '3D', slot: 2, shape: 'circle', position: [0, 0], rotation: 0, scale: 0.82 },
+        { id: 'preview-sticker-4', texture: makeStickerPreviewLogo('GO', '#111827'), filename: 'GO', slot: 3, shape: 'square', position: [0, 0], rotation: 0, scale: 0.82 },
+        { id: 'preview-sticker-5', texture: makeStickerPreviewLogo('★', '#F97316'), filename: 'Star', slot: 4, shape: 'square', position: [0, 0], rotation: 0, scale: 0.84 },
+        { id: 'preview-sticker-6', texture: makeStickerPreviewLogo('OK', '#5E366E'), filename: 'OK', slot: 5, shape: 'circle', position: [0, 0], rotation: 0, scale: 0.84 },
+    ],
+};
 
 function StickerPreview() {
     return (
-        <div className="relative h-full w-full">
-            <Canvas camera={{ position: [0, 0.08, 4.8], fov: 36 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
+        <div className="relative mx-auto h-full w-full max-w-[min(100%,220px)] overflow-hidden rounded-[8px] bg-[radial-gradient(circle_at_50%_22%,rgba(253,216,53,0.18),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.5),rgba(255,255,255,0.08))] dark:bg-[radial-gradient(circle_at_50%_22%,rgba(253,216,53,0.16),transparent_44%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]">
+            <Canvas camera={{ position: [0, 0.03, 8.1], fov: 30 }} gl={{ antialias: true, stencil: true }} style={{ pointerEvents: 'none' }}>
                 <ambientLight intensity={0.78} />
                 <directionalLight position={[4, 6, 5]} intensity={1.4} />
                 <directionalLight position={[-4, 3, 2]} intensity={0.55} />
                 <Suspense fallback={null}>
                     <Stage environment="city" intensity={0.22} shadows={false} adjustCamera={false}>
-                        <Sticker preview />
+                        <Sticker config={STICKER_PREVIEW_CONFIG} preview position={[0, -0.05, 0]} />
                     </Stage>
                 </Suspense>
             </Canvas>

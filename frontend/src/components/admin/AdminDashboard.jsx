@@ -15,7 +15,16 @@ const STATUS_KEYS = {
 };
 const BINDING_KEYS = { hard: 'bindingHardShort', spiral: 'bindingSpiralShort', soft: 'bindingSoft' };
 const PATTERN_KEYS = { blank: 'patternBlank', lined: 'patternLined', tlined: 'patternTLined', grid: 'patternGrid', dotted: 'patternDotted' };
-const PRODUCT_KEYS = { notebook: 'notebook', thermos: 'thermos', powerbank: 'powerbank', sticker: 'sticker3d' };
+const PRODUCT_KEYS = {
+    notebook: 'notebook',
+    thermos: 'thermos',
+    powerbank: 'powerbank',
+    sticker: 'sticker3d',
+    shopper: 'shopper',
+    tshirt: 'tshirt',
+    hoodie: 'hoodie',
+    lanyard: 'lanyard',
+};
 
 function getStatusLabel(status, language) {
     const key = STATUS_KEYS[status];
@@ -1241,6 +1250,10 @@ const DEFAULT_ADMIN_SETTINGS = {
         thermos: true,
         powerbank: true,
         sticker: true,
+        shopper: true,
+        tshirt: true,
+        hoodie: true,
+        lanyard: true,
         print_canvas: false,
     },
     dashboard_sections: {
@@ -1248,6 +1261,10 @@ const DEFAULT_ADMIN_SETTINGS = {
         thermos: true,
         powerbank: true,
         sticker: true,
+        shopper: true,
+        tshirt: true,
+        hoodie: true,
+        lanyard: true,
         print_canvas: true,
     },
 };
@@ -1256,7 +1273,11 @@ const SECTION_LABELS = {
     notebook: 'Ежедневник',
     thermos: 'Термос',
     powerbank: 'Повербанк',
-    sticker: '3D стикер',
+    sticker: '3D стикеры',
+    shopper: 'Шопер',
+    tshirt: 'Майка',
+    hoodie: 'Худи',
+    lanyard: 'Ланъярд',
     print_canvas: 'Полотно на печать',
 };
 
@@ -1301,22 +1322,20 @@ const normalizeAdminSettings = (data) => ({
     dashboard_sections: { ...DEFAULT_ADMIN_SETTINGS.dashboard_sections, ...(data?.dashboard_sections || {}) },
 });
 
-const mergeSettingsPatch = (current, patch) => ({
-    ...current,
-    ...patch,
-    home_sections: patch.home_sections
-        ? { ...current.home_sections, ...patch.home_sections }
-        : current.home_sections,
-    dashboard_sections: patch.dashboard_sections
-        ? { ...current.dashboard_sections, ...patch.dashboard_sections }
-        : current.dashboard_sections,
-});
+const settingsEqual = (left, right) => JSON.stringify(normalizeAdminSettings(left)) === JSON.stringify(normalizeAdminSettings(right));
 
-function SettingsSwitch({ label, description, enabled, loading, saving, onToggle }) {
+function SettingsSwitch({ label, description, enabled, loading, saving, dirty, onToggle }) {
     return (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-[12px] border border-white/8 bg-black/15 px-3 py-3">
+        <div className={`flex flex-col sm:flex-row sm:items-center gap-4 rounded-[12px] border px-3 py-3 transition-colors ${
+            dirty
+                ? 'border-yellow-400/25 bg-yellow-500/8'
+                : 'border-white/8 bg-black/15'
+        }`}>
             <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-white/85">{label}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-bold text-white/85">{label}</p>
+                    {dirty && <span className="rounded-full bg-yellow-500/12 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-yellow-300">изменено</span>}
+                </div>
                 {description && <p className="mt-1 text-xs leading-relaxed text-white/38">{description}</p>}
             </div>
             <button
@@ -1341,8 +1360,9 @@ function SettingsSwitch({ label, description, enabled, loading, saving, onToggle
     );
 }
 
-function AdminSettingsPanel({ language }) {
+function AdminSettingsPanel({ language, showGuestMode = true }) {
     const [settings, setSettings] = useState(DEFAULT_ADMIN_SETTINGS);
+    const [draftSettings, setDraftSettings] = useState(DEFAULT_ADMIN_SETTINGS);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState('');
@@ -1355,6 +1375,7 @@ function AdminSettingsPanel({ language }) {
                 if (!alive) return;
                 const nextSettings = normalizeAdminSettings(data);
                 setSettings(nextSettings);
+                setDraftSettings(nextSettings);
                 setAppSettings(nextSettings);
             })
             .catch((err) => {
@@ -1366,22 +1387,21 @@ function AdminSettingsPanel({ language }) {
         return () => { alive = false; };
     }, [language, setAppSettings]);
 
-    const saveSettingsPatch = async (patch) => {
-        const previousSettings = settings;
-        const optimisticSettings = mergeSettingsPatch(settings, patch);
-        setSettings(optimisticSettings);
-        setAppSettings(optimisticSettings);
+    const saveSettings = async () => {
         setSaving(true);
         setMsg('');
         try {
-            const { data } = await adminApi.updateSettings(patch);
+            const { data } = await adminApi.updateSettings({
+                guest_approval_enabled: draftSettings.guest_approval_enabled !== false,
+                home_sections: draftSettings.home_sections,
+                dashboard_sections: draftSettings.dashboard_sections,
+            });
             const nextSettings = normalizeAdminSettings(data);
             setSettings(nextSettings);
+            setDraftSettings(nextSettings);
             setAppSettings(nextSettings);
             setMsg(t(language, 'adminSaved'));
         } catch (err) {
-            setSettings(previousSettings);
-            setAppSettings(previousSettings);
             setMsg('✗ ' + formatApiError(err, language));
         } finally {
             setSaving(false);
@@ -1389,7 +1409,27 @@ function AdminSettingsPanel({ language }) {
         }
     };
 
-    const enabled = settings.guest_approval_enabled !== false;
+    const updateDraft = (patch) => {
+        setDraftSettings((current) => normalizeAdminSettings({
+            ...current,
+            ...patch,
+            home_sections: patch.home_sections
+                ? { ...current.home_sections, ...patch.home_sections }
+                : current.home_sections,
+            dashboard_sections: patch.dashboard_sections
+                ? { ...current.dashboard_sections, ...patch.dashboard_sections }
+                : current.dashboard_sections,
+        }));
+        setMsg('');
+    };
+
+    const resetDraft = () => {
+        setDraftSettings(settings);
+        setMsg('');
+    };
+
+    const enabled = draftSettings.guest_approval_enabled !== false;
+    const hasChanges = !settingsEqual(settings, draftSettings);
 
     return (
         <div className="mt-6 rounded-[14px] border border-white/10 bg-white/[0.03] p-4">
@@ -1400,11 +1440,11 @@ function AdminSettingsPanel({ language }) {
                         <span className={`text-[10px] font-bold uppercase tracking-widest rounded-full border px-2 py-0.5 ${
                             saving
                                 ? 'text-yellow-300 bg-yellow-500/10 border-yellow-500/25'
-                                : enabled
-                                ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25'
-                                : 'text-white/35 bg-white/5 border-white/10'
+                                : hasChanges
+                                ? 'text-yellow-300 bg-yellow-500/10 border-yellow-500/25'
+                                : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25'
                         }`}>
-                            {saving ? t(language, 'adminSaving') : t(language, 'adminSaved')}
+                            {saving ? t(language, 'adminSaving') : hasChanges ? 'есть изменения' : t(language, 'adminSaved')}
                         </span>
                     </div>
                     {msg && (
@@ -1413,17 +1453,20 @@ function AdminSettingsPanel({ language }) {
                         </p>
                     )}
                 </div>
-                <div className="space-y-2">
-                    <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest">Основные настройки</p>
-                    <SettingsSwitch
-                        label={t(language, 'adminGuestModeTitle')}
-                        description={t(language, 'adminGuestModeDesc')}
-                        enabled={enabled}
-                        loading={loading}
-                        saving={saving}
-                        onToggle={() => saveSettingsPatch({ guest_approval_enabled: !enabled })}
-                    />
-                </div>
+                {showGuestMode && (
+                    <div className="space-y-2">
+                        <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest">Основные настройки</p>
+                        <SettingsSwitch
+                            label={t(language, 'adminGuestModeTitle')}
+                            description={t(language, 'adminGuestModeDesc')}
+                            enabled={enabled}
+                            loading={loading}
+                            saving={saving}
+                            dirty={(settings.guest_approval_enabled !== false) !== enabled}
+                            onToggle={() => updateDraft({ guest_approval_enabled: !enabled })}
+                        />
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -1432,11 +1475,12 @@ function AdminSettingsPanel({ language }) {
                             <SettingsSwitch
                                 key={`home-${key}`}
                                 label={label}
-                                enabled={settings.home_sections?.[key] !== false}
+                                enabled={draftSettings.home_sections?.[key] !== false}
                                 loading={loading}
                                 saving={saving}
-                                onToggle={() => saveSettingsPatch({
-                                    home_sections: { [key]: !(settings.home_sections?.[key] !== false) },
+                                dirty={(settings.home_sections?.[key] !== false) !== (draftSettings.home_sections?.[key] !== false)}
+                                onToggle={() => updateDraft({
+                                    home_sections: { [key]: !(draftSettings.home_sections?.[key] !== false) },
                                 })}
                             />
                         ))}
@@ -1447,17 +1491,36 @@ function AdminSettingsPanel({ language }) {
                             <SettingsSwitch
                                 key={`dashboard-${key}`}
                                 label={label}
-                                enabled={settings.dashboard_sections?.[key] !== false}
+                                enabled={draftSettings.dashboard_sections?.[key] !== false}
                                 loading={loading}
                                 saving={saving}
-                                onToggle={() => saveSettingsPatch({
-                                    dashboard_sections: { [key]: !(settings.dashboard_sections?.[key] !== false) },
+                                dirty={(settings.dashboard_sections?.[key] !== false) !== (draftSettings.dashboard_sections?.[key] !== false)}
+                                onToggle={() => updateDraft({
+                                    dashboard_sections: { [key]: !(draftSettings.dashboard_sections?.[key] !== false) },
                                 })}
                             />
                         ))}
                     </div>
                 </div>
 
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 border-t border-white/8 pt-4">
+                    <button
+                        type="button"
+                        onClick={resetDraft}
+                        disabled={loading || saving || !hasChanges}
+                        className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold uppercase tracking-widest text-white/55 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        Отменить
+                    </button>
+                    <button
+                        type="button"
+                        onClick={saveSettings}
+                        disabled={loading || saving || !hasChanges}
+                        className="rounded-full bg-white px-5 py-2 text-xs font-black uppercase tracking-widest text-[#080B13] transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        {saving ? t(language, 'adminSaving') : t(language, 'adminSaveBtn')}
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -1480,8 +1543,6 @@ function DashboardTab({ onJumpToUsers, language }) {
                 <StatCard label="Выручка (всего)" value={`${(s.revenue_total ?? 0).toLocaleString('ru')} ${s.revenue_currency || 'BYN'}`} />
                 <StatCard label="Дилеров" value={usersByRole.find(r => r.role === 'dealer')?.count ?? 0} />
             </div>
-
-            <AdminSettingsPanel language={language} />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-6">
                 <div>
@@ -1623,18 +1684,70 @@ function JsonTab({ language }) {
 // ─── Продукты ────────────────────────────────────────────────────────────────
 
 function ProductsTab({ language }) {
-    const { data, loading, error } = useData(() => productApi.getAll(), language);
+    const { data, setData, loading, error } = useData(() => productApi.getAll(true), language);
+    const [savingId, setSavingId] = useState(null);
+    const [saveError, setSaveError] = useState('');
 
-    if (loading) return <Loader language={language} />;
-    if (error) return <ErrBox msg={error} />;
+    if (loading) return (
+        <>
+            <AdminSettingsPanel language={language} />
+            <Loader language={language} />
+        </>
+    );
+    if (error) return (
+        <>
+            <AdminSettingsPanel language={language} />
+            <ErrBox msg={error} />
+        </>
+    );
     const products = Array.isArray(data) ? data : [];
+
+    const payloadForProduct = (product, isActive) => ({
+        type: product.type || 'notebook',
+        name: product.name,
+        description: product.description || null,
+        isActive,
+        dealerId: product.dealer_id || product.dealerId || null,
+        retailPrice: product.retailPrice ?? product.retail_price ?? 0,
+        imageUrl: product.imageUrl || product.image_url || null,
+        modelUrl: product.modelUrl || product.model_url || null,
+        binding: product.binding || [],
+        spiralColors: product.spiralColors || product.spiral_colors || [],
+        hasElastic: product.hasElastic ?? product.has_elastic ?? false,
+        elasticColors: product.elasticColors || product.elastic_colors || [],
+        formats: product.formats || [],
+        coverColors: product.coverColors || product.cover_colors || [],
+        wholesaleTiers: product.wholesaleTiers || product.wholesale_tiers || [],
+        attributes: product.attributes || {},
+    });
+
+    const toggleProductVisibility = async (product) => {
+        if (savingId !== null) return;
+        const nextActive = product.isActive === false;
+        setSavingId(product.id);
+        setSaveError('');
+        try {
+            const { data: updated } = await productApi.update(product.id, payloadForProduct(product, nextActive));
+            setData((current) => (Array.isArray(current)
+                ? current.map((item) => item.id === product.id ? updated : item)
+                : current));
+        } catch (err) {
+            setSaveError(formatApiError(err, language));
+        } finally {
+            setSavingId(null);
+        }
+    };
 
     return (
         <>
+            <AdminSettingsPanel language={language} />
             <SectionHeader title={t(language, 'adminProductsHeader')} count={products.length} />
+            {saveError && <ErrBox msg={saveError} />}
             <Table
                 headers={[
                     t(language, 'adminColProduct'),
+                    'Тип',
+                    'Видимость',
                     t(language, 'adminColDealer'),
                     t(language, 'adminColPrice'),
                     t(language, 'adminColBinding'),
@@ -1646,6 +1759,41 @@ function ProductsTab({ language }) {
                 {products.map(p => (
                     <tr key={p.id} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors">
                         <td className="px-4 py-2.5 text-sm font-bold text-white/80">{p.name}</td>
+                        <td className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white/45">{p.type || 'notebook'}</td>
+                        <td className="px-4 py-2.5">
+                            <button
+                                type="button"
+                                disabled={savingId !== null}
+                                onClick={() => toggleProductVisibility(p)}
+                                role="switch"
+                                aria-checked={p.isActive !== false}
+                                aria-busy={savingId === p.id}
+                                className={`inline-flex min-w-[132px] items-center gap-2 rounded-full border px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest transition disabled:cursor-wait disabled:opacity-60 ${
+                                    p.isActive === false
+                                        ? 'border-white/12 bg-white/5 text-white/35 hover:text-white/60'
+                                        : 'border-emerald-400/30 bg-emerald-500/12 text-emerald-300 hover:bg-emerald-500/18'
+                                }`}
+                            >
+                                <span
+                                    className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors ${
+                                        p.isActive === false
+                                            ? 'border-white/12 bg-white/10'
+                                            : 'border-emerald-400/35 bg-emerald-500/30'
+                                    }`}
+                                >
+                                    <span
+                                        className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full shadow-lg transition-transform ${
+                                            p.isActive === false
+                                                ? 'translate-x-0 bg-slate-400'
+                                                : 'translate-x-5 bg-emerald-300'
+                                        }`}
+                                    />
+                                </span>
+                                <span className="flex-1 text-center">
+                                    {savingId === p.id ? t(language, 'adminSaving') : p.isActive === false ? 'Скрыта' : 'Видна'}
+                                </span>
+                            </button>
+                        </td>
                         <td className="px-4 py-2.5 font-mono text-xs text-white/40">{p.dealer_id || '—'}</td>
                         <td className="px-4 py-2.5 text-sm text-white/60">
                             {(p.retailPrice ?? p.retail_price) != null ? `${p.retailPrice ?? p.retail_price} BYN` : '—'}

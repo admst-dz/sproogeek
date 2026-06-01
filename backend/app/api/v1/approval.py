@@ -30,6 +30,7 @@ from typing import Any, Optional
 import httpx
 import sentry_sdk
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from PIL import Image, ImageColor, ImageDraw, ImageFont
 from pydantic import BaseModel, EmailStr, Field
 from slowapi import Limiter
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,6 +66,16 @@ _RENDER_MIME_EXTENSIONS = {
     "image/jpeg": "jpg",
     "image/webp": "webp",
 }
+_STICKER_MAX_ASSET_BYTES = 10_000_000
+_STICKER_DEFAULT_SHEET_WIDTH_MM = 100.0
+_STICKER_DEFAULT_SHEET_HEIGHT_MM = 141.0
+_STICKER_DEFAULT_SCENE_WIDTH_UNITS = 4.2
+_STICKER_DEFAULT_SCENE_HEIGHT_UNITS = 5.92
+_STICKER_DEFAULT_DPI = 300
+_STICKER_SLOT_WIDTH_MM = 40.0
+_STICKER_SLOT_HEIGHT_MM = 45.0
+_STICKER_BACKGROUND_MAX_SIDE_UNITS = 3.2
+_STICKER_LOGO_MAX_SIDE_UNITS = {"circle": 0.74, "square": 0.78}
 
 
 class GuestApprovalRequest(BaseModel):
@@ -81,6 +92,8 @@ class GuestApprovalRequest(BaseModel):
     name: Optional[str] = Field(default=None, max_length=120)
     phone: Optional[str] = Field(default=None, max_length=40)
     comment: Optional[str] = Field(default=None, max_length=4000)
+    # Только для 3D-стикеров: исходники и координаты для TIFF-файлов печати.
+    sticker_print_payload: Optional[dict[str, Any]] = Field(default=None)
 
 
 class ApprovalSettingsResponse(BaseModel):
@@ -211,6 +224,356 @@ def _decode_render_image(data_url: str) -> Optional[dict[str, Any]]:
     }
 
 
+def _decode_data_url_bytes(data_url: Any, *, max_bytes: int = _STICKER_MAX_ASSET_BYTES) -> Optional[dict[str, Any]]:
+    if not isinstance(data_url, str) or "," not in data_url:
+        return None
+    header, _, b64_payload = data_url.partition(",")
+    if "base64" not in header.lower():
+        return None
+    mime_type = header.split(";", 1)[0].removeprefix("data:").lower()
+    extension = _RENDER_MIME_EXTENSIONS.get(mime_type)
+    if not extension:
+        return None
+    try:
+        raw = base64.b64decode(b64_payload, validate=False)
+    except Exception:  # noqa: BLE001
+        return None
+    if not raw or len(raw) > max_bytes:
+        return None
+    return {"content": raw, "mime_type": mime_type, "extension": extension}
+
+
+def _open_rgba_image(data_url: Any) -> Optional[Image.Image]:
+    decoded = _decode_data_url_bytes(data_url)
+    if not decoded:
+        return None
+    try:
+        with Image.open(io.BytesIO(decoded["content"])) as image:
+            return image.convert("RGBA")
+    except Exception as exc:  # noqa: BLE001
+        sentry_sdk.capture_exception(exc)
+        return None
+
+
+def _float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _list2(value: Any, default: tuple[float, float] = (0.0, 0.0)) -> tuple[float, float]:
+    if isinstance(value, (list, tuple)) and len(value) >= 2:
+        return _float(value[0], default[0]), _float(value[1], default[1])
+    return default
+
+
+def _sticker_payload(payload: GuestApprovalRequest) -> Optional[dict[str, Any]]:
+    product_config = (payload.configuration or {}).get("productConfig") or payload.configuration or {}
+    active = str(product_config.get("activeProduct") or product_config.get("type") or "").lower()
+    if active != "sticker":
+        return None
+    data = payload.sticker_print_payload if isinstance(payload.sticker_print_payload, dict) else None
+    if data:
+        return data
+    return product_config if isinstance(product_config, dict) else None
+
+
+def _sticker_is_square(shape: Any) -> bool:
+    return str(shape or "").lower() == "square"
+
+
+def _sticker_sheet_meta(data: dict[str, Any]) -> dict[str, float | int | str]:
+    width_mm = max(20.0, _float(data.get("sheet_width_mm"), _STICKER_DEFAULT_SHEET_WIDTH_MM))
+    height_mm = max(20.0, _float(data.get("sheet_height_mm"), _STICKER_DEFAULT_SHEET_HEIGHT_MM))
+    scene_width = max(0.1, _float(data.get("scene_width_units"), _STICKER_DEFAULT_SCENE_WIDTH_UNITS))
+    scene_height = max(0.1, _float(data.get("scene_height_units"), _STICKER_DEFAULT_SCENE_HEIGHT_UNITS))
+    dpi = min(600, max(72, _safe_int(data.get("export_dpi"), _STICKER_DEFAULT_DPI)))
+    return {
+        "width_mm": width_mm,
+        "height_mm": height_mm,
+        "scene_width": scene_width,
+        "scene_height": scene_height,
+        "dpi": dpi,
+        "sheet_color": str(data.get("sheet_color") or "#F6F1E7"),
+    }
+
+
+def _mm_to_px(mm: float, dpi: int) -> int:
+    return max(1, round(mm / 25.4 * dpi))
+
+
+def _sticker_unit_to_mm(
+    x_units: float,
+    y_units: float,
+    meta: dict[str, float | int | str],
+) -> tuple[float, float]:
+    width_mm = float(meta["width_mm"])
+    height_mm = float(meta["height_mm"])
+    scene_width = float(meta["scene_width"])
+    scene_height = float(meta["scene_height"])
+    return (
+        width_mm / 2 + (x_units / scene_width) * width_mm,
+        height_mm / 2 - (y_units / scene_height) * height_mm,
+    )
+
+
+def _paste_transformed(
+    canvas: Image.Image,
+    image: Image.Image,
+    *,
+    center_x_px: int,
+    center_y_px: int,
+    max_side_px: int,
+    rotation_rad: float,
+) -> tuple[int, int, int, int]:
+    source = image.copy()
+    source.thumbnail((max_side_px, max_side_px), Image.Resampling.LANCZOS)
+    angle_degrees = -rotation_rad * 180 / 3.141592653589793
+    if abs(angle_degrees) > 0.001:
+        source = source.rotate(angle_degrees, expand=True, resample=Image.Resampling.BICUBIC)
+    left = int(round(center_x_px - source.width / 2))
+    top = int(round(center_y_px - source.height / 2))
+    _alpha_composite_clipped(canvas, source, left, top)
+    return left, top, left + source.width, top + source.height
+
+
+def _alpha_composite_clipped(canvas: Image.Image, source: Image.Image, left: int, top: int) -> None:
+    src_left = max(0, -left)
+    src_top = max(0, -top)
+    dst_left = max(0, left)
+    dst_top = max(0, top)
+    width = min(source.width - src_left, canvas.width - dst_left)
+    height = min(source.height - src_top, canvas.height - dst_top)
+    if width <= 0 or height <= 0:
+        return
+    cropped = source.crop((src_left, src_top, src_left + width, src_top + height))
+    canvas.alpha_composite(cropped, (dst_left, dst_top))
+
+
+def _clip_to_sticker_shape(layer: Image.Image, shape: str, width_px: int, height_px: int) -> Image.Image:
+    mask = Image.new("L", layer.size, 0)
+    draw = ImageDraw.Draw(mask)
+    if _sticker_is_square(shape):
+        draw.rounded_rectangle([0, 0, width_px - 1, height_px - 1], radius=max(4, width_px // 16), fill=255)
+    else:
+        side = min(width_px, height_px)
+        left = (width_px - side) // 2
+        top = (height_px - side) // 2
+        draw.ellipse([left, top, left + side - 1, top + side - 1], fill=255)
+    out = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+    out.alpha_composite(layer)
+    alpha = out.getchannel("A")
+    out.putalpha(Image.composite(alpha, Image.new("L", layer.size, 0), mask))
+    return out
+
+
+def _draw_sticker_guides(
+    canvas: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    *,
+    slot_meta: list[dict[str, Any]],
+    dpi: int,
+) -> None:
+    font = ImageFont.load_default()
+    line = max(1, _mm_to_px(0.25, dpi))
+    for slot in slot_meta:
+        cx = int(slot["center_x_px"])
+        cy = int(slot["center_y_px"])
+        half_w = int(slot["width_px"] / 2)
+        half_h = int(slot["height_px"] / 2)
+        box = [cx - half_w, cy - half_h, cx + half_w, cy + half_h]
+        color = (225, 0, 140, 255)
+        if _sticker_is_square(slot["shape"]):
+            draw.rounded_rectangle(box, radius=max(4, half_w // 8), outline=color, width=line)
+        else:
+            side = min(slot["width_px"], slot["height_px"])
+            circle = [cx - side // 2, cy - side // 2, cx + side // 2, cy + side // 2]
+            draw.ellipse(circle, outline=color, width=line)
+        draw.line([cx - _mm_to_px(2, dpi), cy, cx + _mm_to_px(2, dpi), cy], fill=color, width=line)
+        draw.line([cx, cy - _mm_to_px(2, dpi), cx, cy + _mm_to_px(2, dpi)], fill=color, width=line)
+        text = (
+            f"#{slot['index'] + 1} "
+            f"X={slot['center_x_mm']:.2f}mm "
+            f"Y={slot['center_y_mm']:.2f}mm"
+        )
+        draw.text((box[0], max(0, box[1] - _mm_to_px(4, dpi))), text, fill=(0, 0, 0, 255), font=font)
+
+
+def _sticker_slot_list(data: dict[str, Any], meta: dict[str, float | int | str]) -> list[dict[str, Any]]:
+    raw_slots = data.get("slots") if isinstance(data.get("slots"), list) else []
+    fallback = [
+        {"x_units": -1.08, "y_units": 2.05},
+        {"x_units": 1.08, "y_units": 1.52},
+        {"x_units": -1.08, "y_units": 0.28},
+        {"x_units": 1.08, "y_units": -0.34},
+        {"x_units": -1.08, "y_units": -1.58},
+        {"x_units": 1.08, "y_units": -2.05},
+    ]
+    slots = raw_slots or fallback
+    return [slot for slot in slots[:6] if isinstance(slot, dict)]
+
+
+def _build_sticker_print_files(payload: GuestApprovalRequest, guest_order_id: str) -> Optional[dict[str, Any]]:
+    data = _sticker_payload(payload)
+    if not data:
+        return None
+
+    meta = _sticker_sheet_meta(data)
+    dpi = int(meta["dpi"])
+    sheet_width_px = _mm_to_px(float(meta["width_mm"]), dpi)
+    sheet_height_px = _mm_to_px(float(meta["height_mm"]), dpi)
+    try:
+        sheet_rgb = ImageColor.getrgb(str(meta["sheet_color"]))
+    except ValueError:
+        sheet_rgb = ImageColor.getrgb("#F6F1E7")
+    base = Image.new("RGBA", (sheet_width_px, sheet_height_px), (*sheet_rgb[:3], 255))
+    px_per_scene_x = sheet_width_px / float(meta["scene_width"])
+    px_per_scene_y = sheet_height_px / float(meta["scene_height"])
+    px_per_mm = dpi / 25.4
+
+    background_items = data.get("background_images") if isinstance(data.get("background_images"), list) else []
+    for item in background_items[:12]:
+        if not isinstance(item, dict):
+            continue
+        image = _open_rgba_image(item.get("texture"))
+        if image is None:
+            continue
+        pos_x, pos_y = _list2(item.get("position"))
+        center_x_mm, center_y_mm = _sticker_unit_to_mm(pos_x, pos_y, meta)
+        max_side_units = _STICKER_BACKGROUND_MAX_SIDE_UNITS * max(0.1, _float(item.get("scale"), 1.0))
+        max_side_px = max(1, round(max_side_units * min(px_per_scene_x, px_per_scene_y)))
+        _paste_transformed(
+            base,
+            image,
+            center_x_px=round(center_x_mm * px_per_mm),
+            center_y_px=round(center_y_mm * px_per_mm),
+            max_side_px=max_side_px,
+            rotation_rad=_float(item.get("rotation"), 0.0),
+        )
+
+    slot_shapes: dict[int, str] = {}
+    sticker_items = data.get("sticker_images") if isinstance(data.get("sticker_images"), list) else []
+    for item in sticker_items[:6]:
+        if isinstance(item, dict):
+            slot = _safe_int(item.get("slot"), _safe_int(item.get("index"), 0))
+            if 0 <= slot < 6:
+                slot_shapes[slot] = "square" if _sticker_is_square(item.get("shape")) else "circle"
+
+    slot_meta: list[dict[str, Any]] = []
+    for index, slot in enumerate(_sticker_slot_list(data, meta)):
+        center_x_mm = _float(slot.get("center_x_mm"), None) if slot.get("center_x_mm") is not None else None
+        center_y_mm = _float(slot.get("center_y_mm"), None) if slot.get("center_y_mm") is not None else None
+        if center_x_mm is None or center_y_mm is None:
+            center_x_mm, center_y_mm = _sticker_unit_to_mm(
+                _float(slot.get("x_units"), 0.0),
+                _float(slot.get("y_units"), 0.0),
+                meta,
+            )
+        shape = slot_shapes.get(index, "square" if index in {1, 3, 4} else "circle")
+        slot_meta.append({
+            "index": index,
+            "shape": shape,
+            "center_x_mm": center_x_mm,
+            "center_y_mm": center_y_mm,
+            "center_x_px": round(center_x_mm * px_per_mm),
+            "center_y_px": round(center_y_mm * px_per_mm),
+            "width_mm": _STICKER_SLOT_WIDTH_MM,
+            "height_mm": _STICKER_SLOT_HEIGHT_MM,
+            "width_px": _mm_to_px(_STICKER_SLOT_WIDTH_MM, dpi),
+            "height_px": _mm_to_px(_STICKER_SLOT_HEIGHT_MM, dpi),
+        })
+
+    sticker_by_slot: dict[int, dict[str, Any]] = {}
+    for index, item in enumerate(sticker_items[:6]):
+        if not isinstance(item, dict):
+            continue
+        slot = _safe_int(item.get("slot"), index)
+        if 0 <= slot < 6 and slot not in sticker_by_slot:
+            sticker_by_slot[slot] = item
+
+    for slot in slot_meta:
+        item = sticker_by_slot.get(int(slot["index"]))
+        if not item:
+            continue
+        image = _open_rgba_image(item.get("texture"))
+        if image is None:
+            continue
+        shape = "square" if _sticker_is_square(item.get("shape")) else "circle"
+        pos_x, pos_y = _list2(item.get("position"))
+        local_x_px = round(pos_x * px_per_scene_x)
+        local_y_px = round(-pos_y * px_per_scene_y)
+        max_side_units = _STICKER_LOGO_MAX_SIDE_UNITS.get(shape, 0.74) * max(0.1, _float(item.get("scale"), 0.72))
+        max_side_px = max(1, round(max_side_units * min(px_per_scene_x, px_per_scene_y)))
+        layer = Image.new("RGBA", (int(slot["width_px"]), int(slot["height_px"])), (0, 0, 0, 0))
+        _paste_transformed(
+            layer,
+            image,
+            center_x_px=int(slot["width_px"] / 2 + local_x_px),
+            center_y_px=int(slot["height_px"] / 2 + local_y_px),
+            max_side_px=max_side_px,
+            rotation_rad=_float(item.get("rotation"), 0.0),
+        )
+        layer = _clip_to_sticker_shape(layer, shape, int(slot["width_px"]), int(slot["height_px"]))
+        left = int(round(slot["center_x_px"] - slot["width_px"] / 2))
+        top = int(round(slot["center_y_px"] - slot["height_px"] / 2))
+        _alpha_composite_clipped(base, layer, left, top)
+        slot["artwork"] = {
+            "filename": item.get("filename") or "",
+            "local_x_units": pos_x,
+            "local_y_units": pos_y,
+            "rotation_rad": _float(item.get("rotation"), 0.0),
+            "scale": _float(item.get("scale"), 0.72),
+        }
+
+    technical = base.copy()
+    draw = ImageDraw.Draw(technical)
+    grid_step_px = _mm_to_px(10, dpi)
+    for x in range(0, sheet_width_px, grid_step_px):
+        draw.line([x, 0, x, sheet_height_px], fill=(0, 0, 0, 34), width=1)
+    for y in range(0, sheet_height_px, grid_step_px):
+        draw.line([0, y, sheet_width_px, y], fill=(0, 0, 0, 34), width=1)
+    draw.rectangle([0, 0, sheet_width_px - 1, sheet_height_px - 1], outline=(0, 0, 0, 255), width=max(1, _mm_to_px(0.2, dpi)))
+    _draw_sticker_guides(technical, draw, slot_meta=slot_meta, dpi=dpi)
+
+    def to_tiff_bytes(image: Image.Image) -> bytes:
+        out = io.BytesIO()
+        image.convert("CMYK").save(out, format="TIFF", compression="tiff_lzw", dpi=(dpi, dpi))
+        return out.getvalue()
+
+    spec = {
+        "guest_order_id": guest_order_id,
+        "product": "sticker",
+        "sheet": {
+            "width_mm": float(meta["width_mm"]),
+            "height_mm": float(meta["height_mm"]),
+            "dpi": dpi,
+            "pixel_size": [sheet_width_px, sheet_height_px],
+            "color": meta["sheet_color"],
+        },
+        "coordinate_system": {
+            "origin": "top-left",
+            "units": "millimeters",
+            "x_axis": "left-to-right",
+            "y_axis": "top-to-bottom",
+        },
+        "slots": slot_meta,
+        "background_count": len(background_items),
+    }
+    return {
+        "plain_tiff": to_tiff_bytes(base),
+        "technical_tiff": to_tiff_bytes(technical),
+        "spec_json": json.dumps(spec, ensure_ascii=False, indent=2, default=str).encode("utf-8"),
+    }
+
+
 def _short_id() -> str:
     return f"guest-{uuid.uuid4().hex[:12]}"
 
@@ -301,6 +664,20 @@ async def _build_guest_print_archive(
                 f"render/design-{guest_order_id[-8:]}.{render_image['extension']}",
                 render_image["content"],
             )
+
+        try:
+            sticker_print_files = _build_sticker_print_files(payload, guest_order_id)
+            if sticker_print_files:
+                suffix = guest_order_id[-8:]
+                zf.writestr(f"print/sticker-print-{suffix}.tiff", sticker_print_files["plain_tiff"])
+                zf.writestr(
+                    f"print/sticker-print-with-coordinates-{suffix}.tiff",
+                    sticker_print_files["technical_tiff"],
+                )
+                zf.writestr(f"print/sticker-print-spec-{suffix}.json", sticker_print_files["spec_json"])
+        except Exception as exc:  # noqa: BLE001
+            sentry_sdk.capture_exception(exc)
+            zf.writestr("print/ERROR.txt", f"sticker TIFF generation failed: {exc}\n")
 
         try:
             unwrap_bytes = await fetch_unwrap_zip(order_like)
@@ -520,6 +897,35 @@ async def request_guest_approval(
             "mime_type": render_image["mime_type"],
         })
 
+    sticker_print_files = None
+    try:
+        sticker_print_files = _build_sticker_print_files(payload, guest_order_id)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("sticker print TIFF generation failed")
+        sentry_sdk.capture_exception(exc)
+
+    if sticker_print_files:
+        suffix = guest_order_id[-8:]
+        attachments.extend([
+            {
+                "filename": f"sticker-print-{suffix}.tiff",
+                "content": sticker_print_files["plain_tiff"],
+                "mime_type": "image/tiff",
+            },
+            {
+                "filename": f"sticker-print-with-coordinates-{suffix}.tiff",
+                "content": sticker_print_files["technical_tiff"],
+                "mime_type": "image/tiff",
+            },
+            {
+                "filename": f"sticker-print-spec-{suffix}.json",
+                "content": sticker_print_files["spec_json"],
+                "mime_type": "application/json",
+            },
+        ])
+        body_lines.insert(4, "Для 3D-стикеров также прикреплены TIFF-файлы для печати.")
+        body_lines.insert(5, "")
+
     event_logger.log(
         "GUEST_APPROVAL_REQUESTED",
         "Guest requested design approval PDF by email",
@@ -537,6 +943,7 @@ async def request_guest_approval(
             "pdf_bytes": len(pdf_bytes),
             "render_bytes": len(render_image["content"]) if render_image else 0,
             "render_mime_type": render_image["mime_type"] if render_image else None,
+            "sticker_print_files": bool(sticker_print_files),
             "ip": ip,
             "name": payload.name,
             "phone": payload.phone,

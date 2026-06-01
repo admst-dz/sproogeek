@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import cached, invalidate
-from app.core.deps import STAFF_ROLES, get_current_user, request_id
+from app.core.deps import STAFF_ROLES, get_current_user, get_current_user_optional, request_id
 from app.core.event_logger import event_logger
 from app.crud import product as crud_product
 from app.database import get_db
@@ -26,11 +26,11 @@ def _can_manage_product(product, current_user) -> bool:
 
 
 @cached(prefix=_PRODUCTS_CACHE_PREFIX, ttl=_PRODUCTS_CACHE_TTL)
-async def _cached_products(dealer_id: Optional[str], product_type: Optional[str], db: AsyncSession):
+async def _cached_products(dealer_id: Optional[str], product_type: Optional[str], include_inactive: bool, db: AsyncSession):
     items = (
-        await crud_product.get_products_by_dealer(db, dealer_id, product_type=product_type)
+        await crud_product.get_products_by_dealer(db, dealer_id, product_type=product_type, active_only=not include_inactive)
         if dealer_id
-        else await crud_product.get_products(db, product_type=product_type)
+        else await crud_product.get_products(db, product_type=product_type, active_only=not include_inactive)
     )
     # ORM-объекты не сериализуются orjson — переводим в dict через
     # Pydantic-схему ответа, она же гарантирует стабильную форму.
@@ -41,9 +41,16 @@ async def _cached_products(dealer_id: Optional[str], product_type: Optional[str]
 async def get_products(
     dealer_id: Optional[str] = Query(None),
     type: Optional[str] = Query(None, description="Фильтр по типу: notebook/shopper/tshirt/hoodie/lanyard/..."),
+    include_inactive: bool = Query(False, description="Staff-only: include hidden products"),
     db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
 ):
-    return await _cached_products(dealer_id, type, db)
+    if include_inactive:
+        if not current_user or current_user.role not in STAFF_ROLES:
+            raise HTTPException(status_code=403, detail="Access denied")
+        if current_user.role == "dealer" and dealer_id and dealer_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+    return await _cached_products(dealer_id, type, include_inactive, db)
 
 
 @router.post("/", response_model=ProductResponse)

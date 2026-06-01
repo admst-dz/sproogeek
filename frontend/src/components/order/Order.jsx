@@ -8,8 +8,14 @@ import { Notebook } from '../shared/Notebook';
 import { Thermos } from '../thermos/Thermos';
 import { Powerbank } from '../powerbank/Powerbank';
 import { Sticker } from '../sticker/Sticker';
+import { Shopper } from '../merch/Shopper';
+import { Tshirt } from '../merch/Tshirt';
+import { Hoodie } from '../merch/Hoodie';
+import { Lanyard } from '../merch/Lanyard';
 import { SceneLoadingOverlay } from '../shared/VibeLoader';
 import { SiteFooter } from '../shared/SiteFooter';
+
+const MERCH_PRODUCTS = new Set(['shopper', 'tshirt', 'hoodie', 'lanyard']);
 
 export const Order = ({ onBack, onSuccess }) => {
     const {
@@ -20,7 +26,11 @@ export const Order = ({ onBack, onSuccess }) => {
         activeProduct, language,
         thermosBodyColor, thermosCapVisible, thermosLogos,
         powerbankBodyColor, powerbankLogos,
-        stickerImages,
+        stickerSheetColor, stickerBackgroundImages, stickerImages,
+        shopperColor, shopperMaterial, shopperHandleType, shopperPrintSide, shopperLogos,
+        tshirtColor, tshirtMaterial, tshirtSize, tshirtPrintSide, tshirtLogos,
+        hoodieColor, hoodieMaterial, hoodieSize, hoodiePrintSide, hoodieLogos,
+        lanyardColor, lanyardMaterial, lanyardLengthMm, lanyardWidthMm, lanyardRepeatMm, lanyardCarabiner, lanyardLogos,
     } = useConfigurator();
 
     const [clientType, setClientType] = useState('phys');
@@ -71,7 +81,77 @@ export const Order = ({ onBack, onSuccess }) => {
                 activeProduct: 'sticker',
                 stickerWidthMm: 40,
                 stickerHeightMm: 45,
+                stickerSheetColor,
+                stickerBackgroundImages,
                 stickerImages,
+            };
+        }
+        if (activeProduct === 'shopper') {
+            return {
+                type: 'shopper',
+                activeProduct: 'shopper',
+                color: shopperColor,
+                shopperColor,
+                material: shopperMaterial,
+                shopperMaterial,
+                handleType: shopperHandleType,
+                shopperHandleType,
+                printSide: shopperPrintSide,
+                shopperPrintSide,
+                logos: shopperLogos,
+                shopperLogos,
+            };
+        }
+        if (activeProduct === 'tshirt') {
+            return {
+                type: 'tshirt',
+                activeProduct: 'tshirt',
+                color: tshirtColor,
+                tshirtColor,
+                material: tshirtMaterial,
+                tshirtMaterial,
+                size: tshirtSize,
+                tshirtSize,
+                printSide: tshirtPrintSide,
+                tshirtPrintSide,
+                logos: tshirtLogos,
+                tshirtLogos,
+            };
+        }
+        if (activeProduct === 'hoodie') {
+            return {
+                type: 'hoodie',
+                activeProduct: 'hoodie',
+                color: hoodieColor,
+                hoodieColor,
+                material: hoodieMaterial,
+                hoodieMaterial,
+                size: hoodieSize,
+                hoodieSize,
+                printSide: hoodiePrintSide,
+                hoodiePrintSide,
+                logos: hoodieLogos,
+                hoodieLogos,
+            };
+        }
+        if (activeProduct === 'lanyard') {
+            return {
+                type: 'lanyard',
+                activeProduct: 'lanyard',
+                color: lanyardColor,
+                lanyardColor,
+                material: lanyardMaterial,
+                lanyardMaterial,
+                lengthMm: lanyardLengthMm,
+                lanyardLengthMm,
+                widthMm: lanyardWidthMm,
+                lanyardWidthMm,
+                repeatMm: lanyardRepeatMm,
+                lanyardRepeatMm,
+                carabiner: lanyardCarabiner,
+                lanyardCarabiner,
+                logos: lanyardLogos,
+                lanyardLogos,
             };
         }
         const bindingCaps = getNotebookBindingCapabilities(bindingType);
@@ -103,6 +183,10 @@ export const Order = ({ onBack, onSuccess }) => {
         if (activeProduct === 'thermos') return t(language, 'thermos');
         if (activeProduct === 'powerbank') return t(language, 'powerbank');
         if (activeProduct === 'sticker') return t(language, 'sticker3d');
+        if (activeProduct === 'shopper') return t(language, 'shopper');
+        if (activeProduct === 'tshirt') return t(language, 'tshirt');
+        if (activeProduct === 'hoodie') return t(language, 'hoodie');
+        if (activeProduct === 'lanyard') return t(language, 'lanyard');
         return t(language, 'notebook');
     };
 
@@ -161,7 +245,7 @@ export const Order = ({ onBack, onSuccess }) => {
                     <div className="bg-white dark:bg-white/5 rounded-[18px] md:rounded-[20px] shadow-xl dark:shadow-none flex flex-col border border-white/50 dark:border-white/8 backdrop-blur-sm overflow-hidden">
                         {activeProduct !== 'calendar' ? (
                             <div className="relative bg-[#dcdcdc] dark:bg-[#0A0E1A] h-[220px] sm:h-[280px]">
-                                <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true }}>
+                                <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true, stencil: true }}>
                                     <Environment preset="city" />
                                     <ambientLight intensity={0.6} />
                                     <directionalLight position={[10, 10, 5]} intensity={1.5} />
@@ -172,13 +256,21 @@ export const Order = ({ onBack, onSuccess }) => {
                                             {activeProduct === 'thermos' && <Thermos />}
                                             {activeProduct === 'powerbank' && <Powerbank />}
                                             {activeProduct === 'sticker' && <Sticker preview />}
+                                            {activeProduct === 'shopper' && <Shopper />}
+                                            {activeProduct === 'tshirt' && <Tshirt />}
+                                            {activeProduct === 'hoodie' && <Hoodie />}
+                                            {activeProduct === 'lanyard' && <Lanyard />}
                                         </Stage>
                                     </PresentationControls>
                                 </Canvas>
                                 <SceneLoadingOverlay compact label="3D" />
                                 {activeProduct === 'sticker' ? (
                                     <div className="absolute bottom-3 right-3 flex items-center gap-2 bg-black/50 backdrop-blur-md rounded-[10px] px-3 py-2 border border-white/15 pointer-events-none">
-                                        <span className="text-white/70 text-xs font-bold uppercase tracking-wide">40 x 45 мм</span>
+                                        <span className="text-white/70 text-xs font-bold uppercase tracking-wide">6 3D</span>
+                                    </div>
+                                ) : MERCH_PRODUCTS.has(activeProduct) ? (
+                                    <div className="absolute bottom-3 right-3 flex items-center gap-2 bg-black/50 backdrop-blur-md rounded-[10px] px-3 py-2 border border-white/15 pointer-events-none">
+                                        <span className="text-white/70 text-xs font-bold uppercase tracking-wide">{getProductName()}</span>
                                     </div>
                                 ) : (
                                     <div className="absolute bottom-3 right-3 flex items-center gap-2 bg-black/50 backdrop-blur-md rounded-[10px] px-3 py-2 border border-white/15 pointer-events-none">
@@ -205,8 +297,40 @@ export const Order = ({ onBack, onSuccess }) => {
                         <div className="space-y-3 border-t border-gray-100 dark:border-white/8 p-6 text-sm font-bold text-[#1a1a1a] dark:text-white">
                             {activeProduct === 'sticker' ? (
                                 <>
-                                    <Row label={t(language, 'stickerCanvasSize')} value="40 x 45 мм" />
-                                    <Row label={t(language, 'printCanvasItems')} value={stickerImages.length} />
+                                    <Row label={t(language, 'stickerCanvasSize')} value={t(language, 'stickerSheetFormat')} />
+                                    <Row label={t(language, 'stickerSheetColor')} value={<ColorDot color={stickerSheetColor} />} />
+                                    <Row label={t(language, 'stickerBackgroundImages')} value={stickerBackgroundImages.length} />
+                                    <Row label={t(language, 'printCanvasItems')} value={`${stickerImages.length}/6`} />
+                                </>
+                            ) : activeProduct === 'shopper' ? (
+                                <>
+                                    <Row label={t(language, 'merchColor')} value={<ColorDot color={shopperColor} />} />
+                                    <Row label={t(language, 'merchMaterial')} value={shopperMaterial} />
+                                    <Row label={t(language, 'merchHandleType')} value={shopperHandleType} />
+                                    <Row label={t(language, 'merchPrintSide')} value={shopperPrintSide} />
+                                </>
+                            ) : activeProduct === 'tshirt' ? (
+                                <>
+                                    <Row label={t(language, 'merchColor')} value={<ColorDot color={tshirtColor} />} />
+                                    <Row label={t(language, 'merchMaterial')} value={tshirtMaterial} />
+                                    <Row label={t(language, 'merchSize')} value={tshirtSize} />
+                                    <Row label={t(language, 'merchPrintSide')} value={tshirtPrintSide} />
+                                </>
+                            ) : activeProduct === 'hoodie' ? (
+                                <>
+                                    <Row label={t(language, 'merchColor')} value={<ColorDot color={hoodieColor} />} />
+                                    <Row label={t(language, 'merchMaterial')} value={hoodieMaterial} />
+                                    <Row label={t(language, 'merchSize')} value={hoodieSize} />
+                                    <Row label={t(language, 'merchPrintSide')} value={hoodiePrintSide} />
+                                </>
+                            ) : activeProduct === 'lanyard' ? (
+                                <>
+                                    <Row label={t(language, 'merchColor')} value={<ColorDot color={lanyardColor} />} />
+                                    <Row label={t(language, 'merchMaterial')} value={lanyardMaterial} />
+                                    <Row label={t(language, 'lanyardLength')} value={`${lanyardLengthMm} мм`} />
+                                    <Row label={t(language, 'lanyardWidth')} value={`${lanyardWidthMm} мм`} />
+                                    <Row label={t(language, 'lanyardRepeat')} value={`${lanyardRepeatMm / 10} см`} />
+                                    <Row label={t(language, 'lanyardCarabiner')} value={lanyardCarabiner} />
                                 </>
                             ) : (
                                 <>

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useMemo, useRef } from 'react'
-import { ALL_PRODUCT_DEFAULTS, THEME_SWITCHING_ENABLED, getNotebookBindingCapabilities, mergeSectionVisibility, useConfigurator } from './store'
+import { ALL_PRODUCT_DEFAULTS, DEFAULT_APP_SETTINGS, THEME_SWITCHING_ENABLED, getNotebookBindingCapabilities, mergeSectionVisibility, useConfigurator } from './store'
 import { t } from './i18n'
 import { CookieBanner } from './components/shared/CookieBanner'
 import { getInitialRouteState, getPathForRouteState } from './config/routes'
@@ -23,6 +23,10 @@ const CommandPalette = lazy(() => import('./components/shared/CommandPalette').t
 const METRIKA_COUNTER_ID = 109128387;
 const CONFIGURATOR_DRAFT_KEY = 'spruzhuk_configurator_draft';
 const CONFIGURATOR_DRAFT_FIELDS = ['activeProduct', 'zoomLevel', ...Object.keys(ALL_PRODUCT_DEFAULTS)];
+const HIDDEN_HOME_SECTIONS = Object.keys(DEFAULT_APP_SETTINGS.home_sections).reduce((acc, key) => {
+    acc[key] = false;
+    return acc;
+}, {});
 
 function sendMetrikaHit(url = window.location.href) {
     if (typeof window === 'undefined' || typeof window.ym !== 'function') return;
@@ -126,6 +130,9 @@ function HomeFallbackCard({ title, actionLabel, tone, onClick }) {
         emerald: 'bg-emerald-500/10 dark:bg-emerald-400/15',
         amber: 'bg-amber-500/10 dark:bg-amber-400/15',
         pink: 'bg-pink-500/10 dark:bg-pink-400/15',
+        sky: 'bg-sky-500/10 dark:bg-sky-400/15',
+        violet: 'bg-violet-500/10 dark:bg-violet-400/15',
+        teal: 'bg-teal-500/10 dark:bg-teal-400/15',
     }[tone] || 'bg-gray-500/10 dark:bg-white/10';
 
     return (
@@ -263,6 +270,38 @@ function HomeRouteFallback({ onStart, onAuth, user, logout, openCommandPalette, 
                             onClick={() => handleSelect('sticker')}
                         />
                     )}
+                    {sectionVisibility?.shopper !== false && (
+                        <HomeFallbackCard
+                            title={t(language, 'shopper')}
+                            actionLabel={t(language, 'openBtn')}
+                            tone="amber"
+                            onClick={() => handleSelect('shopper')}
+                        />
+                    )}
+                    {sectionVisibility?.tshirt !== false && (
+                        <HomeFallbackCard
+                            title={t(language, 'tshirt')}
+                            actionLabel={t(language, 'openBtn')}
+                            tone="sky"
+                            onClick={() => handleSelect('tshirt')}
+                        />
+                    )}
+                    {sectionVisibility?.hoodie !== false && (
+                        <HomeFallbackCard
+                            title={t(language, 'hoodie')}
+                            actionLabel={t(language, 'openBtn')}
+                            tone="violet"
+                            onClick={() => handleSelect('hoodie')}
+                        />
+                    )}
+                    {sectionVisibility?.lanyard !== false && (
+                        <HomeFallbackCard
+                            title={t(language, 'lanyard')}
+                            actionLabel={t(language, 'openBtn')}
+                            tone="teal"
+                            onClick={() => handleSelect('lanyard')}
+                        />
+                    )}
                     {sectionVisibility?.print_canvas !== false && onPrintCanvas && (
                         <HomeFallbackCard
                             title={t(language, 'printCanvasHomeButton')}
@@ -331,6 +370,7 @@ function MainApp() {
     const [showAuth, setShowAuth] = useState(false);
     const [pendingSuccessToast, setPendingSuccessToast] = useState(false);
     const [configuratorDraft, setConfiguratorDraft] = useState(() => readConfiguratorDraft());
+    const [publicSettingsReady, setPublicSettingsReady] = useState(false);
 
     const skipNextDraftSaveRef = useRef(false);
     const lastMetrikaUrlRef = useRef(typeof window !== 'undefined' ? window.location.href : '');
@@ -407,9 +447,24 @@ function MainApp() {
     };
 
     useEffect(() => {
+        let cancelled = false;
+        setPublicSettingsReady(false);
         fetchPublicSettings()
-            .then((settings) => setAppSettings(settings))
-            .catch(() => setAppSettings({ guest_approval_enabled: true }));
+            .then((settings) => {
+                if (cancelled) return;
+                setAppSettings(settings);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setAppSettings({
+                    ...DEFAULT_APP_SETTINGS,
+                    home_sections: HIDDEN_HOME_SECTIONS,
+                });
+            })
+            .finally(() => {
+                if (!cancelled) setPublicSettingsReady(true);
+            });
+        return () => { cancelled = true; };
     }, [setAppSettings]);
 
     useEffect(() => {
@@ -577,7 +632,7 @@ function MainApp() {
                 navigate={guardedNavigate}
                 screen={screen}
                 openAuth={() => setShowAuth(true)}
-                productVisibility={visibleConfiguratorSections}
+                productVisibility={publicSettingsReady ? visibleConfiguratorSections : HIDDEN_HOME_SECTIONS}
             />
 
             {/* --- МОДАЛЬНОЕ ОКНО АВТОРИЗАЦИИ --- */}
@@ -678,42 +733,46 @@ function MainApp() {
 
             {/* --- ЭКРАН: ГЛАВНАЯ СТРАНИЦА --- */}
             {screen === 'home' && (
-                <RouteSuspense
-                    fallback={(
-                        <HomeRouteFallback
+                publicSettingsReady ? (
+                    <RouteSuspense
+                        fallback={(
+                            <HomeRouteFallback
+                                onStart={() => {
+                                    setClientTab(null);
+                                    setScreen('configurator');
+                                }}
+                                onAuth={() => setShowAuth(true)}
+                                user={currentUser}
+                                logout={logout}
+                                openCommandPalette={openCommandPalette}
+                                sectionVisibility={appSettings.home_sections}
+                                onPrintCanvas={
+                                    homePrintCanvasEnabled
+                                        ? handleOpenPrintCanvas
+                                        : null
+                                }
+                            />
+                        )}
+                    >
+                        <Home
                             onStart={() => {
                                 setClientTab(null);
                                 setScreen('configurator');
                             }}
-                            onAuth={() => setShowAuth(true)}
-                            user={currentUser}
-                            logout={logout}
-                            openCommandPalette={openCommandPalette}
-                            sectionVisibility={appSettings.home_sections}
                             onPrintCanvas={
                                 homePrintCanvasEnabled
                                     ? handleOpenPrintCanvas
                                     : null
                             }
+                            sectionVisibility={appSettings.home_sections}
+                            onAuth={() => setShowAuth(true)}
+                            user={currentUser}
+                            logout={logout}
                         />
-                    )}
-                >
-                    <Home
-                        onStart={() => {
-                            setClientTab(null);
-                            setScreen('configurator');
-                        }}
-                        onPrintCanvas={
-                            homePrintCanvasEnabled
-                                ? handleOpenPrintCanvas
-                                : null
-                        }
-                        sectionVisibility={appSettings.home_sections}
-                        onAuth={() => setShowAuth(true)}
-                        user={currentUser}
-                        logout={logout}
-                    />
-                </RouteSuspense>
+                    </RouteSuspense>
+                ) : (
+                    <RouteLoader />
+                )
             )}
 
             {/* --- ЭКРАН: ПОЛОТНО НА ПЕЧАТЬ --- */}

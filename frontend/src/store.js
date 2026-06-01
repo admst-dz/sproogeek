@@ -162,6 +162,9 @@ export const POWERBANK_DEFAULTS = {
     selectedPowerbankLogoId: null,
 };
 export const STICKER_DEFAULTS = {
+    stickerSheetColor: '#F6F1E7',
+    stickerBackgroundImages: [],
+    selectedStickerBackgroundImageId: null,
     stickerImages: [],
     selectedStickerImageId: null,
 };
@@ -197,6 +200,7 @@ export const LANYARD_DEFAULTS = {
     lanyardMaterial: 'polyester_15',
     lanyardLengthMm: 450,
     lanyardWidthMm: 15,
+    lanyardRepeatMm: 50,
     lanyardCarabiner: 'carabiner',
     lanyardLogos: [],
     selectedLanyardLogoId: null,
@@ -244,6 +248,39 @@ const makeLogoId = () => (
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`
 );
+
+export const STICKER_SLOT_COUNT = 6;
+export const STICKER_DEFAULT_SLOT_SHAPES = ['circle', 'square', 'circle', 'square', 'square', 'circle'];
+
+const normalizeStickerShape = (shape) => (shape === 'square' ? 'square' : 'circle');
+
+const LANYARD_MATERIAL_WIDTH_MM = {
+    polyester_10: 10,
+    polyester_15: 15,
+    polyester_20: 20,
+    satin_15: 15,
+};
+
+const getLanyardWidthFromMaterial = (material, fallback = 15) => (
+    LANYARD_MATERIAL_WIDTH_MM[material] ?? fallback
+);
+
+const normalizeTshirtPrintSide = (side) => (side === 'back' ? 'back' : 'front');
+const clampTshirtLogoPosition = (x, y) => [
+    Math.max(-0.86, Math.min(0.86, Number(x) || 0)),
+    Math.max(-0.92, Math.min(0.92, Number(y) || 0)),
+];
+
+const getNextStickerSlot = (images = []) => {
+    const occupied = new Set(images.map((image, index) => {
+        const slot = Number(image?.slot);
+        return Number.isInteger(slot) && slot >= 0 && slot < STICKER_SLOT_COUNT ? slot : index;
+    }));
+    for (let slot = 0; slot < STICKER_SLOT_COUNT; slot += 1) {
+        if (!occupied.has(slot)) return slot;
+    }
+    return -1;
+};
 
 const THERMOS_LOGO_START_POSITIONS = {
     body: [[0, 0], [0.08, 0.46], [-0.08, -0.46], [0.16, -0.92], [-0.16, 0.92]],
@@ -298,6 +335,9 @@ export const useConfigurator = create(temporal((set, get) => ({
     selectedPowerbankLogoId: null,
 
     // --- Параметры 3D стикера ---
+    stickerSheetColor: '#F6F1E7',
+    stickerBackgroundImages: [],
+    selectedStickerBackgroundImageId: null,
     stickerImages: [],
     selectedStickerImageId: null,
 
@@ -635,14 +675,93 @@ export const useConfigurator = create(temporal((set, get) => ({
     }),
 
     // --- ACTIONS: 3D СТИКЕР ---
+    setStickerSheetColor: (color) => set({ stickerSheetColor: color }),
+    addStickerBackgroundImage: async (file) => {
+        if (file instanceof File) {
+            const id = makeLogoId();
+            try {
+                const texture = await normalizeImageFile(file);
+                set((state) => ({
+                    stickerBackgroundImages: [
+                        ...state.stickerBackgroundImages,
+                        {
+                            id,
+                            texture,
+                            filename: file.name,
+                            position: [0, 0],
+                            rotation: 0,
+                            scale: 1,
+                        },
+                    ],
+                    selectedStickerBackgroundImageId: id,
+                    selectedStickerImageId: null,
+                }));
+            } catch (error) {
+                console.error('Failed to prepare sticker background image', error);
+            }
+        }
+    },
+    replaceStickerBackgroundImageFile: async (id, file) => {
+        if (!id || !(file instanceof File)) return;
+        try {
+            const texture = await normalizeImageFile(file);
+            set((state) => ({
+                stickerBackgroundImages: state.stickerBackgroundImages.map(l => l.id === id ? { ...l, texture, filename: file.name || l.filename } : l)
+            }));
+        } catch (error) {
+            console.error('Failed to replace sticker background image', error);
+            throw error;
+        }
+    },
+    selectStickerBackgroundImage: (id) => set({ selectedStickerBackgroundImageId: id, selectedStickerImageId: null }),
+    setStickerBackgroundImagePosition: (x, y) => set((state) => ({
+        stickerBackgroundImages: state.stickerBackgroundImages.map(l => l.id === state.selectedStickerBackgroundImageId ? { ...l, position: [x, y] } : l)
+    })),
+    setStickerBackgroundImageRotation: (rotation) => set((state) => ({
+        stickerBackgroundImages: state.stickerBackgroundImages.map(l => l.id === state.selectedStickerBackgroundImageId ? { ...l, rotation } : l)
+    })),
+    setStickerBackgroundImageScale: (scale) => set((state) => ({
+        stickerBackgroundImages: state.stickerBackgroundImages.map(l => l.id === state.selectedStickerBackgroundImageId ? { ...l, scale } : l)
+    })),
+    resetStickerBackgroundImageTransform: () => set((state) => ({
+        stickerBackgroundImages: state.stickerBackgroundImages.map(l => l.id === state.selectedStickerBackgroundImageId ? { ...l, position: [0, 0], rotation: 0, scale: 1 } : l)
+    })),
+    removeStickerBackgroundImage: (id) => set((state) => {
+        const remaining = state.stickerBackgroundImages.filter(l => l.id !== id);
+        return {
+            stickerBackgroundImages: remaining,
+            selectedStickerBackgroundImageId: state.selectedStickerBackgroundImageId === id
+                ? (remaining.length > 0 ? remaining[remaining.length - 1].id : null)
+                : state.selectedStickerBackgroundImageId
+        };
+    }),
     addStickerImage: async (file) => {
         if (file instanceof File) {
             const id = makeLogoId();
             try {
                 const texture = await normalizeImageFile(file);
                 set((state) => ({
-                    stickerImages: [...state.stickerImages, { id, texture, filename: file.name, position: [0, 0], rotation: 0, scale: 0.72 }],
-                    selectedStickerImageId: id
+                    ...(() => {
+                        const slot = getNextStickerSlot(state.stickerImages);
+                        if (slot < 0) return {};
+                        return {
+                            stickerImages: [
+                                ...state.stickerImages,
+                                {
+                                    id,
+                                    texture,
+                                    filename: file.name,
+                                    slot,
+                                    shape: STICKER_DEFAULT_SLOT_SHAPES[slot],
+                                    position: [0, 0],
+                                    rotation: 0,
+                                    scale: 0.72,
+                                },
+                            ],
+                            selectedStickerImageId: id,
+                            selectedStickerBackgroundImageId: null,
+                        };
+                    })(),
                 }));
             } catch (error) {
                 console.error('Failed to prepare sticker image', error);
@@ -661,7 +780,7 @@ export const useConfigurator = create(temporal((set, get) => ({
             throw error;
         }
     },
-    selectStickerImage: (id) => set({ selectedStickerImageId: id }),
+    selectStickerImage: (id) => set({ selectedStickerImageId: id, selectedStickerBackgroundImageId: null }),
     setStickerImagePosition: (x, y) => set((state) => ({
         stickerImages: state.stickerImages.map(l => l.id === state.selectedStickerImageId ? { ...l, position: [x, y] } : l)
     })),
@@ -670,6 +789,9 @@ export const useConfigurator = create(temporal((set, get) => ({
     })),
     setStickerImageScale: (scale) => set((state) => ({
         stickerImages: state.stickerImages.map(l => l.id === state.selectedStickerImageId ? { ...l, scale } : l)
+    })),
+    setStickerImageShape: (shape) => set((state) => ({
+        stickerImages: state.stickerImages.map(l => l.id === state.selectedStickerImageId ? { ...l, shape: normalizeStickerShape(shape) } : l)
     })),
     resetStickerImageTransform: () => set((state) => ({
         stickerImages: state.stickerImages.map(l => l.id === state.selectedStickerImageId ? { ...l, position: [0, 0], rotation: 0, scale: 0.72 } : l)
@@ -703,6 +825,18 @@ export const useConfigurator = create(temporal((set, get) => ({
             console.error(`Failed to prepare ${collectionKey} image`, error);
         }
     },
+    _setMerchLogoPosition: (collectionKey, selectedKey, x, y) => set((state) => ({
+        [collectionKey]: (state[collectionKey] || []).map(l => l.id === state[selectedKey] ? { ...l, position: [x, y] } : l),
+    })),
+    _setMerchLogoRotation: (collectionKey, selectedKey, rotation) => set((state) => ({
+        [collectionKey]: (state[collectionKey] || []).map(l => l.id === state[selectedKey] ? { ...l, rotation } : l),
+    })),
+    _setMerchLogoScale: (collectionKey, selectedKey, scale) => set((state) => ({
+        [collectionKey]: (state[collectionKey] || []).map(l => l.id === state[selectedKey] ? { ...l, scale } : l),
+    })),
+    _resetMerchLogoTransform: (collectionKey, selectedKey) => set((state) => ({
+        [collectionKey]: (state[collectionKey] || []).map(l => l.id === state[selectedKey] ? { ...l, position: [0, 0], rotation: 0, scale: 0.6 } : l),
+    })),
     addShopperLogo: (file, side = 'front') => get()._addMerchLogo('shopperLogos', 'selectedShopperLogoId', file, side),
     addTshirtLogo: (file, side = 'front') => get()._addMerchLogo('tshirtLogos', 'selectedTshirtLogoId', file, side),
     addHoodieLogo: (file, side = 'front') => get()._addMerchLogo('hoodieLogos', 'selectedHoodieLogoId', file, side),
@@ -713,6 +847,10 @@ export const useConfigurator = create(temporal((set, get) => ({
     setShopperHandleType: (handle) => set({ shopperHandleType: handle }),
     setShopperPrintSide: (side) => set({ shopperPrintSide: side }),
     selectShopperLogo: (id) => set({ selectedShopperLogoId: id }),
+    setShopperLogoPosition: (x, y) => get()._setMerchLogoPosition('shopperLogos', 'selectedShopperLogoId', x, y),
+    setShopperLogoRotation: (rotation) => get()._setMerchLogoRotation('shopperLogos', 'selectedShopperLogoId', rotation),
+    setShopperLogoScale: (scale) => get()._setMerchLogoScale('shopperLogos', 'selectedShopperLogoId', scale),
+    resetShopperLogoTransform: () => get()._resetMerchLogoTransform('shopperLogos', 'selectedShopperLogoId'),
     removeShopperLogo: (id) => set((state) => {
         const remaining = state.shopperLogos.filter(l => l.id !== id);
         return {
@@ -726,8 +864,12 @@ export const useConfigurator = create(temporal((set, get) => ({
     setTshirtColor: (color) => set({ tshirtColor: color }),
     setTshirtMaterial: (material) => set({ tshirtMaterial: material }),
     setTshirtSize: (size) => set({ tshirtSize: size }),
-    setTshirtPrintSide: (side) => set({ tshirtPrintSide: side }),
+    setTshirtPrintSide: (side) => set({ tshirtPrintSide: normalizeTshirtPrintSide(side) }),
     selectTshirtLogo: (id) => set({ selectedTshirtLogoId: id }),
+    setTshirtLogoPosition: (x, y) => get()._setMerchLogoPosition('tshirtLogos', 'selectedTshirtLogoId', ...clampTshirtLogoPosition(x, y)),
+    setTshirtLogoRotation: (rotation) => get()._setMerchLogoRotation('tshirtLogos', 'selectedTshirtLogoId', rotation),
+    setTshirtLogoScale: (scale) => get()._setMerchLogoScale('tshirtLogos', 'selectedTshirtLogoId', scale),
+    resetTshirtLogoTransform: () => get()._resetMerchLogoTransform('tshirtLogos', 'selectedTshirtLogoId'),
     removeTshirtLogo: (id) => set((state) => {
         const remaining = state.tshirtLogos.filter(l => l.id !== id);
         return {
@@ -743,6 +885,10 @@ export const useConfigurator = create(temporal((set, get) => ({
     setHoodieSize: (size) => set({ hoodieSize: size }),
     setHoodiePrintSide: (side) => set({ hoodiePrintSide: side }),
     selectHoodieLogo: (id) => set({ selectedHoodieLogoId: id }),
+    setHoodieLogoPosition: (x, y) => get()._setMerchLogoPosition('hoodieLogos', 'selectedHoodieLogoId', x, y),
+    setHoodieLogoRotation: (rotation) => get()._setMerchLogoRotation('hoodieLogos', 'selectedHoodieLogoId', rotation),
+    setHoodieLogoScale: (scale) => get()._setMerchLogoScale('hoodieLogos', 'selectedHoodieLogoId', scale),
+    resetHoodieLogoTransform: () => get()._resetMerchLogoTransform('hoodieLogos', 'selectedHoodieLogoId'),
     removeHoodieLogo: (id) => set((state) => {
         const remaining = state.hoodieLogos.filter(l => l.id !== id);
         return {
@@ -754,10 +900,19 @@ export const useConfigurator = create(temporal((set, get) => ({
     }),
 
     setLanyardColor: (color) => set({ lanyardColor: color }),
-    setLanyardMaterial: (material) => set({ lanyardMaterial: material }),
+    setLanyardMaterial: (material) => set((state) => ({
+        lanyardMaterial: material,
+        lanyardWidthMm: getLanyardWidthFromMaterial(material, state.lanyardWidthMm),
+    })),
     setLanyardLengthMm: (mm) => set({ lanyardLengthMm: mm }),
+    setLanyardWidthMm: (mm) => set({ lanyardWidthMm: mm }),
+    setLanyardRepeatMm: (mm) => set({ lanyardRepeatMm: mm }),
     setLanyardCarabiner: (kind) => set({ lanyardCarabiner: kind }),
     selectLanyardLogo: (id) => set({ selectedLanyardLogoId: id }),
+    setLanyardLogoPosition: (x, y) => get()._setMerchLogoPosition('lanyardLogos', 'selectedLanyardLogoId', x, y),
+    setLanyardLogoRotation: (rotation) => get()._setMerchLogoRotation('lanyardLogos', 'selectedLanyardLogoId', rotation),
+    setLanyardLogoScale: (scale) => get()._setMerchLogoScale('lanyardLogos', 'selectedLanyardLogoId', scale),
+    resetLanyardLogoTransform: () => get()._resetMerchLogoTransform('lanyardLogos', 'selectedLanyardLogoId'),
     removeLanyardLogo: (id) => set((state) => {
         const remaining = state.lanyardLogos.filter(l => l.id !== id);
         return {

@@ -1,82 +1,144 @@
 import { useMemo } from 'react';
+import { Decal, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { useConfigurator } from '../../store';
-import { MerchLogoPlane } from './MerchLogoPlane';
+import tshirtModelUrl from '../../assets/tshirt_test.glb?url';
+import { useLogoTexture } from '../../utils/threeTextures';
 
-// Силуэт майки собирается из ExtrudeGeometry по 2D-форме. Это временный
-// плейсхолдер до подключения реальной glb/gltf-модели.
-const SHIRT_HALF_WIDTH = 1.6;
-const SHIRT_HEIGHT = 2.6;
-const SHIRT_DEPTH = 0.2;
+const MODEL_SCALE = 1.18;
+const DECAL_DEPTH = 0.34;
+const DECAL_SURFACE_OFFSET = 0.08;
+const TSHIRT_LOGO_MIN_SCALE = 0.08;
+const TSHIRT_LOGO_MAX_SCALE = 1;
+const TSHIRT_PRINT_AREA_CENTER_Y_RATIO = 0.48;
+const TSHIRT_PRINT_AREA_WIDTH_RATIO = 0.68;
+const TSHIRT_PRINT_AREA_HEIGHT_RATIO = 0.52;
 
-function buildShirtShape({ withSleeves = true } = {}) {
-    const shape = new THREE.Shape();
-    // Стартуем от низа-левой кромки и идём по периметру против часовой
-    const halfBottom = SHIRT_HALF_WIDTH * 0.78;
-    const sleeveOutset = withSleeves ? SHIRT_HALF_WIDTH : SHIRT_HALF_WIDTH * 0.72;
-    const sleeveTop = SHIRT_HEIGHT * 0.78;
-    const shoulderInset = SHIRT_HALF_WIDTH * 0.58;
-    const neckHalf = SHIRT_HALF_WIDTH * 0.22;
-    const neckDip = SHIRT_HEIGHT - SHIRT_HALF_WIDTH * 0.16;
+function containedLogoSize(map, areaWidth, areaHeight, scale = 0.6) {
+    const imageWidth = map?.image?.width ?? map?.image?.naturalWidth ?? 1;
+    const imageHeight = map?.image?.height ?? map?.image?.naturalHeight ?? 1;
+    const aspect = imageWidth && imageHeight ? imageWidth / imageHeight : 1;
+    const areaAspect = areaWidth / areaHeight;
+    const normalizedScale = THREE.MathUtils.clamp(scale, TSHIRT_LOGO_MIN_SCALE, TSHIRT_LOGO_MAX_SCALE);
 
-    shape.moveTo(-halfBottom, 0);
-    shape.lineTo(halfBottom, 0);
-    shape.lineTo(halfBottom + (sleeveOutset - halfBottom) * 0.85, SHIRT_HEIGHT * 0.55);
-    shape.lineTo(sleeveOutset, sleeveTop);
-    shape.lineTo(shoulderInset, SHIRT_HEIGHT * 0.92);
-    shape.quadraticCurveTo(neckHalf + 0.1, SHIRT_HEIGHT, neckHalf, neckDip);
-    shape.quadraticCurveTo(0, neckDip - SHIRT_HALF_WIDTH * 0.04, -neckHalf, neckDip);
-    shape.quadraticCurveTo(-neckHalf - 0.1, SHIRT_HEIGHT, -shoulderInset, SHIRT_HEIGHT * 0.92);
-    shape.lineTo(-sleeveOutset, sleeveTop);
-    shape.lineTo(-halfBottom - (sleeveOutset - halfBottom) * 0.85, SHIRT_HEIGHT * 0.55);
-    shape.closePath();
-    return shape;
+    if (aspect >= areaAspect) {
+        const width = areaWidth * normalizedScale;
+        return { width, height: width / aspect };
+    }
+
+    const height = areaHeight * normalizedScale;
+    return { width: height * aspect, height };
+}
+
+function TshirtLogoDecal({
+    image,
+    areaWidth,
+    areaHeight,
+    offset = [0, 0, 0],
+    rotationFix = [0, 0, 0],
+    scaleBase = 0.9,
+    depth = DECAL_DEPTH,
+}) {
+    const map = useLogoTexture(image.texture);
+    const size = containedLogoSize(map, areaWidth * scaleBase, areaHeight, image.scale ?? 0.6);
+
+    const [px = 0, py = 0] = image.position || [];
+    const maxX = Math.max(0, areaWidth / 2 - size.width / 2);
+    const maxY = Math.max(0, areaHeight / 2 - size.height / 2);
+    const x = THREE.MathUtils.clamp(px * maxX, -maxX, maxX);
+    const y = THREE.MathUtils.clamp(py * maxY, -maxY, maxY);
+
+    return (
+        <Decal
+            position={[offset[0] + x, offset[1] + y, offset[2]]}
+            rotation={[
+                rotationFix[0],
+                rotationFix[1],
+                (image.rotation ?? 0) + rotationFix[2],
+            ]}
+            scale={[size.width, size.height, depth]}
+            renderOrder={8}
+        >
+            <meshStandardMaterial
+                map={map}
+                transparent
+                roughness={0.58}
+                metalness={0.01}
+                polygonOffset
+                polygonOffsetFactor={-8}
+                polygonOffsetUnits={-8}
+                depthWrite={false}
+            />
+        </Decal>
+    );
 }
 
 export function Tshirt({ config = null, preview = false, position = [0, 0, 0] }) {
     const state = useConfigurator();
     const color = config?.tshirtColor ?? state.tshirtColor;
-    const printSide = config?.tshirtPrintSide ?? state.tshirtPrintSide;
+    const rawPrintSide = config?.tshirtPrintSide ?? state.tshirtPrintSide;
+    const printSide = rawPrintSide === 'back' ? 'back' : 'front';
     const logos = config?.tshirtLogos ?? state.tshirtLogos;
+    const { scene: sourceScene } = useGLTF(tshirtModelUrl);
 
-    const geometry = useMemo(() => {
-        const shape = buildShirtShape({ withSleeves: true });
-        return new THREE.ExtrudeGeometry(shape, {
-            depth: SHIRT_DEPTH,
-            bevelEnabled: true,
-            bevelSegments: 3,
-            bevelSize: 0.06,
-            bevelThickness: 0.04,
+    const { geometries, bbox, size, center } = useMemo(() => {
+        sourceScene.updateMatrixWorld(true);
+        const entries = [];
+        const box = new THREE.Box3();
+
+        sourceScene.traverse((node) => {
+            if (!node.isMesh || !node.geometry) return;
+            const geometry = node.geometry.clone();
+            geometry.applyMatrix4(node.matrixWorld);
+            geometry.computeBoundingBox();
+            box.union(geometry.boundingBox);
+            entries.push({ name: node.name, geometry });
         });
-    }, []);
 
-    const printAreaWidth = SHIRT_HALF_WIDTH * 1.1;
-    const printAreaHeight = SHIRT_HEIGHT * 0.5;
-    const isFront = printSide !== 'back';
-    const logoZ = isFront ? SHIRT_DEPTH + 0.06 : -0.06;
-    const logoYaw = isFront ? 0 : Math.PI;
+        const modelSize = new THREE.Vector3();
+        const modelCenter = new THREE.Vector3();
+        box.getSize(modelSize);
+        box.getCenter(modelCenter);
+        return { geometries: entries, bbox: box, size: modelSize, center: modelCenter };
+    }, [sourceScene]);
+
+    const isBack = printSide === 'back';
+    const logoX = 0;
+    const logoY = bbox.min.y + size.y * TSHIRT_PRINT_AREA_CENTER_Y_RATIO;
+    const logoZ = isBack ? bbox.min.z - DECAL_SURFACE_OFFSET : bbox.max.z + DECAL_SURFACE_OFFSET;
+    const logoYaw = isBack ? Math.PI : 0;
+    const printAreaWidth = size.x * TSHIRT_PRINT_AREA_WIDTH_RATIO;
+    const printAreaHeight = size.y * TSHIRT_PRINT_AREA_HEIGHT_RATIO;
 
     return (
-        <group position={[position[0], position[1] - SHIRT_HEIGHT / 2 + 0.6, position[2]]} rotation={preview ? [0.18, -0.42, 0] : [0.04, -0.18, 0]}>
-            <mesh geometry={geometry} castShadow receiveShadow>
-                <meshStandardMaterial color={color} roughness={0.78} metalness={0.02} />
-            </mesh>
-            {/* Резинка по горловине */}
-            <mesh position={[0, SHIRT_HEIGHT * 0.92, SHIRT_DEPTH / 2]} rotation={[Math.PI / 2, 0, 0]}>
-                <torusGeometry args={[SHIRT_HALF_WIDTH * 0.24, 0.025, 12, 48]} />
-                <meshStandardMaterial color={color} roughness={0.6} metalness={0.04} />
-            </mesh>
-
-            {logos.map((image) => (
-                <MerchLogoPlane
-                    key={image.id}
-                    image={image}
-                    areaWidth={printAreaWidth}
-                    areaHeight={printAreaHeight}
-                    offset={[0, SHIRT_HEIGHT * 0.4, logoZ]}
-                    rotationFix={[0, logoYaw, 0]}
-                />
-            ))}
+        <group position={position} rotation={preview ? [0.16, -0.38, 0] : [0.04, -0.16, 0]}>
+            <group scale={MODEL_SCALE} position={[-center.x * MODEL_SCALE, -center.y * MODEL_SCALE, -center.z * MODEL_SCALE]}>
+                {geometries.map(({ name, geometry }) => (
+                    <mesh key={name} geometry={geometry} castShadow receiveShadow>
+                        <meshStandardMaterial
+                            key={`tshirt-material-${color}`}
+                            color={color}
+                            roughness={0.82}
+                            metalness={0.02}
+                            side={THREE.DoubleSide}
+                        />
+                        {logos.map((image) => (
+                            <TshirtLogoDecal
+                                key={image.id}
+                                image={image}
+                                areaWidth={printAreaWidth}
+                                areaHeight={printAreaHeight}
+                                offset={[logoX, logoY, logoZ]}
+                                rotationFix={[0, logoYaw, 0]}
+                                scaleBase={1}
+                                depth={DECAL_DEPTH}
+                            />
+                        ))}
+                    </mesh>
+                ))}
+            </group>
         </group>
     );
 }
+
+useGLTF.preload(tshirtModelUrl);

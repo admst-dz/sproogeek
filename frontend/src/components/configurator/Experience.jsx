@@ -172,10 +172,15 @@ function OrbitCameraRig({ activeProduct, controlsRef, isMobile, zoomLevel }) {
 
     useEffect(() => {
         if (!ORBIT_PRODUCTS.has(activeProduct)) return
+        const initialDistance = THREE.MathUtils.clamp(
+            config.baseDistance,
+            config.minDistance,
+            config.maxDistance
+        )
 
         // eslint-disable-next-line react-hooks/immutability
         camera.zoom = 1
-        camera.position.copy(target).addScaledVector(defaultDirection, desiredDistance)
+        camera.position.copy(target).addScaledVector(defaultDirection, initialDistance)
         camera.lookAt(target)
         camera.updateProjectionMatrix()
 
@@ -187,7 +192,7 @@ function OrbitCameraRig({ activeProduct, controlsRef, isMobile, zoomLevel }) {
             controls.update()
             controls.saveState()
         }
-    }, [activeProduct, camera, config.maxDistance, config.minDistance, controlsRef, defaultDirection, desiredDistance, target])
+    }, [activeProduct, camera, config, controlsRef, defaultDirection, target])
 
     useEffect(() => {
         const controls = controlsRef.current
