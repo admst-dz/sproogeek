@@ -265,6 +265,8 @@ const getLanyardWidthFromMaterial = (material, fallback = 15) => (
     LANYARD_MATERIAL_WIDTH_MM[material] ?? fallback
 );
 
+const normalizeTshirtPrintSide = (side) => (side === 'back' ? 'back' : 'front');
+
 const getNextStickerSlot = (images = []) => {
     const occupied = new Set(images.map((image, index) => {
         const slot = Number(image?.slot);
@@ -858,7 +860,7 @@ export const useConfigurator = create(temporal((set, get) => ({
     setTshirtColor: (color) => set({ tshirtColor: color }),
     setTshirtMaterial: (material) => set({ tshirtMaterial: material }),
     setTshirtSize: (size) => set({ tshirtSize: size }),
-    setTshirtPrintSide: (side) => set({ tshirtPrintSide: side }),
+    setTshirtPrintSide: (side) => set({ tshirtPrintSide: normalizeTshirtPrintSide(side) }),
     selectTshirtLogo: (id) => set({ selectedTshirtLogoId: id }),
     setTshirtLogoPosition: (x, y) => get()._setMerchLogoPosition('tshirtLogos', 'selectedTshirtLogoId', x, y),
     setTshirtLogoRotation: (rotation) => get()._setMerchLogoRotation('tshirtLogos', 'selectedTshirtLogoId', rotation),

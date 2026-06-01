@@ -3,10 +3,28 @@ import { Decal, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { useConfigurator } from '../../store';
 import tshirtModelUrl from '../../assets/tshirt_test.glb?url';
-import { logoSizeFromTexture, useLogoTexture } from '../../utils/threeTextures';
+import { useLogoTexture } from '../../utils/threeTextures';
 
 const MODEL_SCALE = 1.18;
 const DECAL_DEPTH = 0.34;
+const TSHIRT_LOGO_MIN_SCALE = 0.08;
+const TSHIRT_LOGO_MAX_SCALE = 1;
+
+function containedLogoSize(map, areaWidth, areaHeight, scale = 0.6) {
+    const imageWidth = map?.image?.width ?? map?.image?.naturalWidth ?? 1;
+    const imageHeight = map?.image?.height ?? map?.image?.naturalHeight ?? 1;
+    const aspect = imageWidth && imageHeight ? imageWidth / imageHeight : 1;
+    const areaAspect = areaWidth / areaHeight;
+    const normalizedScale = THREE.MathUtils.clamp(scale, TSHIRT_LOGO_MIN_SCALE, TSHIRT_LOGO_MAX_SCALE);
+
+    if (aspect >= areaAspect) {
+        const width = areaWidth * normalizedScale;
+        return { width, height: width / aspect };
+    }
+
+    const height = areaHeight * normalizedScale;
+    return { width: height * aspect, height };
+}
 
 function TshirtLogoDecal({
     image,
@@ -18,7 +36,7 @@ function TshirtLogoDecal({
     depth = DECAL_DEPTH,
 }) {
     const map = useLogoTexture(image.texture);
-    const size = logoSizeFromTexture(map, Math.max(areaWidth, areaHeight) * scaleBase * (image.scale ?? 0.6));
+    const size = containedLogoSize(map, areaWidth * scaleBase, areaHeight, image.scale ?? 0.6);
 
     const [px = 0, py = 0] = image.position || [];
     const maxX = Math.max(0, areaWidth / 2 - size.width / 2);
@@ -54,7 +72,8 @@ function TshirtLogoDecal({
 export function Tshirt({ config = null, preview = false, position = [0, 0, 0] }) {
     const state = useConfigurator();
     const color = config?.tshirtColor ?? state.tshirtColor;
-    const printSide = config?.tshirtPrintSide ?? state.tshirtPrintSide;
+    const rawPrintSide = config?.tshirtPrintSide ?? state.tshirtPrintSide;
+    const printSide = rawPrintSide === 'back' ? 'back' : 'front';
     const logos = config?.tshirtLogos ?? state.tshirtLogos;
     const { scene: sourceScene } = useGLTF(tshirtModelUrl);
 
@@ -80,16 +99,12 @@ export function Tshirt({ config = null, preview = false, position = [0, 0, 0] })
     }, [sourceScene]);
 
     const isBack = printSide === 'back';
-    const isLeftSleeve = printSide === 'leftSleeve';
-    const isRightSleeve = printSide === 'rightSleeve';
-    const sleeveX = size.x * 0.34;
-    const logoX = isLeftSleeve ? -sleeveX : isRightSleeve ? sleeveX : 0;
-    const logoY = bbox.min.y + size.y * (isLeftSleeve || isRightSleeve ? 0.58 : 0.49);
+    const logoX = 0;
+    const logoY = bbox.min.y + size.y * 0.49;
     const logoZ = isBack ? bbox.min.z - 0.02 : bbox.max.z + 0.02;
-    const logoYaw = isBack ? Math.PI : isLeftSleeve ? -0.72 : isRightSleeve ? 0.72 : 0;
-    const printAreaWidth = size.x * (isLeftSleeve || isRightSleeve ? 0.22 : 0.48);
-    const printAreaHeight = size.y * (isLeftSleeve || isRightSleeve ? 0.22 : 0.42);
-    const sleeveTilt = isLeftSleeve ? -0.28 : isRightSleeve ? 0.28 : 0;
+    const logoYaw = isBack ? Math.PI : 0;
+    const printAreaWidth = size.x * 0.78;
+    const printAreaHeight = size.y * 0.42;
 
     return (
         <group position={position} rotation={preview ? [0.16, -0.38, 0] : [0.04, -0.16, 0]}>
@@ -110,9 +125,9 @@ export function Tshirt({ config = null, preview = false, position = [0, 0, 0] })
                                 areaWidth={printAreaWidth}
                                 areaHeight={printAreaHeight}
                                 offset={[logoX, logoY, logoZ]}
-                                rotationFix={[0, logoYaw, sleeveTilt]}
-                                scaleBase={isLeftSleeve || isRightSleeve ? 0.55 : 0.9}
-                                depth={isLeftSleeve || isRightSleeve ? 0.28 : DECAL_DEPTH}
+                                rotationFix={[0, logoYaw, 0]}
+                                scaleBase={1}
+                                depth={DECAL_DEPTH}
                             />
                         ))}
                     </mesh>

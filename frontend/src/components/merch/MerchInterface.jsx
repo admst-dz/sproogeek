@@ -32,7 +32,7 @@ import {
 // одновременно (поэтому селектор не показываем).
 const PRINT_SIDES = {
     shopper: ['front', 'back'],
-    tshirt: ['front', 'back', 'leftSleeve', 'rightSleeve'],
+    tshirt: ['front', 'back'],
     hoodie: ['front', 'back', 'chest'],
 };
 
@@ -173,7 +173,8 @@ export const MerchInterface = ({ onFinish }) => {
 
     const color = state[config.colorKey];
     const material = state[config.materialKey];
-    const printSide = config.printSideKey ? state[config.printSideKey] : null;
+    const rawPrintSide = config.printSideKey ? state[config.printSideKey] : null;
+    const printSide = activeProduct === 'tshirt' && rawPrintSide !== 'back' ? 'front' : rawPrintSide;
     const logos = state[config.logosKey] || [];
     const selectedLogoId = state[config.selectedLogoKey];
 
@@ -390,8 +391,8 @@ export const MerchInterface = ({ onFinish }) => {
                             <SizeSlider
                                 label={t(language, 'size')}
                                 value={selectedLogo.scale ?? 0.6}
-                                min={activeProduct === 'lanyard' ? 0.28 : 0.2}
-                                max={activeProduct === 'lanyard' ? 1.8 : 4}
+                                min={activeProduct === 'tshirt' ? 0.08 : activeProduct === 'lanyard' ? 0.28 : 0.2}
+                                max={activeProduct === 'tshirt' ? 1 : activeProduct === 'lanyard' ? 1.8 : 4}
                                 step={0.05}
                                 onChange={setLogoScale}
                             />

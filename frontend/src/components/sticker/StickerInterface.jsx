@@ -19,6 +19,63 @@ import { STICKER_SHEET_COLOR_PALETTE } from '../../config/productPalettes';
 import { GuestApprovalModal } from '../shared/GuestApprovalModal';
 import { LogoBackgroundRemovalButton } from '../shared/LogoBackgroundRemovalButton';
 
+const STICKER_PRINT_SHEET = {
+    widthMm: 100,
+    heightMm: 141,
+    widthUnits: 4.2,
+    heightUnits: 5.92,
+    dpi: 300,
+};
+
+const STICKER_PRINT_SLOTS = [
+    { x: -1.08, y: 2.05 },
+    { x: 1.08, y: 1.52 },
+    { x: -1.08, y: 0.28 },
+    { x: 1.08, y: -0.34 },
+    { x: -1.08, y: -1.58 },
+    { x: 1.08, y: -2.05 },
+];
+
+const buildStickerPrintPayload = ({
+    stickerSheetColor,
+    stickerBackgroundImages,
+    stickerImages,
+}) => ({
+    sheet_width_mm: STICKER_PRINT_SHEET.widthMm,
+    sheet_height_mm: STICKER_PRINT_SHEET.heightMm,
+    scene_width_units: STICKER_PRINT_SHEET.widthUnits,
+    scene_height_units: STICKER_PRINT_SHEET.heightUnits,
+    export_dpi: STICKER_PRINT_SHEET.dpi,
+    sheet_color: stickerSheetColor,
+    slots: STICKER_PRINT_SLOTS.map((slot, index) => ({
+        index,
+        x_units: slot.x,
+        y_units: slot.y,
+        center_x_mm: STICKER_PRINT_SHEET.widthMm / 2 + (slot.x / STICKER_PRINT_SHEET.widthUnits) * STICKER_PRINT_SHEET.widthMm,
+        center_y_mm: STICKER_PRINT_SHEET.heightMm / 2 - (slot.y / STICKER_PRINT_SHEET.heightUnits) * STICKER_PRINT_SHEET.heightMm,
+    })),
+    background_images: stickerBackgroundImages.map((image, index) => ({
+        id: image.id,
+        index,
+        filename: image.filename,
+        texture: image.texture,
+        position: image.position || [0, 0],
+        rotation: image.rotation || 0,
+        scale: image.scale || 1,
+    })),
+    sticker_images: stickerImages.map((image, index) => ({
+        id: image.id,
+        index,
+        filename: image.filename,
+        texture: image.texture,
+        slot: Number.isInteger(image.slot) ? image.slot : index,
+        shape: image.shape || 'circle',
+        position: image.position || [0, 0],
+        rotation: image.rotation || 0,
+        scale: image.scale || 0.72,
+    })),
+});
+
 export const StickerInterface = ({ onFinish }) => {
     const {
         stickerSheetColor,
@@ -216,6 +273,13 @@ export const StickerInterface = ({ onFinish }) => {
                 renderDataURL={approvalSnapshot}
                 productName={t(language, 'sticker3d')}
                 configuration={{ productConfig: buildStickerCartItem(approvalSnapshot) }}
+                extraPayload={{
+                    sticker_print_payload: buildStickerPrintPayload({
+                        stickerSheetColor,
+                        stickerBackgroundImages,
+                        stickerImages,
+                    }),
+                }}
                 quantity={quantity}
             />
         </ConstructorDock>

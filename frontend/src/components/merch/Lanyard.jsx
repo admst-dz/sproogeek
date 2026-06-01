@@ -12,6 +12,9 @@ const ATTACHMENT_METALNESS = 0.02;
 const ATTACHMENT_ROUGHNESS = 0.78;
 const PATTERN_CANVAS_WIDTH = 4096;
 const PATTERN_CANVAS_HEIGHT = 256;
+const LANYARD_LOGO_ROTATION = -Math.PI / 2;
+const LANYARD_LOGO_SLOT_RATIO = 0.56;
+const LANYARD_LOGO_HEIGHT_RATIO = 0.78;
 
 const clampScale = (value) => THREE.MathUtils.clamp(Number(value) || 0.6, 0.12, 3);
 
@@ -46,31 +49,27 @@ function drawRibbonBase(ctx, color) {
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, height - Math.max(2, height * 0.08), width, Math.max(2, height * 0.08));
 
-    ctx.globalAlpha = 0.08;
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1;
-    for (let x = -height; x < width + height; x += 34) {
-        ctx.beginPath();
-        ctx.moveTo(x, height);
-        ctx.lineTo(x + height, 0);
-        ctx.stroke();
-    }
     ctx.globalAlpha = 1;
 }
 
 function drawLogoOnRibbon(ctx, logo, image, centerX, periodPx) {
     const { height } = ctx.canvas;
     const scale = clampScale(logo.scale);
-    const maxWidth = periodPx * 0.7 * scale;
-    const maxHeight = height * 0.68 * scale;
-    const fit = Math.min(maxWidth / image.width, maxHeight / image.height);
+    const rotation = LANYARD_LOGO_ROTATION + (logo.rotation ?? 0);
+    const sin = Math.abs(Math.sin(rotation));
+    const cos = Math.abs(Math.cos(rotation));
+    const rotatedWidth = image.width * cos + image.height * sin;
+    const rotatedHeight = image.width * sin + image.height * cos;
+    const maxWidth = periodPx * LANYARD_LOGO_SLOT_RATIO * scale;
+    const maxHeight = height * LANYARD_LOGO_HEIGHT_RATIO * scale;
+    const fit = Math.min(maxWidth / rotatedWidth, maxHeight / rotatedHeight);
     if (!Number.isFinite(fit) || fit <= 0) return;
 
     const drawWidth = image.width * fit;
     const drawHeight = image.height * fit;
     ctx.save();
     ctx.translate(centerX, height / 2);
-    ctx.rotate(logo.rotation ?? 0);
+    ctx.rotate(rotation);
     ctx.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
     ctx.restore();
 }
@@ -87,15 +86,21 @@ function useLanyardPatternTexture({ color, logos, lengthMm, repeatMm }) {
     ), [logos]);
 
     useEffect(() => {
+        let cancelled = false;
+
         if (!logos?.length) {
-            setTexture((current) => {
-                current?.dispose();
-                return null;
+            queueMicrotask(() => {
+                if (cancelled) return;
+                setTexture((current) => {
+                    current?.dispose();
+                    return null;
+                });
             });
-            return undefined;
+            return () => {
+                cancelled = true;
+            };
         }
 
-        let cancelled = false;
         const canvas = document.createElement('canvas');
         canvas.width = PATTERN_CANVAS_WIDTH;
         canvas.height = PATTERN_CANVAS_HEIGHT;
@@ -160,7 +165,7 @@ export function Lanyard({ config = null, preview = false, position = [0, 0, 0] }
     const { scene: sourceScene } = useGLTF(lanyardModelUrl);
     const patternTexture = useLanyardPatternTexture({ color, logos, lengthMm, repeatMm });
 
-    const { meshes, bbox, size, center } = useMemo(() => {
+    const { meshes, center } = useMemo(() => {
         sourceScene.updateMatrixWorld(true);
         const meshEntries = [];
         const box = new THREE.Box3();
