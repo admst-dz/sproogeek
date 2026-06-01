@@ -163,6 +163,8 @@ export const POWERBANK_DEFAULTS = {
 };
 export const STICKER_DEFAULTS = {
     stickerSheetColor: '#F6F1E7',
+    stickerBackgroundImages: [],
+    selectedStickerBackgroundImageId: null,
     stickerImages: [],
     selectedStickerImageId: null,
 };
@@ -316,6 +318,8 @@ export const useConfigurator = create(temporal((set, get) => ({
 
     // --- Параметры 3D стикера ---
     stickerSheetColor: '#F6F1E7',
+    stickerBackgroundImages: [],
+    selectedStickerBackgroundImageId: null,
     stickerImages: [],
     selectedStickerImageId: null,
 
@@ -654,6 +658,65 @@ export const useConfigurator = create(temporal((set, get) => ({
 
     // --- ACTIONS: 3D СТИКЕР ---
     setStickerSheetColor: (color) => set({ stickerSheetColor: color }),
+    addStickerBackgroundImage: async (file) => {
+        if (file instanceof File) {
+            const id = makeLogoId();
+            try {
+                const texture = await normalizeImageFile(file);
+                set((state) => ({
+                    stickerBackgroundImages: [
+                        ...state.stickerBackgroundImages,
+                        {
+                            id,
+                            texture,
+                            filename: file.name,
+                            position: [0, 0],
+                            rotation: 0,
+                            scale: 1,
+                        },
+                    ],
+                    selectedStickerBackgroundImageId: id,
+                    selectedStickerImageId: null,
+                }));
+            } catch (error) {
+                console.error('Failed to prepare sticker background image', error);
+            }
+        }
+    },
+    replaceStickerBackgroundImageFile: async (id, file) => {
+        if (!id || !(file instanceof File)) return;
+        try {
+            const texture = await normalizeImageFile(file);
+            set((state) => ({
+                stickerBackgroundImages: state.stickerBackgroundImages.map(l => l.id === id ? { ...l, texture, filename: file.name || l.filename } : l)
+            }));
+        } catch (error) {
+            console.error('Failed to replace sticker background image', error);
+            throw error;
+        }
+    },
+    selectStickerBackgroundImage: (id) => set({ selectedStickerBackgroundImageId: id, selectedStickerImageId: null }),
+    setStickerBackgroundImagePosition: (x, y) => set((state) => ({
+        stickerBackgroundImages: state.stickerBackgroundImages.map(l => l.id === state.selectedStickerBackgroundImageId ? { ...l, position: [x, y] } : l)
+    })),
+    setStickerBackgroundImageRotation: (rotation) => set((state) => ({
+        stickerBackgroundImages: state.stickerBackgroundImages.map(l => l.id === state.selectedStickerBackgroundImageId ? { ...l, rotation } : l)
+    })),
+    setStickerBackgroundImageScale: (scale) => set((state) => ({
+        stickerBackgroundImages: state.stickerBackgroundImages.map(l => l.id === state.selectedStickerBackgroundImageId ? { ...l, scale } : l)
+    })),
+    resetStickerBackgroundImageTransform: () => set((state) => ({
+        stickerBackgroundImages: state.stickerBackgroundImages.map(l => l.id === state.selectedStickerBackgroundImageId ? { ...l, position: [0, 0], rotation: 0, scale: 1 } : l)
+    })),
+    removeStickerBackgroundImage: (id) => set((state) => {
+        const remaining = state.stickerBackgroundImages.filter(l => l.id !== id);
+        return {
+            stickerBackgroundImages: remaining,
+            selectedStickerBackgroundImageId: state.selectedStickerBackgroundImageId === id
+                ? (remaining.length > 0 ? remaining[remaining.length - 1].id : null)
+                : state.selectedStickerBackgroundImageId
+        };
+    }),
     addStickerImage: async (file) => {
         if (file instanceof File) {
             const id = makeLogoId();
@@ -678,6 +741,7 @@ export const useConfigurator = create(temporal((set, get) => ({
                                 },
                             ],
                             selectedStickerImageId: id,
+                            selectedStickerBackgroundImageId: null,
                         };
                     })(),
                 }));
@@ -698,7 +762,7 @@ export const useConfigurator = create(temporal((set, get) => ({
             throw error;
         }
     },
-    selectStickerImage: (id) => set({ selectedStickerImageId: id }),
+    selectStickerImage: (id) => set({ selectedStickerImageId: id, selectedStickerBackgroundImageId: null }),
     setStickerImagePosition: (x, y) => set((state) => ({
         stickerImages: state.stickerImages.map(l => l.id === state.selectedStickerImageId ? { ...l, position: [x, y] } : l)
     })),

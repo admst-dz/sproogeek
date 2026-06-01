@@ -83,7 +83,7 @@ function ThermosPreviewScene() {
 function ThermosPreview() {
     return (
         <div className="relative w-full h-full">
-            <Canvas camera={{ position: [0, 0.5, 4], fov: 40 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
+            <Canvas camera={{ position: [0, 0.5, 4], fov: 40 }} gl={{ antialias: true, stencil: true }} style={{ pointerEvents: 'none' }}>
                 <ambientLight intensity={0.7} />
                 <directionalLight position={[5, 8, 5]} intensity={1.5} />
                 <directionalLight position={[-4, 3, 2]} intensity={0.6} />
@@ -188,7 +188,7 @@ function PowerbankPreview() {
         <div className="relative w-full h-full">
             <Canvas
                 camera={{ position: POWERBANK_PREVIEW_POSE.cameraPosition, fov: POWERBANK_PREVIEW_POSE.cameraFov }}
-                gl={{ antialias: true }}
+                gl={{ antialias: true, stencil: true }}
                 style={{ pointerEvents: 'none' }}
             >
                 <ambientLight intensity={0.7} />
@@ -232,7 +232,7 @@ function NotebookPreview() {
         <div className="relative w-full h-full">
             <Canvas
                 camera={{ position: NOTEBOOK_PREVIEW_POSE.cameraPosition, fov: NOTEBOOK_PREVIEW_POSE.cameraFov }}
-                gl={{ antialias: true }}
+                gl={{ antialias: true, stencil: true }}
                 style={{ pointerEvents: 'none' }}
             >
                 <ambientLight intensity={0.75} />
@@ -250,7 +250,7 @@ function NotebookPreview() {
 function MerchPreview({ model, previewConfig }) {
     return (
         <div className="relative h-full w-full">
-            <Canvas camera={{ position: [0, 0.2, 5.4], fov: 36 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
+            <Canvas camera={{ position: [0, 0.2, 5.4], fov: 36 }} gl={{ antialias: true, stencil: true }} style={{ pointerEvents: 'none' }}>
                 <ambientLight intensity={0.78} />
                 <directionalLight position={[4, 6, 5]} intensity={1.4} />
                 <directionalLight position={[-4, 3, 2]} intensity={0.55} />
@@ -320,7 +320,7 @@ const STICKER_PREVIEW_CONFIG = {
 function StickerPreview() {
     return (
         <div className="relative mx-auto h-full w-full max-w-[min(100%,220px)] overflow-hidden rounded-[8px] bg-[radial-gradient(circle_at_50%_22%,rgba(253,216,53,0.18),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.5),rgba(255,255,255,0.08))] dark:bg-[radial-gradient(circle_at_50%_22%,rgba(253,216,53,0.16),transparent_44%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]">
-            <Canvas camera={{ position: [0, 0.03, 8.1], fov: 30 }} gl={{ antialias: true }} style={{ pointerEvents: 'none' }}>
+            <Canvas camera={{ position: [0, 0.03, 8.1], fov: 30 }} gl={{ antialias: true, stencil: true }} style={{ pointerEvents: 'none' }}>
                 <ambientLight intensity={0.78} />
                 <directionalLight position={[4, 6, 5]} intensity={1.4} />
                 <directionalLight position={[-4, 3, 2]} intensity={0.55} />

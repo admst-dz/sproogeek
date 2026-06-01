@@ -81,7 +81,7 @@ export function ConfiguratorScreen({ currentUser, userRole, logout, onNavigate, 
                     <div
                         ref={configuratorCanvasRef}
                         onWheelCapture={handleSceneWheel}
-                        className="app-bg relative w-full h-[40svh] min-h-[270px] max-h-[46svh] shrink-0 md:absolute md:inset-0 md:w-full md:h-full md:max-h-none md:bg-transparent dark:md:bg-transparent lg:right-[430px] lg:w-auto"
+                        className="app-bg relative w-full h-[50svh] min-h-[280px] max-h-[52svh] shrink-0 md:absolute md:inset-0 md:w-full md:h-full md:max-h-none md:bg-transparent dark:md:bg-transparent lg:right-[430px] lg:w-auto"
                     >
                         <div className="absolute bottom-3 right-3 z-10 md:hidden">
                             <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
@@ -94,6 +94,7 @@ export function ConfiguratorScreen({ currentUser, userRole, logout, onNavigate, 
                                 antialias: true,
                                 preserveDrawingBuffer: true,
                                 alpha: true,
+                                stencil: true,
                                 powerPreference: 'high-performance',
                                 logarithmicDepthBuffer: true
                             }}

@@ -837,7 +837,7 @@ const ClientOrder3DPreview = ({ configuration, productName, language = 'ru' }) =
 
     return (
         <div className="relative w-full h-40 rounded-[14px] bg-[#0A0E1A] border border-white/8 overflow-hidden">
-            <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true }}>
+            <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true, stencil: true }}>
                 <Environment preset="city" />
                 <ambientLight intensity={0.6} />
                 <directionalLight position={[10, 10, 5]} intensity={1.5} />

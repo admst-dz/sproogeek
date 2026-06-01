@@ -26,7 +26,7 @@ export const Order = ({ onBack, onSuccess }) => {
         activeProduct, language,
         thermosBodyColor, thermosCapVisible, thermosLogos,
         powerbankBodyColor, powerbankLogos,
-        stickerSheetColor, stickerImages,
+        stickerSheetColor, stickerBackgroundImages, stickerImages,
         shopperColor, shopperMaterial, shopperHandleType, shopperPrintSide, shopperLogos,
         tshirtColor, tshirtMaterial, tshirtSize, tshirtPrintSide, tshirtLogos,
         hoodieColor, hoodieMaterial, hoodieSize, hoodiePrintSide, hoodieLogos,
@@ -82,6 +82,7 @@ export const Order = ({ onBack, onSuccess }) => {
                 stickerWidthMm: 40,
                 stickerHeightMm: 45,
                 stickerSheetColor,
+                stickerBackgroundImages,
                 stickerImages,
             };
         }
@@ -242,7 +243,7 @@ export const Order = ({ onBack, onSuccess }) => {
                     <div className="bg-white dark:bg-white/5 rounded-[18px] md:rounded-[20px] shadow-xl dark:shadow-none flex flex-col border border-white/50 dark:border-white/8 backdrop-blur-sm overflow-hidden">
                         {activeProduct !== 'calendar' ? (
                             <div className="relative bg-[#dcdcdc] dark:bg-[#0A0E1A] h-[220px] sm:h-[280px]">
-                                <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true }}>
+                                <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true, stencil: true }}>
                                     <Environment preset="city" />
                                     <ambientLight intensity={0.6} />
                                     <directionalLight position={[10, 10, 5]} intensity={1.5} />
@@ -296,6 +297,7 @@ export const Order = ({ onBack, onSuccess }) => {
                                 <>
                                     <Row label={t(language, 'stickerCanvasSize')} value={t(language, 'stickerSheetFormat')} />
                                     <Row label={t(language, 'stickerSheetColor')} value={<ColorDot color={stickerSheetColor} />} />
+                                    <Row label={t(language, 'stickerBackgroundImages')} value={stickerBackgroundImages.length} />
                                     <Row label={t(language, 'printCanvasItems')} value={`${stickerImages.length}/6`} />
                                 </>
                             ) : activeProduct === 'shopper' ? (

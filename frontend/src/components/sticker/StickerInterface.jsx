@@ -22,9 +22,18 @@ import { LogoBackgroundRemovalButton } from '../shared/LogoBackgroundRemovalButt
 export const StickerInterface = ({ onFinish }) => {
     const {
         stickerSheetColor,
+        stickerBackgroundImages,
+        selectedStickerBackgroundImageId,
         stickerImages,
         selectedStickerImageId,
         setStickerSheetColor,
+        addStickerBackgroundImage,
+        selectStickerBackgroundImage,
+        removeStickerBackgroundImage,
+        resetStickerBackgroundImageTransform,
+        setStickerBackgroundImagePosition,
+        setStickerBackgroundImageRotation,
+        setStickerBackgroundImageScale,
         addStickerImage,
         replaceStickerImageFile,
         selectStickerImage,
@@ -46,13 +55,14 @@ export const StickerInterface = ({ onFinish }) => {
 
     const buildStickerCartItem = (snapshot) => ({
         productName: t(language, 'sticker3d'),
-        design: `${t(language, 'stickerCanvasSize')}: ${stickerSizeLabel}, ${t(language, 'stickerSheetColor')}: ${stickerSheetColor}, ${t(language, 'printCanvasItems')}: ${stickerImages.length}/${STICKER_SLOT_COUNT}`,
+        design: `${t(language, 'stickerCanvasSize')}: ${stickerSizeLabel}, ${t(language, 'stickerSheetColor')}: ${stickerSheetColor}, ${t(language, 'stickerBackgroundImages')}: ${stickerBackgroundImages.length}, ${t(language, 'printCanvasItems')}: ${stickerImages.length}/${STICKER_SLOT_COUNT}`,
         priceBYN: 0,
         type: 'sticker',
         activeProduct: 'sticker',
         stickerWidthMm: 40,
         stickerHeightMm: 45,
         stickerSheetColor,
+        stickerBackgroundImages,
         stickerImages,
         status: 'draft',
         rendersGenerated: 0,
@@ -74,6 +84,7 @@ export const StickerInterface = ({ onFinish }) => {
         setApprovalOpen(true);
     };
 
+    const selectedBackground = stickerBackgroundImages.find((image) => image.id === selectedStickerBackgroundImageId) || null;
     const selected = stickerImages.find((image) => image.id === selectedStickerImageId) || null;
 
     return (
@@ -109,6 +120,40 @@ export const StickerInterface = ({ onFinish }) => {
                     <p className="text-[10px] leading-tight text-white/35">{t(language, 'stickerHint')}</p>
                 </SettingGroup>
 
+                <SettingGroup title={t(language, 'stickerBackgroundImages')}>
+                    <SettingRow label={t(language, 'stickerSheetBackground')}>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <FileUploadChip label={t(language, 'addBackgroundImage')} onFile={addStickerBackgroundImage} />
+                            <span className="rounded-full border border-white/15 bg-white/8 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-white/45">
+                                {stickerBackgroundImages.length}
+                            </span>
+                        </div>
+                    </SettingRow>
+                    <LogoList
+                        logos={stickerBackgroundImages}
+                        selectedLogoId={selectedStickerBackgroundImageId}
+                        selectLogo={selectStickerBackgroundImage}
+                        removeLogo={removeStickerBackgroundImage}
+                        metaForLogo={(logo) => `${t(language, 'stickerSheetBackground')} ${stickerBackgroundImages.indexOf(logo) + 1}`}
+                    />
+                </SettingGroup>
+
+                {selectedBackground && (
+                    <SettingGroup title={t(language, 'selectedBackgroundImage')}>
+                        <TransformPad
+                            label={t(language, 'position')}
+                            value={selectedBackground.position}
+                            onChange={setStickerBackgroundImagePosition}
+                            onReset={resetStickerBackgroundImageTransform}
+                            aspect="aspect-[7/10]"
+                            xRange={2.2}
+                            yRange={3.1}
+                        />
+                        <RotationScrub label={t(language, 'rotation')} value={selectedBackground.rotation ?? 0} onChange={setStickerBackgroundImageRotation} />
+                        <SizeSlider label={t(language, 'size')} value={selectedBackground.scale ?? 1} min={0.15} max={3} step={0.03} onChange={setStickerBackgroundImageScale} />
+                    </SettingGroup>
+                )}
+
                 <SettingGroup title={t(language, 'stickerImages')}>
                     <SettingRow label={t(language, 'stickerImages')}>
                         <div className="flex flex-wrap items-center gap-2">
@@ -141,9 +186,9 @@ export const StickerInterface = ({ onFinish }) => {
                                     ]}
                                 />
                             </SettingRow>
-                            <TransformPad label={t(language, 'position')} value={selected.position} onChange={setStickerImagePosition} onReset={resetStickerImageTransform} aspect="aspect-square" xRange={0.34} yRange={0.34} />
+                            <TransformPad label={t(language, 'position')} value={selected.position} onChange={setStickerImagePosition} onReset={resetStickerImageTransform} aspect="aspect-square" xRange={0.92} yRange={0.92} />
                             <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setStickerImageRotation} />
-                            <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.72} min={0.22} max={1.15} step={0.03} onChange={setStickerImageScale} />
+                            <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.72} min={0.22} max={3} step={0.03} onChange={setStickerImageScale} />
                         </div>
                         <FloatingLogoSettings title={t(language, 'selectedImage')} subtitle={selected.filename}>
                             <LogoBackgroundRemovalButton logo={selected} language={language} onApply={(file) => replaceStickerImageFile(selected.id, file)} />
@@ -157,9 +202,9 @@ export const StickerInterface = ({ onFinish }) => {
                                     ]}
                                 />
                             </SettingRow>
-                            <TransformPad label={t(language, 'position')} value={selected.position} onChange={setStickerImagePosition} onReset={resetStickerImageTransform} aspect="aspect-square" xRange={0.34} yRange={0.34} />
+                            <TransformPad label={t(language, 'position')} value={selected.position} onChange={setStickerImagePosition} onReset={resetStickerImageTransform} aspect="aspect-square" xRange={0.92} yRange={0.92} />
                             <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setStickerImageRotation} />
-                            <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.72} min={0.22} max={1.15} step={0.03} onChange={setStickerImageScale} />
+                            <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.72} min={0.22} max={3} step={0.03} onChange={setStickerImageScale} />
                         </FloatingLogoSettings>
                     </SettingGroup>
                 )}
