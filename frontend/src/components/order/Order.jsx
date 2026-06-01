@@ -30,7 +30,7 @@ export const Order = ({ onBack, onSuccess }) => {
         shopperColor, shopperMaterial, shopperHandleType, shopperPrintSide, shopperLogos,
         tshirtColor, tshirtMaterial, tshirtSize, tshirtPrintSide, tshirtLogos,
         hoodieColor, hoodieMaterial, hoodieSize, hoodiePrintSide, hoodieLogos,
-        lanyardColor, lanyardMaterial, lanyardLengthMm, lanyardWidthMm, lanyardCarabiner, lanyardLogos,
+        lanyardColor, lanyardMaterial, lanyardLengthMm, lanyardWidthMm, lanyardRepeatMm, lanyardCarabiner, lanyardLogos,
     } = useConfigurator();
 
     const [clientType, setClientType] = useState('phys');
@@ -146,6 +146,8 @@ export const Order = ({ onBack, onSuccess }) => {
                 lanyardLengthMm,
                 widthMm: lanyardWidthMm,
                 lanyardWidthMm,
+                repeatMm: lanyardRepeatMm,
+                lanyardRepeatMm,
                 carabiner: lanyardCarabiner,
                 lanyardCarabiner,
                 logos: lanyardLogos,
@@ -327,6 +329,7 @@ export const Order = ({ onBack, onSuccess }) => {
                                     <Row label={t(language, 'merchMaterial')} value={lanyardMaterial} />
                                     <Row label={t(language, 'lanyardLength')} value={`${lanyardLengthMm} мм`} />
                                     <Row label={t(language, 'lanyardWidth')} value={`${lanyardWidthMm} мм`} />
+                                    <Row label={t(language, 'lanyardRepeat')} value={`${lanyardRepeatMm / 10} см`} />
                                     <Row label={t(language, 'lanyardCarabiner')} value={lanyardCarabiner} />
                                 </>
                             ) : (

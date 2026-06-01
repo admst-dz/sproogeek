@@ -200,6 +200,7 @@ export const LANYARD_DEFAULTS = {
     lanyardMaterial: 'polyester_15',
     lanyardLengthMm: 450,
     lanyardWidthMm: 15,
+    lanyardRepeatMm: 50,
     lanyardCarabiner: 'carabiner',
     lanyardLogos: [],
     selectedLanyardLogoId: null,
@@ -252,6 +253,17 @@ export const STICKER_SLOT_COUNT = 6;
 export const STICKER_DEFAULT_SLOT_SHAPES = ['circle', 'square', 'circle', 'square', 'square', 'circle'];
 
 const normalizeStickerShape = (shape) => (shape === 'square' ? 'square' : 'circle');
+
+const LANYARD_MATERIAL_WIDTH_MM = {
+    polyester_10: 10,
+    polyester_15: 15,
+    polyester_20: 20,
+    satin_15: 15,
+};
+
+const getLanyardWidthFromMaterial = (material, fallback = 15) => (
+    LANYARD_MATERIAL_WIDTH_MM[material] ?? fallback
+);
 
 const getNextStickerSlot = (images = []) => {
     const occupied = new Set(images.map((image, index) => {
@@ -807,6 +819,18 @@ export const useConfigurator = create(temporal((set, get) => ({
             console.error(`Failed to prepare ${collectionKey} image`, error);
         }
     },
+    _setMerchLogoPosition: (collectionKey, selectedKey, x, y) => set((state) => ({
+        [collectionKey]: (state[collectionKey] || []).map(l => l.id === state[selectedKey] ? { ...l, position: [x, y] } : l),
+    })),
+    _setMerchLogoRotation: (collectionKey, selectedKey, rotation) => set((state) => ({
+        [collectionKey]: (state[collectionKey] || []).map(l => l.id === state[selectedKey] ? { ...l, rotation } : l),
+    })),
+    _setMerchLogoScale: (collectionKey, selectedKey, scale) => set((state) => ({
+        [collectionKey]: (state[collectionKey] || []).map(l => l.id === state[selectedKey] ? { ...l, scale } : l),
+    })),
+    _resetMerchLogoTransform: (collectionKey, selectedKey) => set((state) => ({
+        [collectionKey]: (state[collectionKey] || []).map(l => l.id === state[selectedKey] ? { ...l, position: [0, 0], rotation: 0, scale: 0.6 } : l),
+    })),
     addShopperLogo: (file, side = 'front') => get()._addMerchLogo('shopperLogos', 'selectedShopperLogoId', file, side),
     addTshirtLogo: (file, side = 'front') => get()._addMerchLogo('tshirtLogos', 'selectedTshirtLogoId', file, side),
     addHoodieLogo: (file, side = 'front') => get()._addMerchLogo('hoodieLogos', 'selectedHoodieLogoId', file, side),
@@ -817,6 +841,10 @@ export const useConfigurator = create(temporal((set, get) => ({
     setShopperHandleType: (handle) => set({ shopperHandleType: handle }),
     setShopperPrintSide: (side) => set({ shopperPrintSide: side }),
     selectShopperLogo: (id) => set({ selectedShopperLogoId: id }),
+    setShopperLogoPosition: (x, y) => get()._setMerchLogoPosition('shopperLogos', 'selectedShopperLogoId', x, y),
+    setShopperLogoRotation: (rotation) => get()._setMerchLogoRotation('shopperLogos', 'selectedShopperLogoId', rotation),
+    setShopperLogoScale: (scale) => get()._setMerchLogoScale('shopperLogos', 'selectedShopperLogoId', scale),
+    resetShopperLogoTransform: () => get()._resetMerchLogoTransform('shopperLogos', 'selectedShopperLogoId'),
     removeShopperLogo: (id) => set((state) => {
         const remaining = state.shopperLogos.filter(l => l.id !== id);
         return {
@@ -832,6 +860,10 @@ export const useConfigurator = create(temporal((set, get) => ({
     setTshirtSize: (size) => set({ tshirtSize: size }),
     setTshirtPrintSide: (side) => set({ tshirtPrintSide: side }),
     selectTshirtLogo: (id) => set({ selectedTshirtLogoId: id }),
+    setTshirtLogoPosition: (x, y) => get()._setMerchLogoPosition('tshirtLogos', 'selectedTshirtLogoId', x, y),
+    setTshirtLogoRotation: (rotation) => get()._setMerchLogoRotation('tshirtLogos', 'selectedTshirtLogoId', rotation),
+    setTshirtLogoScale: (scale) => get()._setMerchLogoScale('tshirtLogos', 'selectedTshirtLogoId', scale),
+    resetTshirtLogoTransform: () => get()._resetMerchLogoTransform('tshirtLogos', 'selectedTshirtLogoId'),
     removeTshirtLogo: (id) => set((state) => {
         const remaining = state.tshirtLogos.filter(l => l.id !== id);
         return {
@@ -847,6 +879,10 @@ export const useConfigurator = create(temporal((set, get) => ({
     setHoodieSize: (size) => set({ hoodieSize: size }),
     setHoodiePrintSide: (side) => set({ hoodiePrintSide: side }),
     selectHoodieLogo: (id) => set({ selectedHoodieLogoId: id }),
+    setHoodieLogoPosition: (x, y) => get()._setMerchLogoPosition('hoodieLogos', 'selectedHoodieLogoId', x, y),
+    setHoodieLogoRotation: (rotation) => get()._setMerchLogoRotation('hoodieLogos', 'selectedHoodieLogoId', rotation),
+    setHoodieLogoScale: (scale) => get()._setMerchLogoScale('hoodieLogos', 'selectedHoodieLogoId', scale),
+    resetHoodieLogoTransform: () => get()._resetMerchLogoTransform('hoodieLogos', 'selectedHoodieLogoId'),
     removeHoodieLogo: (id) => set((state) => {
         const remaining = state.hoodieLogos.filter(l => l.id !== id);
         return {
@@ -858,10 +894,19 @@ export const useConfigurator = create(temporal((set, get) => ({
     }),
 
     setLanyardColor: (color) => set({ lanyardColor: color }),
-    setLanyardMaterial: (material) => set({ lanyardMaterial: material }),
+    setLanyardMaterial: (material) => set((state) => ({
+        lanyardMaterial: material,
+        lanyardWidthMm: getLanyardWidthFromMaterial(material, state.lanyardWidthMm),
+    })),
     setLanyardLengthMm: (mm) => set({ lanyardLengthMm: mm }),
+    setLanyardWidthMm: (mm) => set({ lanyardWidthMm: mm }),
+    setLanyardRepeatMm: (mm) => set({ lanyardRepeatMm: mm }),
     setLanyardCarabiner: (kind) => set({ lanyardCarabiner: kind }),
     selectLanyardLogo: (id) => set({ selectedLanyardLogoId: id }),
+    setLanyardLogoPosition: (x, y) => get()._setMerchLogoPosition('lanyardLogos', 'selectedLanyardLogoId', x, y),
+    setLanyardLogoRotation: (rotation) => get()._setMerchLogoRotation('lanyardLogos', 'selectedLanyardLogoId', rotation),
+    setLanyardLogoScale: (scale) => get()._setMerchLogoScale('lanyardLogos', 'selectedLanyardLogoId', scale),
+    resetLanyardLogoTransform: () => get()._resetMerchLogoTransform('lanyardLogos', 'selectedLanyardLogoId'),
     removeLanyardLogo: (id) => set((state) => {
         const remaining = state.lanyardLogos.filter(l => l.id !== id);
         return {

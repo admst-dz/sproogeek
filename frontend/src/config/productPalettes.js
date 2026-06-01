@@ -71,5 +71,6 @@ export const LANYARD_COLOR_PALETTE = [
 
 export const APPAREL_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
 export const LANYARD_LENGTHS_MM = [400, 450, 500];
+export const LANYARD_REPEAT_OPTIONS_MM = [50, 70];
 export const LANYARD_CARABINERS = ['hook', 'carabiner', 'swivel', 'j_hook'];
 export const SHOPPER_HANDLE_TYPES = ['short', 'long'];

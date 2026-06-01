@@ -1,12 +1,55 @@
 import { useMemo } from 'react';
-import { useGLTF } from '@react-three/drei';
+import { Decal, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { useConfigurator } from '../../store';
 import tshirtModelUrl from '../../assets/tshirt_test.glb?url';
-import { MerchLogoPlane } from './MerchLogoPlane';
+import { logoSizeFromTexture, useLogoTexture } from '../../utils/threeTextures';
 
 const MODEL_SCALE = 1.18;
-const LOGO_SURFACE_OFFSET = 0.018;
+const DECAL_DEPTH = 0.34;
+
+function TshirtLogoDecal({
+    image,
+    areaWidth,
+    areaHeight,
+    offset = [0, 0, 0],
+    rotationFix = [0, 0, 0],
+    scaleBase = 0.9,
+    depth = DECAL_DEPTH,
+}) {
+    const map = useLogoTexture(image.texture);
+    const size = logoSizeFromTexture(map, Math.max(areaWidth, areaHeight) * scaleBase * (image.scale ?? 0.6));
+
+    const [px = 0, py = 0] = image.position || [];
+    const maxX = Math.max(0, areaWidth / 2 - size.width / 2);
+    const maxY = Math.max(0, areaHeight / 2 - size.height / 2);
+    const x = THREE.MathUtils.clamp(px * maxX, -maxX, maxX);
+    const y = THREE.MathUtils.clamp(py * maxY, -maxY, maxY);
+
+    return (
+        <Decal
+            position={[offset[0] + x, offset[1] + y, offset[2]]}
+            rotation={[
+                rotationFix[0],
+                rotationFix[1],
+                (image.rotation ?? 0) + rotationFix[2],
+            ]}
+            scale={[size.width, size.height, depth]}
+            renderOrder={8}
+        >
+            <meshStandardMaterial
+                map={map}
+                transparent
+                roughness={0.58}
+                metalness={0.01}
+                polygonOffset
+                polygonOffsetFactor={-8}
+                polygonOffsetUnits={-8}
+                depthWrite={false}
+            />
+        </Decal>
+    );
+}
 
 export function Tshirt({ config = null, preview = false, position = [0, 0, 0] }) {
     const state = useConfigurator();
@@ -39,11 +82,11 @@ export function Tshirt({ config = null, preview = false, position = [0, 0, 0] })
     const isBack = printSide === 'back';
     const isLeftSleeve = printSide === 'leftSleeve';
     const isRightSleeve = printSide === 'rightSleeve';
-    const logoZ = isBack ? bbox.min.z - LOGO_SURFACE_OFFSET : bbox.max.z + LOGO_SURFACE_OFFSET;
-    const logoYaw = isBack ? Math.PI : 0;
     const sleeveX = size.x * 0.34;
     const logoX = isLeftSleeve ? -sleeveX : isRightSleeve ? sleeveX : 0;
-    const logoY = bbox.min.y + size.y * (isLeftSleeve || isRightSleeve ? 0.58 : 0.47);
+    const logoY = bbox.min.y + size.y * (isLeftSleeve || isRightSleeve ? 0.58 : 0.49);
+    const logoZ = isBack ? bbox.min.z - 0.02 : bbox.max.z + 0.02;
+    const logoYaw = isBack ? Math.PI : isLeftSleeve ? -0.72 : isRightSleeve ? 0.72 : 0;
     const printAreaWidth = size.x * (isLeftSleeve || isRightSleeve ? 0.22 : 0.48);
     const printAreaHeight = size.y * (isLeftSleeve || isRightSleeve ? 0.22 : 0.42);
     const sleeveTilt = isLeftSleeve ? -0.28 : isRightSleeve ? 0.28 : 0;
@@ -60,19 +103,19 @@ export function Tshirt({ config = null, preview = false, position = [0, 0, 0] })
                             metalness={0.02}
                             side={THREE.DoubleSide}
                         />
+                        {logos.map((image) => (
+                            <TshirtLogoDecal
+                                key={image.id}
+                                image={image}
+                                areaWidth={printAreaWidth}
+                                areaHeight={printAreaHeight}
+                                offset={[logoX, logoY, logoZ]}
+                                rotationFix={[0, logoYaw, sleeveTilt]}
+                                scaleBase={isLeftSleeve || isRightSleeve ? 0.55 : 0.9}
+                                depth={isLeftSleeve || isRightSleeve ? 0.28 : DECAL_DEPTH}
+                            />
+                        ))}
                     </mesh>
-                ))}
-
-                {logos.map((image) => (
-                    <MerchLogoPlane
-                        key={image.id}
-                        image={image}
-                        areaWidth={printAreaWidth}
-                        areaHeight={printAreaHeight}
-                        offset={[logoX, logoY, logoZ]}
-                        rotationFix={[0, logoYaw, sleeveTilt]}
-                        scaleBase={isLeftSleeve || isRightSleeve ? 0.55 : 0.9}
-                    />
                 ))}
             </group>
         </group>
