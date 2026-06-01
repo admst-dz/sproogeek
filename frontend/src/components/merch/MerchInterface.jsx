@@ -380,7 +380,7 @@ export const MerchInterface = ({ onFinish }) => {
                                     value={selectedLogo.position}
                                     onChange={setLogoPosition}
                                     onReset={resetLogoTransform}
-                                    yRange={activeProduct === 'tshirt' ? 0.82 : 1}
+                                    yRange={1}
                                 />
                             )}
                             <RotationScrub

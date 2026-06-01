@@ -266,6 +266,10 @@ const getLanyardWidthFromMaterial = (material, fallback = 15) => (
 );
 
 const normalizeTshirtPrintSide = (side) => (side === 'back' ? 'back' : 'front');
+const clampTshirtLogoPosition = (x, y) => [
+    Math.max(-0.86, Math.min(0.86, Number(x) || 0)),
+    Math.max(-0.92, Math.min(0.92, Number(y) || 0)),
+];
 
 const getNextStickerSlot = (images = []) => {
     const occupied = new Set(images.map((image, index) => {
@@ -862,7 +866,7 @@ export const useConfigurator = create(temporal((set, get) => ({
     setTshirtSize: (size) => set({ tshirtSize: size }),
     setTshirtPrintSide: (side) => set({ tshirtPrintSide: normalizeTshirtPrintSide(side) }),
     selectTshirtLogo: (id) => set({ selectedTshirtLogoId: id }),
-    setTshirtLogoPosition: (x, y) => get()._setMerchLogoPosition('tshirtLogos', 'selectedTshirtLogoId', x, y),
+    setTshirtLogoPosition: (x, y) => get()._setMerchLogoPosition('tshirtLogos', 'selectedTshirtLogoId', ...clampTshirtLogoPosition(x, y)),
     setTshirtLogoRotation: (rotation) => get()._setMerchLogoRotation('tshirtLogos', 'selectedTshirtLogoId', rotation),
     setTshirtLogoScale: (scale) => get()._setMerchLogoScale('tshirtLogos', 'selectedTshirtLogoId', scale),
     resetTshirtLogoTransform: () => get()._resetMerchLogoTransform('tshirtLogos', 'selectedTshirtLogoId'),

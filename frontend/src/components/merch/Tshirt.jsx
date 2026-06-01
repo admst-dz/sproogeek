@@ -7,8 +7,12 @@ import { useLogoTexture } from '../../utils/threeTextures';
 
 const MODEL_SCALE = 1.18;
 const DECAL_DEPTH = 0.34;
+const DECAL_SURFACE_OFFSET = 0.08;
 const TSHIRT_LOGO_MIN_SCALE = 0.08;
 const TSHIRT_LOGO_MAX_SCALE = 1;
+const TSHIRT_PRINT_AREA_CENTER_Y_RATIO = 0.48;
+const TSHIRT_PRINT_AREA_WIDTH_RATIO = 0.68;
+const TSHIRT_PRINT_AREA_HEIGHT_RATIO = 0.52;
 
 function containedLogoSize(map, areaWidth, areaHeight, scale = 0.6) {
     const imageWidth = map?.image?.width ?? map?.image?.naturalWidth ?? 1;
@@ -100,11 +104,11 @@ export function Tshirt({ config = null, preview = false, position = [0, 0, 0] })
 
     const isBack = printSide === 'back';
     const logoX = 0;
-    const logoY = bbox.min.y + size.y * 0.49;
-    const logoZ = isBack ? bbox.min.z - 0.02 : bbox.max.z + 0.02;
+    const logoY = bbox.min.y + size.y * TSHIRT_PRINT_AREA_CENTER_Y_RATIO;
+    const logoZ = isBack ? bbox.min.z - DECAL_SURFACE_OFFSET : bbox.max.z + DECAL_SURFACE_OFFSET;
     const logoYaw = isBack ? Math.PI : 0;
-    const printAreaWidth = size.x * 0.78;
-    const printAreaHeight = size.y * 0.42;
+    const printAreaWidth = size.x * TSHIRT_PRINT_AREA_WIDTH_RATIO;
+    const printAreaHeight = size.y * TSHIRT_PRINT_AREA_HEIGHT_RATIO;
 
     return (
         <group position={position} rotation={preview ? [0.16, -0.38, 0] : [0.04, -0.16, 0]}>

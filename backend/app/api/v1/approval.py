@@ -897,6 +897,35 @@ async def request_guest_approval(
             "mime_type": render_image["mime_type"],
         })
 
+    sticker_print_files = None
+    try:
+        sticker_print_files = _build_sticker_print_files(payload, guest_order_id)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("sticker print TIFF generation failed")
+        sentry_sdk.capture_exception(exc)
+
+    if sticker_print_files:
+        suffix = guest_order_id[-8:]
+        attachments.extend([
+            {
+                "filename": f"sticker-print-{suffix}.tiff",
+                "content": sticker_print_files["plain_tiff"],
+                "mime_type": "image/tiff",
+            },
+            {
+                "filename": f"sticker-print-with-coordinates-{suffix}.tiff",
+                "content": sticker_print_files["technical_tiff"],
+                "mime_type": "image/tiff",
+            },
+            {
+                "filename": f"sticker-print-spec-{suffix}.json",
+                "content": sticker_print_files["spec_json"],
+                "mime_type": "application/json",
+            },
+        ])
+        body_lines.insert(4, "Для 3D-стикеров также прикреплены TIFF-файлы для печати.")
+        body_lines.insert(5, "")
+
     event_logger.log(
         "GUEST_APPROVAL_REQUESTED",
         "Guest requested design approval PDF by email",
@@ -914,6 +943,7 @@ async def request_guest_approval(
             "pdf_bytes": len(pdf_bytes),
             "render_bytes": len(render_image["content"]) if render_image else 0,
             "render_mime_type": render_image["mime_type"] if render_image else None,
+            "sticker_print_files": bool(sticker_print_files),
             "ip": ip,
             "name": payload.name,
             "phone": payload.phone,
