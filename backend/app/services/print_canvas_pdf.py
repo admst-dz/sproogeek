@@ -30,7 +30,7 @@ MM_PER_INCH = 25.4
 PT_PER_MM = 72.0 / MM_PER_INCH
 # Cap the traced mask resolution; the contour walk is O(boundary cells) but a
 # huge roll would still produce too many nodes. The sheet is downsampled to fit.
-TRACE_MAX_EDGE_PX = 1600
+TRACE_MAX_EDGE_PX = 2600
 DEFAULT_CHOKE_MM = 0.3
 # Below this alpha/darkness the mask pixel counts as "outside" the artwork.
 MASK_THRESHOLD = 128
@@ -276,7 +276,7 @@ def build_print_pdf(
     if loops:
         shape = base_page.new_shape()
         for loop in loops:
-            simplified = _simplify_closed(loop, epsilon=0.75)
+            simplified = _simplify_closed(loop, epsilon=0.6)
             if len(simplified) < 3:
                 continue
             pts = [fitz.Point(x * sx, y * sy) for x, y in simplified]
