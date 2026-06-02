@@ -28,9 +28,14 @@ logger = logging.getLogger(__name__)
 
 MM_PER_INCH = 25.4
 PT_PER_MM = 72.0 / MM_PER_INCH
-# Cap the traced mask resolution; the contour walk is O(boundary cells) but a
-# huge roll would still produce too many nodes. The sheet is downsampled to fit.
-TRACE_MAX_EDGE_PX = 4200
+# The underbase is traced strictly at the mask's native resolution — the browser
+# sends it at the 300 DPI export resolution, so the vector silhouette is a true
+# 300 DPI trace matching the colour layer. This cap is only an OOM safety valve
+# for absurd (>2.5 m at full width) sheets; realistic jobs are never downsampled.
+# The choke amount is chosen on a fast downsample (TRACE_SELECT_EDGE_PX) so the
+# extra trial traces stay cheap, then a single trace runs at full resolution.
+TRACE_MAX_EDGE_PX = 30000
+TRACE_SELECT_EDGE_PX = 1500
 DEFAULT_CHOKE_MM = 0.3
 # The mask TIFF is black artwork on a white sheet. Treat low but visible alpha
 # coverage as underbase, then choke it back; this keeps thin details alive.
@@ -112,16 +117,16 @@ def _binary_mask(gray: np.ndarray) -> np.ndarray:
     return coverage >= MASK_COVERAGE_THRESHOLD
 
 
-def _downsample(mask: np.ndarray) -> tuple[np.ndarray, float]:
-    """Shrink the mask so its longest edge is <= TRACE_MAX_EDGE_PX.
+def _downsample(mask: np.ndarray, max_edge: int = TRACE_MAX_EDGE_PX) -> tuple[np.ndarray, float]:
+    """Shrink the mask so its longest edge is <= ``max_edge``.
 
     Returns the resized boolean mask and the scale factor that maps a resized
     pixel back to an original pixel (>= 1.0)."""
     rows, cols = mask.shape
     longest = max(rows, cols)
-    if longest <= TRACE_MAX_EDGE_PX:
+    if longest <= max_edge:
         return mask, 1.0
-    scale = longest / TRACE_MAX_EDGE_PX
+    scale = longest / max_edge
     new_w = max(1, round(cols / scale))
     new_h = max(1, round(rows / scale))
     resampling = getattr(Image, "Resampling", Image).LANCZOS
@@ -367,22 +372,34 @@ def build_print_pdf(
 
     # --- trace the underbase silhouette ---
     full_mask = _binary_mask(gray)
-    mask, _ = _downsample(full_mask)
-    px_per_mm = mask.shape[1] / width_mm if width_mm else 1.0
-    close_px = min(UNDERBASE_MAX_CLOSE_PX, int(round(UNDERBASE_CLOSE_MM * px_per_mm)))
-    mask = _close(mask, close_px)
-    choke_px = min(UNDERBASE_MAX_CHOKE_PX, int(round(max(0.0, choke_mm) * px_per_mm)))
-    base_area = int(mask.sum())
-    loops: list[list[tuple[float, float]]] = []
-    for step in _unique_steps(choke_px, choke_px - 1, choke_px // 2, 0):
-        candidate = _erode(mask, step)
-        if base_area and int(candidate.sum()) < max(1, base_area * 0.04):
+
+    # Choose the choke amount on a fast, downsampled copy (multiple trial traces
+    # here are cheap), expressed back in millimetres so it transfers to any res.
+    sel_mask, _ = _downsample(full_mask, TRACE_SELECT_EDGE_PX)
+    sel_ppm = sel_mask.shape[1] / width_mm if width_mm else 1.0
+    sel_mask = _close(sel_mask, min(UNDERBASE_MAX_CLOSE_PX, int(round(UNDERBASE_CLOSE_MM * sel_ppm))))
+    sel_choke = min(UNDERBASE_MAX_CHOKE_PX, int(round(max(0.0, choke_mm) * sel_ppm)))
+    sel_area = int(sel_mask.sum())
+    chosen_choke_mm = 0.0
+    for step in _unique_steps(sel_choke, sel_choke - 1, sel_choke // 2, 0):
+        candidate = _erode(sel_mask, step)
+        if sel_area and int(candidate.sum()) < max(1, sel_area * 0.04):
             continue
-        candidate_loops = _filtered_contours(candidate)
-        if candidate_loops:
-            mask = candidate
-            loops = candidate_loops
+        if _filtered_contours(candidate):
+            chosen_choke_mm = (step / sel_ppm) if sel_ppm else 0.0
             break
+
+    # Trace once at the full (300 DPI) resolution with the chosen choke so the
+    # vector underbase matches the colour layer's fidelity.
+    mask, _ = _downsample(full_mask)
+    full_ppm = mask.shape[1] / width_mm if width_mm else 1.0
+    mask = _close(mask, min(UNDERBASE_MAX_CLOSE_PX, int(round(UNDERBASE_CLOSE_MM * full_ppm))))
+    mask = _erode(mask, int(round(chosen_choke_mm * full_ppm)))
+    loops = _filtered_contours(mask)
+    if not loops:
+        # Chosen choke wiped the base at full res — fall back to no choke.
+        mask, _ = _downsample(full_mask)
+        loops = _filtered_contours(mask)
 
     rows, cols = mask.shape
     sx = page_w / cols if cols else 1.0
