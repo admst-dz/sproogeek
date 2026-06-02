@@ -381,8 +381,16 @@ const trimTransparent = (sourceCanvas) => {
     return { canvas: cropped, width: cw, height: ch };
 };
 
-const prepareLogoFile = async (file) => {
-    const browserFile = await prepareBrowserLogoFile(file);
+const base64ToPngFile = (base64, name) => {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return new File([bytes], name, { type: 'image/png' });
+};
+
+// Build a logo from a browser-ready image File (PNG/JPG/...): trims transparent
+// margins, derives physical size from DPI, detects round shape.
+const buildLogoFromImageFile = async (browserFile, displayName) => {
     const [source, dpi] = await Promise.all([
         readAsDataURL(browserFile),
         readImageDpi(browserFile),
@@ -432,13 +440,34 @@ const prepareLogoFile = async (file) => {
     const widthMm = clamp(pxToMm(sourceContentW, dpi.dpiX), MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
     return {
         id: makeLogoId(),
-        name: file.name || browserFile.name || 'logo.png',
+        name: displayName || browserFile.name || 'logo.png',
         src: content.toDataURL('image/png'),
         widthPx: sourceContentW,
         heightPx: sourceContentH,
         widthMm,
         shape: hasTransparentCorners && aspect > 0.82 && aspect < 1.18 ? 'round' : 'auto',
     };
+};
+
+// A single-page PDF is split on the backend into its visual logos; each becomes
+// its own logo here. TIFF and raster files yield exactly one logo.
+const prepareLogosFromFile = async (file) => {
+    if (isPdfFile(file)) {
+        const { data } = await mediaApi.prepareLogoPdf(file);
+        const images = data?.images || [];
+        const base = (file.name || 'logo').replace(/\.[^.]+$/, '') || 'logo';
+        if (images.length) {
+            const logos = [];
+            for (let i = 0; i < images.length; i += 1) {
+                const partFile = base64ToPngFile(images[i], `${base}-${i + 1}.png`);
+                const partName = images.length > 1 ? `${base} (${i + 1})` : base;
+                logos.push(await buildLogoFromImageFile(partFile, partName));
+            }
+            return logos;
+        }
+    }
+    const browserFile = await prepareBrowserLogoFile(file);
+    return [await buildLogoFromImageFile(browserFile, file.name || browserFile.name)];
 };
 
 const logoWidthMm = (logo) => clamp(
@@ -626,7 +655,7 @@ export const PrintCanvas = ({ onBack }) => {
         setError('');
         try {
             const prepared = [];
-            for (const file of files) prepared.push(await prepareLogoFile(file));
+            for (const file of files) prepared.push(...(await prepareLogosFromFile(file)));
             const { placements: curPlacements, logoMap: curLogoMap, sheetWidth: sw, gap: g } = stateRef.current;
             const rectsAccu = resolveRects(curPlacements, curLogoMap).map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h }));
             const additions = prepared.map((logo) => {
@@ -1383,7 +1412,7 @@ export const PrintCanvas = ({ onBack }) => {
                                             onPointerMove={moveItemDrag}
                                             onPointerUp={stopItemDrag}
                                             onPointerCancel={stopItemDrag}
-                                            className="absolute grid cursor-move touch-none place-items-center overflow-hidden bg-white/8"
+                                            className="absolute grid cursor-move touch-none place-items-center overflow-hidden"
                                             title={item.name}
                                             style={{
                                                 left: item.x * previewScale,
@@ -1391,6 +1420,11 @@ export const PrintCanvas = ({ onBack }) => {
                                                 width: item.w * previewScale,
                                                 height: item.h * previewScale,
                                                 borderRadius: item.shape === 'round' ? '999px' : 4,
+                                                // Transparency checkerboard so light/white artwork stays visible.
+                                                backgroundColor: '#c4c4c4',
+                                                backgroundImage: 'linear-gradient(45deg, #9a9a9a 25%, transparent 25%), linear-gradient(-45deg, #9a9a9a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #9a9a9a 75%), linear-gradient(-45deg, transparent 75%, #9a9a9a 75%)',
+                                                backgroundSize: '10px 10px',
+                                                backgroundPosition: '0 0, 0 5px, 5px -5px, -5px 0',
                                                 boxShadow: selected
                                                     ? '0 0 0 2px #fff9ec, 0 0 0 4px rgba(255,249,236,0.35)'
                                                     : 'inset 0 0 0 1px rgba(255,249,236,0.2)',

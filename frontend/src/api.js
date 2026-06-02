@@ -195,6 +195,11 @@ export const mediaApi = {
         formData.append('file', file);
         return apiClient.post('/files/prepare-logo', formData, { responseType: 'blob' });
     },
+    prepareLogoPdf: (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return apiClient.post('/files/prepare-logo-pdf', formData);
+    },
     removeLogoBackground: (file, { trim = true } = {}) => {
         const formData = new FormData();
         formData.append('file', file);
