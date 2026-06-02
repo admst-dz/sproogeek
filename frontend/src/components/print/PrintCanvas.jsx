@@ -11,7 +11,7 @@ const MIN_LOGO_WIDTH_MM = 10;
 const MAX_LOGO_WIDTH_MM = 560;
 const DEFAULT_IMAGE_DPI = 72;
 const LOGO_FILE_ACCEPT = 'image/*,.tif,.tiff,application/pdf,.pdf';
-const MAX_IMAGE_EDGE = 1400;
+const MAX_IMAGE_EDGE = 2600;
 const LOGO_GAP_OPTIONS_MM = [3, 5];
 const DEFAULT_LOGO_GAP_MM = 3;
 const SHEET_PADDING_MM = 8;
@@ -19,7 +19,7 @@ const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
 const RECT_EPSILON = 0.001;
-const TIFF_EXPORT_DPI = 150;
+const TIFF_EXPORT_DPI = 300;
 const MM_PER_INCH = 25.4;
 // Kept well under browser per-canvas area/dimension caps (Safari ~16.7M px).
 const TIFF_STRIP_ROWS = 2048;
@@ -432,6 +432,34 @@ const buildLogoFromImageFile = async (browserFile, displayName) => {
         hasTransparentCorners = false;
     }
 
+    // Detect (near-)white artwork: it would be invisible/unprintable on the
+    // white sheet, so we prepare a black version and default to it.
+    let lightArt = false;
+    try {
+        const data = content.getContext('2d').getImageData(0, 0, contentW, contentH).data;
+        let lumSum = 0;
+        let opaque = 0;
+        for (let i = 0; i < data.length; i += 4) {
+            if (data[i + 3] > 16) {
+                lumSum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+                opaque += 1;
+            }
+        }
+        lightArt = opaque > 0 && (lumSum / opaque) > 235;
+    } catch {
+        lightArt = false;
+    }
+
+    // A black recolour of the artwork (keeps its alpha shape) for the toggle.
+    const blackCanvas = document.createElement('canvas');
+    blackCanvas.width = contentW;
+    blackCanvas.height = contentH;
+    const bctx = blackCanvas.getContext('2d', { alpha: true, colorSpace: 'srgb' });
+    bctx.drawImage(content, 0, 0);
+    bctx.globalCompositeOperation = 'source-in';
+    bctx.fillStyle = '#000000';
+    bctx.fillRect(0, 0, contentW, contentH);
+
     const aspect = contentW / contentH;
     // Map the trimmed pixels back to the source resolution for an accurate
     // physical size (DPI is defined against the original image).
@@ -442,6 +470,8 @@ const buildLogoFromImageFile = async (browserFile, displayName) => {
         id: makeLogoId(),
         name: displayName || browserFile.name || 'logo.png',
         src: content.toDataURL('image/png'),
+        srcBlack: blackCanvas.toDataURL('image/png'),
+        blackened: lightArt,
         widthPx: sourceContentW,
         heightPx: sourceContentH,
         widthMm,
@@ -507,11 +537,13 @@ const placementFootprint = (placement, logo) => {
 };
 
 // Resolve placements into drawable rects (mm), dropping any whose logo is gone.
+const logoDisplaySrc = (logo) => (logo.blackened && logo.srcBlack ? logo.srcBlack : logo.src);
+
 const resolveRects = (placements, logoMap) => placements.reduce((acc, placement) => {
     const logo = logoMap.get(placement.logoId);
     if (!logo) return acc;
     const { w, h } = placementFootprint(placement, logo);
-    acc.push({ ...placement, w, h, logo, src: logo.src, name: logo.name, shape: logo.shape });
+    acc.push({ ...placement, w, h, logo, src: logoDisplaySrc(logo), name: logo.name, shape: logo.shape });
     return acc;
 }, []);
 
@@ -718,6 +750,12 @@ export const PrintCanvas = ({ onBack }) => {
         const value = clamp(Number(mm) || 0, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
         setLogos((current) => current.map((logo) => (
             logo.id === id ? { ...logo, widthMm: value } : logo
+        )));
+    }, []);
+
+    const toggleBlack = useCallback((id) => {
+        setLogos((current) => current.map((logo) => (
+            logo.id === id ? { ...logo, blackened: !logo.blackened } : logo
         )));
     }, []);
 
@@ -1171,9 +1209,20 @@ export const PrintCanvas = ({ onBack }) => {
                 const colorFile = new File([colorBlob], 'color.tiff', { type: 'image/tiff' });
                 const maskFile = new File([maskBlob], 'mask.tiff', { type: 'image/tiff' });
                 const { data: item } = await printCanvasApi.createPdfExport(colorFile, maskFile, metadata);
-                const { data: pdfBlob } = await printCanvasApi.downloadExport(item.id);
-                downloadBlob(pdfBlob, filename);
-                setExportMsg(t(language, 'printCanvasExportSaved'));
+                // The export is built, stored and emailed server-side here; only the
+                // convenience auto-download may hiccup, so retry it and fall back to
+                // a soft notice (the file stays available in the dashboard).
+                let downloaded = false;
+                for (let attempt = 0; attempt < 3 && !downloaded; attempt += 1) {
+                    try {
+                        const { data: pdfBlob } = await printCanvasApi.downloadExport(item.id);
+                        downloadBlob(pdfBlob, filename);
+                        downloaded = true;
+                    } catch {
+                        await new Promise((resolve) => { setTimeout(resolve, 500 * (attempt + 1)); });
+                    }
+                }
+                setExportMsg(t(language, downloaded ? 'printCanvasExportSaved' : 'printCanvasExportEmailedOnly'));
                 return;
             }
 
@@ -1274,7 +1323,7 @@ export const PrintCanvas = ({ onBack }) => {
                                         <div key={logo.id} className="min-w-0 rounded-[12px] border border-white/12 bg-white/7 p-3">
                                             <div className="grid min-w-0 grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-2">
                                                 <div className="grid h-14 w-14 place-items-center overflow-hidden rounded-[9px] border border-white/14 bg-white">
-                                                    <img src={logo.src} alt={logo.name} className="max-h-full max-w-full object-contain" />
+                                                    <img src={logoDisplaySrc(logo)} alt={logo.name} className="max-h-full max-w-full object-contain" />
                                                 </div>
                                                 <div className="min-w-0">
                                                     <p className="max-h-9 overflow-hidden break-all text-[12px] font-black leading-tight sm:text-[13px]">{logo.name}</p>
@@ -1283,6 +1332,23 @@ export const PrintCanvas = ({ onBack }) => {
                                                     </p>
                                                 </div>
                                                 <div className="flex items-center gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleBlack(logo.id)}
+                                                        className="grid h-7 w-7 place-items-center rounded-[7px] border transition"
+                                                        style={{
+                                                            borderColor: logo.blackened ? '#fff9ec' : 'rgba(255,255,255,0.14)',
+                                                            backgroundColor: logo.blackened ? '#fff9ec' : 'rgba(255,255,255,0.08)',
+                                                            color: logo.blackened ? '#211a1d' : 'rgba(255,255,255,0.7)',
+                                                        }}
+                                                        aria-label={t(language, 'printCanvasToBlack')}
+                                                        title={t(language, 'printCanvasToBlack')}
+                                                    >
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+                                                            <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" />
+                                                        </svg>
+                                                    </button>
                                                     <button
                                                         type="button"
                                                         onClick={() => duplicateLogo(logo.id)}
@@ -1486,16 +1552,17 @@ export const PrintCanvas = ({ onBack }) => {
                             }`}
                         >
                             <div
-                                className="relative mx-auto rounded-[8px] border border-[#fff9ec]/55 bg-[#fff9ec]/8 shadow-[0_0_0_1px_rgba(255,249,236,0.16),0_18px_60px_rgba(0,0,0,0.32)] backdrop-blur-[2px]"
+                                className="relative mx-auto rounded-[8px] border border-[#211a1d]/15 bg-[#f4ecdd] shadow-[0_18px_60px_rgba(0,0,0,0.32)]"
                                 style={{
                                     width: sheetWidth * previewScale,
                                     height: sheetHeight * previewScale,
-                                    backgroundImage: 'linear-gradient(rgba(255,249,236,0.10) 1px, transparent 1px), linear-gradient(90deg, rgba(255,249,236,0.10) 1px, transparent 1px)',
+                                    // Light "film" sheet so black/coloured artwork is visible (matches print).
+                                    backgroundImage: 'linear-gradient(rgba(33,26,29,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(33,26,29,0.07) 1px, transparent 1px)',
                                     backgroundSize: `${20 * previewScale}px ${20 * previewScale}px`,
                                 }}
                             >
                                 {!rects.length && (
-                                    <div className="pointer-events-none absolute inset-0 grid place-items-center px-8 text-center text-[14px] font-black uppercase tracking-wider text-white/40">
+                                    <div className="pointer-events-none absolute inset-0 grid place-items-center px-8 text-center text-[14px] font-black uppercase tracking-wider text-[#211a1d]/35">
                                         {t(language, 'printCanvasEmptyCanvas')}
                                     </div>
                                 )}
@@ -1518,7 +1585,7 @@ export const PrintCanvas = ({ onBack }) => {
                                                 // Transparent cutout (no clipping) — a clean trace of the artwork.
                                                 // Only selection draws a frame; the footprint itself stays invisible.
                                                 boxShadow: selected
-                                                    ? '0 0 0 2px #fff9ec, 0 0 0 4px rgba(255,249,236,0.35)'
+                                                    ? '0 0 0 2px #211a1d, 0 0 0 4px rgba(33,26,29,0.25)'
                                                     : 'none',
                                                 zIndex: selected ? 2 : 1,
                                             }}
@@ -1555,7 +1622,7 @@ export const PrintCanvas = ({ onBack }) => {
                                                     onPointerMove={moveResize}
                                                     onPointerUp={stopResize}
                                                     onPointerCancel={stopResize}
-                                                    className="absolute z-10 h-2.5 w-2.5 touch-none rounded-[2px] border border-[#211a1d] bg-[#fff9ec]"
+                                                    className="absolute z-10 h-2.5 w-2.5 touch-none rounded-[2px] border-2 border-[#f4ecdd] bg-[#211a1d]"
                                                     style={pos}
                                                 />
                                             ))}
