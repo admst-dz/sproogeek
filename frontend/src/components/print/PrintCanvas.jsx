@@ -606,6 +606,46 @@ const QuantityButton = ({ children, onClick, disabled }) => (
     </button>
 );
 
+// Width (mm) editor with local state so typing is smooth (the controlled value
+// would otherwise be re-clamped on every keystroke). Commits valid values live
+// and normalises to the allowed range on blur.
+const WidthInput = ({ value, onCommit, ariaLabel }) => {
+    const [focused, setFocused] = useState(false);
+    const [text, setText] = useState(String(value));
+    const [lastValue, setLastValue] = useState(value);
+    // Reflect external changes (while not editing) without an effect.
+    if (value !== lastValue && !focused) {
+        setLastValue(value);
+        setText(String(value));
+    }
+    return (
+        <input
+            type="number"
+            min={MIN_LOGO_WIDTH_MM}
+            max={MAX_LOGO_WIDTH_MM}
+            step="1"
+            value={text}
+            aria-label={ariaLabel}
+            onFocus={() => setFocused(true)}
+            onChange={(event) => {
+                setText(event.target.value);
+                const next = Number(event.target.value);
+                if (Number.isFinite(next) && next >= MIN_LOGO_WIDTH_MM) {
+                    onCommit(Math.min(next, MAX_LOGO_WIDTH_MM));
+                }
+            }}
+            onBlur={() => {
+                setFocused(false);
+                const next = clamp(Number(text) || MIN_LOGO_WIDTH_MM, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
+                setText(String(Math.round(next * 10) / 10));
+                setLastValue(next);
+                onCommit(next);
+            }}
+            className="h-7 w-16 rounded-[7px] border border-white/14 bg-[#211a1d] text-center text-[11px] font-black text-white outline-none [color-scheme:dark] focus:border-[#fff9ec]/70"
+        />
+    );
+};
+
 export const PrintCanvas = ({ onBack }) => {
     const language = useConfigurator((state) => state.language);
     const previewScrollRef = useRef(null);
@@ -1210,15 +1250,10 @@ export const PrintCanvas = ({ onBack }) => {
                                                         {t(language, 'printCanvasLogoWidth')}
                                                     </span>
                                                     <div className="flex items-center gap-1">
-                                                        <input
-                                                            type="number"
-                                                            min={MIN_LOGO_WIDTH_MM}
-                                                            max={MAX_LOGO_WIDTH_MM}
-                                                            step="1"
+                                                        <WidthInput
                                                             value={Math.round(logoWidthMm(logo) * 10) / 10}
-                                                            aria-label={t(language, 'printCanvasLogoWidth')}
-                                                            onChange={(event) => updateLogoWidth(logo.id, event.target.value)}
-                                                            className="h-7 w-16 rounded-[7px] border border-white/14 bg-[#211a1d] text-center text-[11px] font-black text-white outline-none [color-scheme:dark] focus:border-[#fff9ec]/70"
+                                                            ariaLabel={t(language, 'printCanvasLogoWidth')}
+                                                            onCommit={(mm) => updateLogoWidth(logo.id, mm)}
                                                         />
                                                         <span className="text-[10px] font-bold text-white/45">мм</span>
                                                     </div>
@@ -1412,22 +1447,18 @@ export const PrintCanvas = ({ onBack }) => {
                                             onPointerMove={moveItemDrag}
                                             onPointerUp={stopItemDrag}
                                             onPointerCancel={stopItemDrag}
-                                            className="absolute grid cursor-move touch-none place-items-center overflow-hidden"
+                                            className="absolute grid cursor-move touch-none place-items-center bg-transparent"
                                             title={item.name}
                                             style={{
                                                 left: item.x * previewScale,
                                                 top: item.y * previewScale,
                                                 width: item.w * previewScale,
                                                 height: item.h * previewScale,
-                                                borderRadius: item.shape === 'round' ? '999px' : 4,
-                                                // Transparency checkerboard so light/white artwork stays visible.
-                                                backgroundColor: '#c4c4c4',
-                                                backgroundImage: 'linear-gradient(45deg, #9a9a9a 25%, transparent 25%), linear-gradient(-45deg, #9a9a9a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #9a9a9a 75%), linear-gradient(-45deg, transparent 75%, #9a9a9a 75%)',
-                                                backgroundSize: '10px 10px',
-                                                backgroundPosition: '0 0, 0 5px, 5px -5px, -5px 0',
+                                                // Transparent cutout (no clipping) — a clean trace of the artwork.
+                                                // Only selection draws a frame; the footprint itself stays invisible.
                                                 boxShadow: selected
                                                     ? '0 0 0 2px #fff9ec, 0 0 0 4px rgba(255,249,236,0.35)'
-                                                    : 'inset 0 0 0 1px rgba(255,249,236,0.2)',
+                                                    : 'none',
                                                 zIndex: selected ? 2 : 1,
                                             }}
                                         >
