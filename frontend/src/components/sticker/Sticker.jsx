@@ -49,9 +49,9 @@ function materialForNode(node, variant, color) {
     const isGlass = /_2$/.test(node.name);
     if (isGlass) {
         return new THREE.MeshPhysicalMaterial({
-            color: '#D8DEE6',
+            color: '#E2E7EE',
             transparent: true,
-            opacity: 0.46,
+            opacity: 0.42,
             depthWrite: false,
             roughness: 0.12,
             metalness: 0.02,

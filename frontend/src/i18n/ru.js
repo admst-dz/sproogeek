@@ -44,6 +44,8 @@ export default {
     "selectedImage": "Выбранная картинка",
     "addImage": "Добавить картинку",
     "addBackgroundImage": "Добавить фон",
+    "stickerPackList": "Стикерпак",
+    "stickerPackEmpty": "Добавьте картинки, чтобы собрать стикерпак.",
     "stickerHint": "Вертикальный лист на 6 3D-стикеров. Загруженные логотипы попадают под прозрачную верхнюю часть.",
     "stickerSheetColor": "Цвет листа",
     "stickerSheetMode": "Вариант полотна",
