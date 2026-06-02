@@ -208,6 +208,7 @@ export default {
     "printCanvasEmpty": "Добавьте первый логотип, чтобы увидеть раскладку на полотне.",
     "printCanvasQuantity": "Количество",
     "printCanvasLogoSize": "Размер, мм",
+    "printCanvasLogoWidth": "Ширина, мм",
     "printCanvasPreview": "Предпросмотр",
     "printCanvasSize": "Ширина полотна",
     "printCanvasLogoGap": "Расстояние между логотипами",
