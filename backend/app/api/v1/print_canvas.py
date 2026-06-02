@@ -36,6 +36,7 @@ os.makedirs(EXPORT_DIR, exist_ok=True)
 
 TIFF_SIGNATURES = (b"II*\x00", b"MM\x00*")
 UPLOAD_CHUNK_SIZE = 1024 * 1024
+PDF_SIGNATURE = b"%PDF-"
 
 
 def _settings_section_enabled(section: str, key: str, default: bool = False) -> bool:
@@ -76,6 +77,15 @@ async def _read_tiff_bytes(file: UploadFile) -> bytes:
     content = await file.read()
     if not _is_tiff(content):
         raise HTTPException(status_code=400, detail="File content is not TIFF")
+    return content
+
+
+async def _read_pdf_bytes(file: UploadFile) -> bytes:
+    content = await file.read()
+    if len(content) > settings.max_logo_bytes:
+        raise HTTPException(status_code=413, detail="Source PDF is too large")
+    if content[:5] != PDF_SIGNATURE:
+        raise HTTPException(status_code=400, detail="File content is not PDF")
     return content
 
 
@@ -245,6 +255,7 @@ async def create_print_canvas_export(
     file: UploadFile | None = File(None),
     color: UploadFile | None = File(None),
     mask: UploadFile | None = File(None),
+    source_pdfs: list[UploadFile] | None = File(None),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user_optional),
 ):
@@ -260,9 +271,20 @@ async def create_print_canvas_export(
             raise HTTPException(status_code=400, detail="PDF export requires color and mask rasters")
         color_bytes = await _read_tiff_bytes(color)
         mask_bytes = await _read_tiff_bytes(mask)
+        source_pdf_bytes = []
+        for source_pdf in source_pdfs or []:
+            source_pdf_bytes.append(await _read_pdf_bytes(source_pdf))
         width_mm = _number(parsed.get("sheet_width_mm"), 0) or _number(parsed.get("used_width_mm"), 0)
         height_mm = _number(parsed.get("used_height_mm"), 0)
-        pdf_bytes = await run_in_threadpool(build_print_pdf, color_bytes, mask_bytes, width_mm, height_mm)
+        pdf_bytes = await run_in_threadpool(
+            build_print_pdf,
+            color_bytes,
+            mask_bytes,
+            width_mm,
+            height_mm,
+            source_pdfs=source_pdf_bytes,
+            metadata=parsed,
+        )
         filename = f"print-canvas-{export_id.hex}.pdf"
         file_path = os.path.join(EXPORT_DIR, filename)
         async with aiofiles.open(file_path, "wb") as out_file:
