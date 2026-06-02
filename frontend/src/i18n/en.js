@@ -52,7 +52,7 @@ export default {
     "stickerSheetModeSquare": "Square only",
     "stickerSheetModeCircle": "Circle only",
     "stickerSheetModeMixed": "Square + circle",
-    "stickerSheetFormat": "sheet for 6 stickers",
+    "stickerSheetFormat": "A6 · sheet for 6 stickers",
     "stickerSlots": "Stickers on sheet",
     "stickerSlotsLeft": "slots",
     "stickerSlot": "Sticker",

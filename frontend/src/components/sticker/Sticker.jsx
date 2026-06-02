@@ -14,6 +14,11 @@ import circleStickerModelUrl from '../../assets/crug_for_list.glb?url';
 const MODEL_SCALE = 0.7;
 const SHEET_WIDTH = 4.2;
 const SHEET_HEIGHT = 5.92;
+// Final pack is A6 (105x148 mm); the background fades to white over the outer 4 mm.
+const SHEET_WIDTH_MM = 105;
+const SHEET_HEIGHT_MM = 148;
+const WHITE_FADE_MM = 4;
+const SHEET_WHITE_FADE_Z = -0.0052;
 const STICKER_Z = 0.034;
 const SHEET_BACKGROUND_Z = -0.0056;
 const LOGO_Z = -0.011;
@@ -114,6 +119,54 @@ function SheetModel({ color }) {
                 />
             </mesh>
         </group>
+    );
+}
+
+function useWhiteFadeTexture() {
+    return useMemo(() => {
+        const pxPerMm = 3;
+        const w = Math.round(SHEET_WIDTH_MM * pxPerMm);
+        const h = Math.round(SHEET_HEIGHT_MM * pxPerMm);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        const img = ctx.createImageData(w, h);
+        const fadePx = WHITE_FADE_MM * pxPerMm;
+        for (let y = 0; y < h; y += 1) {
+            for (let x = 0; x < w; x += 1) {
+                const dist = Math.min(x, w - 1 - x, y, h - 1 - y);
+                const factor = Math.min(1, Math.max(0, dist / fadePx)); // 1 inside, 0 at edge
+                const i = (y * w + x) * 4;
+                img.data[i] = 255;
+                img.data[i + 1] = 255;
+                img.data[i + 2] = 255;
+                img.data[i + 3] = Math.round((1 - factor) * 255); // opaque white at edge
+            }
+        }
+        ctx.putImageData(img, 0, 0);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.needsUpdate = true;
+        return texture;
+    }, []);
+}
+
+function SheetWhiteFade() {
+    const map = useWhiteFadeTexture();
+    return (
+        <mesh position={[0, 0, SHEET_WHITE_FADE_Z]} renderOrder={13}>
+            <planeGeometry args={[SHEET_WIDTH, SHEET_HEIGHT]} />
+            <meshBasicMaterial
+                map={map}
+                transparent
+                depthWrite={false}
+                side={THREE.FrontSide}
+                polygonOffset
+                polygonOffsetFactor={-6}
+                polygonOffsetUnits={-6}
+            />
+        </mesh>
     );
 }
 
@@ -340,6 +393,7 @@ export function Sticker({ config = null, preview = false, position = [0, 0, 0] }
             {backgroundImages.map((image) => (
                 image?.texture ? <SheetBackgroundImage key={image.id} image={image} /> : null
             ))}
+            <SheetWhiteFade />
             <group position={[0, 0, STICKER_Z]}>
                 {SLOT_LAYOUT.map((slot, index) => {
                     const image = imagesBySlot.get(index);

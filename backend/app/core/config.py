@@ -81,6 +81,34 @@ class Settings(BaseSettings):
     cmyk_icc_profile: str = Field("", alias="CMYK_ICC_PROFILE")
     print_canvas_cmyk_max_pixels: int = Field(250_000_000, alias="PRINT_CANVAS_CMYK_MAX_PIXELS")
 
+    # --- 3D sticker pack print canvas ---
+    # The pack is printed on A6 (105x148 mm) at 300 DPI. The sheet artwork fades
+    # to white over the outermost `sticker_white_fade_mm` millimetres so there is
+    # no hard colour edge at the trim line.
+    sticker_sheet_width_mm: float = Field(105.0, alias="STICKER_SHEET_WIDTH_MM")
+    sticker_sheet_height_mm: float = Field(148.0, alias="STICKER_SHEET_HEIGHT_MM")
+    sticker_print_dpi: int = Field(300, alias="STICKER_PRINT_DPI")
+    sticker_white_fade_mm: float = Field(4.0, alias="STICKER_WHITE_FADE_MM")
+
+    # --- Real-ESRGAN super-resolution (low-quality artwork rescue) ---
+    # Source artwork that is below the pixel density needed for crisp 300 DPI
+    # print is upscaled with a Real-ESRGAN x4 ONNX model run on onnxruntime.
+    # The model is downloaded once into REALESRGAN_MODEL_PATH (or a cache dir).
+    # If it is unavailable, a high-quality Lanczos+sharpen fallback is used.
+    # REALESRGAN_MODEL_PATH points at a local ONNX file; if empty, REALESRGAN_MODEL_URL
+    # is downloaded once into a cache dir on first use. The model must be a Real-ESRGAN
+    # x4 export with a dynamic NCHW float input in [0,1] and an x4 NCHW output (the
+    # standard realesr-general-x4v3 / RealESRGAN_x4plus export). When neither is set
+    # or inference fails, the service falls back to Lanczos + unsharp masking.
+    realesrgan_model_path: str = Field("", alias="REALESRGAN_MODEL_PATH")
+    realesrgan_model_url: str = Field("", alias="REALESRGAN_MODEL_URL")
+    realesrgan_scale: int = Field(4, alias="REALESRGAN_SCALE")
+    image_upscale_enabled: bool = Field(True, alias="IMAGE_UPSCALE_ENABLED")
+    # Hard cap on the source pixels we attempt to upscale (OOM guard).
+    image_upscale_max_pixels: int = Field(4_000_000, alias="IMAGE_UPSCALE_MAX_PIXELS")
+    # Tile size (px) for the tiled SR inference so memory stays bounded.
+    image_upscale_tile: int = Field(256, alias="IMAGE_UPSCALE_TILE")
+
     admin_backdoor_enabled: bool = Field(False, alias="ADMIN_BACKDOOR_ENABLED")
     admin_backdoor_login: str = Field("", alias="ADMIN_BACKDOOR_LOGIN")
     admin_backdoor_password: str = Field("", alias="ADMIN_BACKDOOR_PASSWORD")
