@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import {
+    getStickerSlotShape,
     STICKER_DEFAULT_SLOT_SHAPES,
     STICKER_SLOT_COUNT,
     useConfigurator,
@@ -279,7 +280,7 @@ function SampleLogoMark({ shape, index }) {
     );
 }
 
-function normalizeImagesBySlot(images = []) {
+function normalizeImagesBySlot(images = [], sheetMode = 'mixed') {
     const bySlot = new Map();
     const usedSlots = new Set();
 
@@ -298,7 +299,9 @@ function normalizeImagesBySlot(images = []) {
         bySlot.set(slot, {
             ...image,
             slot,
-            shape: normalizeShape(image.shape ?? STICKER_DEFAULT_SLOT_SHAPES[slot]),
+            shape: sheetMode === 'mixed'
+                ? normalizeShape(image.shape ?? STICKER_DEFAULT_SLOT_SHAPES[slot])
+                : getStickerSlotShape(sheetMode, slot),
         });
     });
 
@@ -307,12 +310,14 @@ function normalizeImagesBySlot(images = []) {
 
 export function Sticker({ config = null, preview = false, position = [0, 0, 0] }) {
     const stickerSheetColor = useConfigurator((state) => state.stickerSheetColor);
+    const stickerSheetMode = useConfigurator((state) => state.stickerSheetMode);
     const stickerBackgroundImages = useConfigurator((state) => state.stickerBackgroundImages);
     const stickerImages = useConfigurator((state) => state.stickerImages);
     const hasConfig = Boolean(config);
     const configuredBackgroundImages = config?.stickerBackgroundImages;
     const configuredImages = config?.stickerImages;
     const sheetColor = hasConfig ? (config.stickerSheetColor ?? '#F6F1E7') : stickerSheetColor;
+    const sheetMode = hasConfig ? (config.stickerSheetMode ?? 'mixed') : stickerSheetMode;
     const backgroundImages = useMemo(() => (
         hasConfig ? (configuredBackgroundImages ?? EMPTY_IMAGES) : stickerBackgroundImages
     ), [configuredBackgroundImages, hasConfig, stickerBackgroundImages]);
@@ -321,7 +326,7 @@ export function Sticker({ config = null, preview = false, position = [0, 0, 0] }
     ), [configuredImages, hasConfig, stickerImages]);
     const { scene: squareScene } = useGLTF(squareStickerModelUrl);
     const { scene: circleScene } = useGLTF(circleStickerModelUrl);
-    const imagesBySlot = useMemo(() => normalizeImagesBySlot(images), [images]);
+    const imagesBySlot = useMemo(() => normalizeImagesBySlot(images, sheetMode), [images, sheetMode]);
     const showSamples = preview && imagesBySlot.size === 0;
 
     return (
@@ -338,7 +343,7 @@ export function Sticker({ config = null, preview = false, position = [0, 0, 0] }
             <group position={[0, 0, STICKER_Z]}>
                 {SLOT_LAYOUT.map((slot, index) => {
                     const image = imagesBySlot.get(index);
-                    const shape = normalizeShape(image?.shape ?? STICKER_DEFAULT_SLOT_SHAPES[index]);
+                    const shape = normalizeShape(image?.shape ?? getStickerSlotShape(sheetMode, index));
                     const sourceScene = shape === 'square' ? squareScene : circleScene;
                     const stencilRef = index + 1;
                     return (
