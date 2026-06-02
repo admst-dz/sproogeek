@@ -58,6 +58,10 @@ def _pdf_first_page_png(content: bytes) -> bytes:
             longest_pt = max(page.rect.width, page.rect.height) or 1.0
             zoom = min(PDF_RASTER_MAX_DPI / 72.0, PDF_RASTER_MAX_EDGE_PX / longest_pt)
             pixmap = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=True)
+            # Stamp the real DPI (72 * zoom) so the browser derives the true
+            # physical size from the page geometry instead of assuming 72 DPI.
+            dpi = max(1, round(72.0 * zoom))
+            pixmap.set_dpi(dpi, dpi)
             return pixmap.tobytes("png")
     except HTTPException:
         raise
