@@ -381,11 +381,19 @@ const trimTransparent = (sourceCanvas) => {
     return { canvas: cropped, width: cw, height: ch };
 };
 
-const base64ToPngFile = (base64, name) => {
+const base64ToBytes = (base64) => {
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-    return new File([bytes], name, { type: 'image/png' });
+    return bytes;
+};
+
+const base64ToFile = (base64, name, type) => (
+    new File([base64ToBytes(base64)], name, { type })
+);
+
+const base64ToPngFile = (base64, name) => {
+    return base64ToFile(base64, name, 'image/png');
 };
 
 // Build a logo from a browser-ready image File (PNG/JPG/...): trims transparent
@@ -484,14 +492,22 @@ const buildLogoFromImageFile = async (browserFile, displayName) => {
 const prepareLogosFromFile = async (file) => {
     if (isPdfFile(file)) {
         const { data } = await mediaApi.prepareLogoPdf(file);
-        const images = data?.images || [];
+        const entries = Array.isArray(data?.logos) && data.logos.length
+            ? data.logos
+            : (data?.images || []).map((image) => ({ image }));
         const base = (file.name || 'logo').replace(/\.[^.]+$/, '') || 'logo';
-        if (images.length) {
+        if (entries.length) {
             const logos = [];
-            for (let i = 0; i < images.length; i += 1) {
-                const partFile = base64ToPngFile(images[i], `${base}-${i + 1}.png`);
-                const partName = images.length > 1 ? `${base} (${i + 1})` : base;
-                logos.push(await buildLogoFromImageFile(partFile, partName));
+            for (let i = 0; i < entries.length; i += 1) {
+                const entry = entries[i];
+                const partFile = base64ToPngFile(entry.image, `${base}-${i + 1}.png`);
+                const partName = entries.length > 1 ? `${base} (${i + 1})` : base;
+                const logo = await buildLogoFromImageFile(partFile, partName);
+                if (entry.pdf) {
+                    logo.sourcePdf = base64ToFile(entry.pdf, `${base}-${i + 1}.pdf`, 'application/pdf');
+                    logo.sourceKind = 'pdf';
+                }
+                logos.push(logo);
             }
             return logos;
         }
@@ -1092,15 +1108,27 @@ export const PrintCanvas = ({ onBack }) => {
         const pxPerMm = TIFF_EXPORT_DPI / MM_PER_INCH;
         const widthPx = Math.max(1, Math.ceil(sw * pxPerMm));
         const heightPx = Math.max(1, Math.ceil(height * pxPerMm));
-        const drawItems = items.map((item) => ({
-            ...item,
-            px: {
-                x: Math.round(item.x * pxPerMm),
-                y: Math.round(item.y * pxPerMm),
-                width: Math.round(item.w * pxPerMm),
-                height: Math.round(item.h * pxPerMm),
-            },
-        }));
+        const sourcePdfFiles = [];
+        const sourcePdfIndexByLogo = new Map();
+        stateRef.current.logos.forEach((logo) => {
+            if (logo.sourcePdf && !logo.blackened) {
+                sourcePdfIndexByLogo.set(logo.id, sourcePdfFiles.length);
+                sourcePdfFiles.push(logo.sourcePdf);
+            }
+        });
+        const drawItems = items.map((item) => {
+            const sourcePdfIndex = sourcePdfIndexByLogo.get(item.logoId);
+            return {
+                ...item,
+                hasVectorSource: sourcePdfIndex !== undefined,
+                px: {
+                    x: Math.round(item.x * pxPerMm),
+                    y: Math.round(item.y * pxPerMm),
+                    width: Math.round(item.w * pxPerMm),
+                    height: Math.round(item.h * pxPerMm),
+                },
+            };
+        });
         const usedW = Math.min(sw, Math.max(...items.map((r) => r.x + r.w)) + SHEET_PADDING_MM);
         const metadata = {
             sheet_width_mm: sw,
@@ -1133,9 +1161,10 @@ export const PrintCanvas = ({ onBack }) => {
                 width_mm: item.w,
                 height_mm: item.h,
                 rotated: Boolean(item.rotated),
+                source_pdf_index: sourcePdfIndexByLogo.get(item.logoId),
             })),
         };
-        return { drawItems, widthPx, heightPx, metadata };
+        return { drawItems, widthPx, heightPx, metadata, sourcePdfFiles };
     }, []);
 
     // Render placed logos into a strip. `mode` 'color' draws the artwork;
@@ -1183,21 +1212,24 @@ export const PrintCanvas = ({ onBack }) => {
         setExportMsg('');
         setError('');
         try {
-            const { drawItems, widthPx, heightPx, metadata } = buildExportPlan();
+            const { drawItems, widthPx, heightPx, metadata, sourcePdfFiles } = buildExportPlan();
             const imageCache = new Map();
             for (const item of drawItems) {
                 if (!imageCache.has(item.logoId)) imageCache.set(item.logoId, await loadImage(item.src));
             }
-            const colorBlob = buildStripedTiff({
-                width: widthPx,
-                height: heightPx,
-                dpi: TIFF_EXPORT_DPI,
-                rowsPerStrip: TIFF_STRIP_ROWS,
-                renderStrip: makeStripRenderer(drawItems, imageCache, 'color'),
-            });
             const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 
             if (format === 'pdf') {
+                const pdfRasterItems = sourcePdfFiles.length
+                    ? drawItems.filter((item) => !item.hasVectorSource)
+                    : drawItems;
+                const pdfColorBlob = buildStripedTiff({
+                    width: widthPx,
+                    height: heightPx,
+                    dpi: TIFF_EXPORT_DPI,
+                    rowsPerStrip: TIFF_STRIP_ROWS,
+                    renderStrip: makeStripRenderer(pdfRasterItems, imageCache, 'color'),
+                });
                 const maskBlob = buildStripedTiff({
                     width: widthPx,
                     height: heightPx,
@@ -1206,9 +1238,9 @@ export const PrintCanvas = ({ onBack }) => {
                     renderStrip: makeStripRenderer(drawItems, imageCache, 'mask'),
                 });
                 const filename = `print-canvas-${stamp}.pdf`;
-                const colorFile = new File([colorBlob], 'color.tiff', { type: 'image/tiff' });
+                const colorFile = new File([pdfColorBlob], 'color.tiff', { type: 'image/tiff' });
                 const maskFile = new File([maskBlob], 'mask.tiff', { type: 'image/tiff' });
-                const { data: item } = await printCanvasApi.createPdfExport(colorFile, maskFile, metadata);
+                const { data: item } = await printCanvasApi.createPdfExport(colorFile, maskFile, metadata, sourcePdfFiles);
                 // The export is built, stored and emailed server-side here; only the
                 // convenience auto-download may hiccup, so retry it and fall back to
                 // a soft notice (the file stays available in the dashboard).
@@ -1226,6 +1258,13 @@ export const PrintCanvas = ({ onBack }) => {
                 return;
             }
 
+            const colorBlob = buildStripedTiff({
+                width: widthPx,
+                height: heightPx,
+                dpi: TIFF_EXPORT_DPI,
+                rowsPerStrip: TIFF_STRIP_ROWS,
+                renderStrip: makeStripRenderer(drawItems, imageCache, 'color'),
+            });
             const filename = `print-canvas-${stamp}.tiff`;
             const file = new File([colorBlob], filename, { type: 'image/tiff' });
             const { data: item } = await printCanvasApi.createExport(file, metadata);

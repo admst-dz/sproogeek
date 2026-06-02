@@ -216,10 +216,13 @@ export const printCanvasApi = {
         formData.append('metadata', JSON.stringify(metadata || {}));
         return apiClient.post('/print-canvas/exports', formData);
     },
-    createPdfExport: (colorFile, maskFile, metadata) => {
+    createPdfExport: (colorFile, maskFile, metadata, sourcePdfFiles = []) => {
         const formData = new FormData();
         formData.append('color', colorFile);
         formData.append('mask', maskFile);
+        sourcePdfFiles.forEach((file, index) => {
+            formData.append('source_pdfs', file, file.name || `source-${index + 1}.pdf`);
+        });
         formData.append('format', 'pdf');
         formData.append('metadata', JSON.stringify(metadata || {}));
         return apiClient.post('/print-canvas/exports', formData);

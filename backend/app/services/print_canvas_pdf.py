@@ -30,10 +30,14 @@ MM_PER_INCH = 25.4
 PT_PER_MM = 72.0 / MM_PER_INCH
 # Cap the traced mask resolution; the contour walk is O(boundary cells) but a
 # huge roll would still produce too many nodes. The sheet is downsampled to fit.
-TRACE_MAX_EDGE_PX = 2600
+TRACE_MAX_EDGE_PX = 4200
 DEFAULT_CHOKE_MM = 0.3
-# Below this alpha/darkness the mask pixel counts as "outside" the artwork.
-MASK_THRESHOLD = 128
+# The mask TIFF is black artwork on a white sheet. Treat low but visible alpha
+# coverage as underbase, then choke it back; this keeps thin details alive.
+MASK_COVERAGE_THRESHOLD = 12
+MASK_DOWNSAMPLE_THRESHOLD = 72
+TRACE_SIMPLIFY_EPSILON = 0.35
+TRACE_MIN_AREA_PX = 1.5
 
 # Marching-squares segment table. Case index = TL*8 + TR*4 + BR*2 + BL, where
 # the four corners of a cell are sampled clockwise from the top-left. Each entry
@@ -96,9 +100,13 @@ def _to_cmyk_image(rgb: Image.Image) -> Image.Image | None:
 
 
 def _binary_mask(gray: np.ndarray) -> np.ndarray:
-    """Inside-the-artwork mask. The browser paints a black silhouette on white,
-    so "dark" pixels are the shape."""
-    return gray < MASK_THRESHOLD
+    """Inside-the-artwork mask.
+
+    The browser paints a black silhouette on white, so darkness is equivalent
+    to alpha coverage. A low threshold preserves hairlines and antialiased
+    edges; the later choke step reins the base back in for print."""
+    coverage = 255 - gray.astype(np.int16)
+    return coverage >= MASK_COVERAGE_THRESHOLD
 
 
 def _downsample(mask: np.ndarray) -> tuple[np.ndarray, float]:
@@ -113,24 +121,31 @@ def _downsample(mask: np.ndarray) -> tuple[np.ndarray, float]:
     scale = longest / TRACE_MAX_EDGE_PX
     new_w = max(1, round(cols / scale))
     new_h = max(1, round(rows / scale))
+    resampling = getattr(Image, "Resampling", Image).LANCZOS
     resized = Image.fromarray((mask * 255).astype(np.uint8)).resize(
-        (new_w, new_h), Image.BILINEAR
+        (new_w, new_h), resampling
     )
-    return np.asarray(resized) >= MASK_THRESHOLD, scale
+    return np.asarray(resized) >= MASK_DOWNSAMPLE_THRESHOLD, scale
 
 
 def _erode(mask: np.ndarray, iterations: int) -> np.ndarray:
-    """Choke the mask inwards by ``iterations`` pixels (4-neighbour erosion)."""
+    """Choke the mask inwards by ``iterations`` pixels (8-neighbour erosion)."""
     if iterations <= 0:
         return mask
     out = mask
     for _ in range(iterations):
-        shifted = out.copy()
-        shifted[1:, :] &= out[:-1, :]
-        shifted[:-1, :] &= out[1:, :]
-        shifted[:, 1:] &= out[:, :-1]
-        shifted[:, :-1] &= out[:, 1:]
-        out = shifted
+        padded = np.pad(out, 1, mode="constant", constant_values=False)
+        out = (
+            padded[1:-1, 1:-1]
+            & padded[:-2, :-2]
+            & padded[:-2, 1:-1]
+            & padded[:-2, 2:]
+            & padded[1:-1, :-2]
+            & padded[1:-1, 2:]
+            & padded[2:, :-2]
+            & padded[2:, 1:-1]
+            & padded[2:, 2:]
+        )
     return out
 
 
@@ -227,12 +242,68 @@ def _simplify_closed(points: list[tuple[float, float]], epsilon: float) -> list[
     return first[:-1] + second[:-1]
 
 
+def _signed_area(points: list[tuple[float, float]]) -> float:
+    if len(points) < 3:
+        return 0.0
+    area = 0.0
+    prev_x, prev_y = points[-1]
+    for x, y in points:
+        area += prev_x * y - x * prev_y
+        prev_x, prev_y = x, y
+    return area * 0.5
+
+
+def _placement_number(item: dict, key: str, default: float = 0.0) -> float:
+    try:
+        return float(item.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _place_source_pdfs(page, fitz, source_pdfs: list[bytes], metadata: dict | None) -> None:
+    placements = metadata.get("placements") if isinstance(metadata, dict) else None
+    if not isinstance(placements, list) or not source_pdfs:
+        return
+
+    source_docs: dict[int, object] = {}
+    try:
+        for item in placements:
+            if not isinstance(item, dict):
+                continue
+            index = item.get("source_pdf_index")
+            if not isinstance(index, int) or index < 0 or index >= len(source_pdfs):
+                continue
+            x = _placement_number(item, "x_mm") * PT_PER_MM
+            y = _placement_number(item, "y_mm") * PT_PER_MM
+            w = _placement_number(item, "width_mm") * PT_PER_MM
+            h = _placement_number(item, "height_mm") * PT_PER_MM
+            if w <= 0 or h <= 0:
+                continue
+            if index not in source_docs:
+                source_docs[index] = fitz.open(stream=source_pdfs[index], filetype="pdf")
+            page.show_pdf_page(
+                fitz.Rect(x, y, x + w, y + h),
+                source_docs[index],
+                0,
+                keep_proportion=False,
+                overlay=True,
+                rotate=90 if item.get("rotated") else 0,
+            )
+    except Exception:  # noqa: BLE001 - vector preservation must not break export
+        logger.exception("failed to place source PDF elements on print canvas")
+    finally:
+        for doc in source_docs.values():
+            doc.close()
+
+
 def build_print_pdf(
     color_tiff: bytes,
     mask_tiff: bytes,
     width_mm: float,
     height_mm: float,
     choke_mm: float = DEFAULT_CHOKE_MM,
+    source_pdfs: list[bytes] | None = None,
+    metadata: dict | None = None,
 ) -> bytes:
     """Return a two-page print PDF (artwork + traced underbase) as bytes."""
     import fitz  # PyMuPDF (imported lazily, mirrors files.py)
@@ -247,11 +318,15 @@ def build_print_pdf(
 
     # --- trace the underbase silhouette ---
     full_mask = _binary_mask(gray)
-    mask, scale = _downsample(full_mask)
+    mask, _ = _downsample(full_mask)
     px_per_mm = mask.shape[1] / width_mm if width_mm else 1.0
     choke_px = int(round(max(0.0, choke_mm) * px_per_mm))
     mask = _erode(mask, min(choke_px, 6))
-    loops = _trace_contours(mask)
+    loops = [
+        loop for loop in _trace_contours(mask)
+        if abs(_signed_area(loop)) >= TRACE_MIN_AREA_PX
+    ]
+    loops.sort(key=lambda loop: abs(_signed_area(loop)), reverse=True)
 
     rows, cols = mask.shape
     sx = page_w / cols if cols else 1.0
@@ -270,19 +345,20 @@ def build_print_pdf(
         color_buf = io.BytesIO()
         color_rgb.save(color_buf, format="PNG")
         color_page.insert_image(color_rect, stream=color_buf.getvalue())
+    _place_source_pdfs(color_page, fitz, source_pdfs or [], metadata)
 
     # Page 2 — vector underbase trace.
     base_page = doc.new_page(width=page_w, height=page_h)
     if loops:
         shape = base_page.new_shape()
         for loop in loops:
-            simplified = _simplify_closed(loop, epsilon=0.6)
+            simplified = _simplify_closed(loop, epsilon=TRACE_SIMPLIFY_EPSILON)
             if len(simplified) < 3:
                 continue
             pts = [fitz.Point(x * sx, y * sy) for x, y in simplified]
             shape.draw_polyline(pts + [pts[0]])
         # CMYK black (K=100%) keeps the whole document in the CMYK colour space.
-        shape.finish(color=(0, 0, 0, 1), fill=(0, 0, 0, 1), width=0.3, even_odd=True, closePath=False)
+        shape.finish(color=(0, 0, 0, 1), fill=(0, 0, 0, 1), width=0, even_odd=True, closePath=False)
         shape.commit()
     else:
         logger.warning("print canvas underbase trace produced no contours")

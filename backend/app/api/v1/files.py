@@ -137,12 +137,53 @@ def _cluster_boxes(boxes: list[tuple], gap: float) -> list[tuple[float, float, f
     return merged
 
 
-def _pdf_split_logos_png(content: bytes) -> list[bytes]:
-    """Split a single-page PDF cover into its visual logos.
+def _union_box(boxes: list[tuple[float, float, float, float]]) -> tuple[float, float, float, float] | None:
+    if not boxes:
+        return None
+    return (
+        min(box[0] for box in boxes),
+        min(box[1] for box in boxes),
+        max(box[2] for box in boxes),
+        max(box[3] for box in boxes),
+    )
+
+
+def _render_pdf_clip_png(page, rect) -> bytes:
+    try:
+        import fitz  # PyMuPDF
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail="PDF support is not available") from exc
+
+    longest_pt = max(rect.width, rect.height) or 1.0
+    zoom = min(PDF_RASTER_MAX_DPI / 72.0, PDF_RASTER_MAX_EDGE_PX / longest_pt)
+    pixmap = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), clip=rect, alpha=True)
+    dpi = max(1, round(72.0 * zoom))
+    pixmap.set_dpi(dpi, dpi)
+    return pixmap.tobytes("png")
+
+
+def _pdf_clip_to_single_page(doc, rect) -> bytes:
+    try:
+        import fitz  # PyMuPDF
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail="PDF support is not available") from exc
+
+    out = fitz.open()
+    page = out.new_page(width=rect.width, height=rect.height)
+    page.show_pdf_page(page.rect, doc, 0, keep_proportion=False, clip=rect)
+    buf = out.tobytes(deflate=True, garbage=3)
+    out.close()
+    return buf
+
+
+def _pdf_split_logos(content: bytes) -> list[dict[str, bytes | float]]:
+    """Split a single-page PDF cover into visual logos.
 
     Clusters the page's drawable items by proximity and renders each cluster to
-    an isolated PNG (with correct DPI). Falls back to a single full-page render
-    when the page is one blob (e.g. an enclosing frame) or too fragmented."""
+    an isolated PNG preview plus a one-page PDF clip. The PDF clip is used by
+    print-canvas exports to preserve source vector/text/CMYK elements on page 1.
+    Falls back to a single visual-bounds render when the page is one blob (e.g.
+    an enclosing frame) or too fragmented."""
     try:
         import fitz  # PyMuPDF
     except ImportError as exc:
@@ -155,23 +196,34 @@ def _pdf_split_logos_png(content: bytes) -> list[bytes]:
             boxes = _collect_pdf_item_boxes(page)
             gap_pt = PDF_SPLIT_GAP_MM * 72.0 / 25.4
             clusters = _cluster_boxes(boxes, gap_pt) if boxes else []
-            if len(clusters) <= 1 or len(clusters) > PDF_SPLIT_MAX_GROUPS:
-                return [_pdf_first_page_png(content)]
-            clusters.sort(key=lambda b: (round(b[1]), round(b[0])))
-            images: list[bytes] = []
-            for x0, y0, x1, y1 in clusters:
-                rect = fitz.Rect(x0, y0, x1, y1)
-                longest_pt = max(rect.width, rect.height) or 1.0
-                zoom = min(PDF_RASTER_MAX_DPI / 72.0, PDF_RASTER_MAX_EDGE_PX / longest_pt)
-                pixmap = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), clip=rect, alpha=True)
-                dpi = max(1, round(72.0 * zoom))
-                pixmap.set_dpi(dpi, dpi)
-                images.append(pixmap.tobytes("png"))
-            return images
+            if len(clusters) == 0:
+                rects = [page.rect]
+            elif len(clusters) == 1:
+                rects = [fitz.Rect(*clusters[0])]
+            elif len(clusters) > PDF_SPLIT_MAX_GROUPS:
+                union = _union_box(clusters)
+                rects = [fitz.Rect(*union)] if union else [page.rect]
+            else:
+                clusters.sort(key=lambda b: (round(b[1]), round(b[0])))
+                rects = [fitz.Rect(x0, y0, x1, y1) for x0, y0, x1, y1 in clusters]
+
+            logos: list[dict[str, bytes | float]] = []
+            for rect in rects:
+                logos.append({
+                    "image": _render_pdf_clip_png(page, rect),
+                    "pdf": _pdf_clip_to_single_page(doc, rect),
+                    "width_pt": float(rect.width),
+                    "height_pt": float(rect.height),
+                })
+            return logos
     except HTTPException:
         raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Could not split PDF") from exc
+
+
+def _pdf_split_logos_png(content: bytes) -> list[bytes]:
+    return [item["image"] for item in _pdf_split_logos(content)]
 
 
 def _tiff_to_png(content: bytes) -> bytes:
@@ -537,7 +589,7 @@ async def remove_uploaded_logo_background(
 
 @router.post("/prepare-logo-pdf")
 async def prepare_pdf_logos(file: UploadFile = File(...)):
-    """Split a single-page PDF into its visual logos as base64 PNGs."""
+    """Split a single-page PDF into visual logos with PNG previews and PDF clips."""
     content_type = (file.content_type or "").split(";")[0].lower()
     name = os.path.basename(file.filename or "").lower()
     if content_type != "application/pdf" and not name.endswith(".pdf"):
@@ -547,8 +599,19 @@ async def prepare_pdf_logos(file: UploadFile = File(...)):
         raise HTTPException(status_code=413, detail="File is too large")
     if content[:5] != b"%PDF-":
         raise HTTPException(status_code=400, detail="File content is not PDF")
-    images = await run_in_threadpool(_pdf_split_logos_png, content)
-    return {"images": [base64.b64encode(png).decode("ascii") for png in images]}
+    logos = await run_in_threadpool(_pdf_split_logos, content)
+    return {
+        "images": [base64.b64encode(item["image"]).decode("ascii") for item in logos],
+        "logos": [
+            {
+                "image": base64.b64encode(item["image"]).decode("ascii"),
+                "pdf": base64.b64encode(item["pdf"]).decode("ascii"),
+                "width_pt": item.get("width_pt"),
+                "height_pt": item.get("height_pt"),
+            }
+            for item in logos
+        ],
+    }
 
 
 @router.post("/prepare-logo")
