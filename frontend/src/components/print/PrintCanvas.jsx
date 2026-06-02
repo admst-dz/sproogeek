@@ -343,7 +343,7 @@ const makeLogoId = () => (
 
 // Crop fully transparent margins so a logo's footprint is just its artwork,
 // which keeps the print sheet tight. Returns null when there is nothing to trim.
-const trimTransparent = (sourceCanvas) => {
+const trimTransparent = (sourceCanvas, alphaThreshold = 2) => {
     const w = sourceCanvas.width;
     const h = sourceCanvas.height;
     const ctx = sourceCanvas.getContext('2d');
@@ -357,7 +357,6 @@ const trimTransparent = (sourceCanvas) => {
     let minY = h;
     let maxX = -1;
     let maxY = -1;
-    const alphaThreshold = 8;
     for (let y = 0; y < h; y += 1) {
         for (let x = 0; x < w; x += 1) {
             if (data[(y * w + x) * 4 + 3] > alphaThreshold) {
@@ -398,7 +397,7 @@ const base64ToPngFile = (base64, name) => {
 
 // Build a logo from a browser-ready image File (PNG/JPG/...): trims transparent
 // margins, derives physical size from DPI, detects round shape.
-const buildLogoFromImageFile = async (browserFile, displayName) => {
+const buildLogoFromImageFile = async (browserFile, displayName, { preserveColor = false } = {}) => {
     const [source, dpi] = await Promise.all([
         readAsDataURL(browserFile),
         readImageDpi(browserFile),
@@ -421,7 +420,7 @@ const buildLogoFromImageFile = async (browserFile, displayName) => {
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(image, 0, 0, width, height);
 
-    const trimmed = trimTransparent(canvas);
+    const trimmed = trimTransparent(canvas, preserveColor ? 0 : 2);
     const content = trimmed ? trimmed.canvas : canvas;
     const contentW = trimmed ? trimmed.width : width;
     const contentH = trimmed ? trimmed.height : height;
@@ -479,7 +478,7 @@ const buildLogoFromImageFile = async (browserFile, displayName) => {
         name: displayName || browserFile.name || 'logo.png',
         src: content.toDataURL('image/png'),
         srcBlack: blackCanvas.toDataURL('image/png'),
-        blackened: lightArt,
+        blackened: preserveColor ? false : lightArt,
         widthPx: sourceContentW,
         heightPx: sourceContentH,
         widthMm,
@@ -502,12 +501,23 @@ const prepareLogosFromFile = async (file) => {
                 const entry = entries[i];
                 const partFile = base64ToPngFile(entry.image, `${base}-${i + 1}.png`);
                 const partName = entries.length > 1 ? `${base} (${i + 1})` : base;
-                const logo = await buildLogoFromImageFile(partFile, partName);
                 if (entry.pdf) {
+                    const logo = await buildLogoFromImageFile(partFile, partName, { preserveColor: true });
                     logo.sourcePdf = base64ToFile(entry.pdf, `${base}-${i + 1}.pdf`, 'application/pdf');
                     logo.sourceKind = 'pdf';
+                    logo.sourceWidthPt = Number(entry.width_pt) || null;
+                    logo.sourceHeightPt = Number(entry.height_pt) || null;
+                    if (logo.sourceWidthPt) {
+                        logo.widthMm = clamp(
+                            (logo.sourceWidthPt * MM_PER_INCH) / 72,
+                            MIN_LOGO_WIDTH_MM,
+                            MAX_LOGO_WIDTH_MM
+                        );
+                    }
+                    logos.push(logo);
+                } else {
+                    logos.push(await buildLogoFromImageFile(partFile, partName));
                 }
-                logos.push(logo);
             }
             return logos;
         }
@@ -521,7 +531,15 @@ const logoWidthMm = (logo) => clamp(
     MIN_LOGO_WIDTH_MM,
     MAX_LOGO_WIDTH_MM
 );
-const logoHeightMm = (logo, widthMm) => Math.max(6, widthMm * (logo.heightPx / Math.max(1, logo.widthPx)));
+const logoAspect = (logo) => {
+    const sourceWidthPt = Number(logo.sourceWidthPt);
+    const sourceHeightPt = Number(logo.sourceHeightPt);
+    if (Number.isFinite(sourceWidthPt) && sourceWidthPt > 0 && Number.isFinite(sourceHeightPt) && sourceHeightPt > 0) {
+        return sourceHeightPt / sourceWidthPt;
+    }
+    return logo.heightPx / Math.max(1, logo.widthPx);
+};
+const logoHeightMm = (logo, widthMm) => Math.max(6, widthMm * logoAspect(logo));
 const formatMmValue = (value) => {
     const number = Number(value);
     if (!Number.isFinite(number)) return '0,00';

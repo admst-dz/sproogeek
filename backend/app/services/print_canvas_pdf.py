@@ -38,6 +38,9 @@ MASK_COVERAGE_THRESHOLD = 12
 MASK_DOWNSAMPLE_THRESHOLD = 72
 TRACE_SIMPLIFY_EPSILON = 0.35
 TRACE_MIN_AREA_PX = 1.5
+UNDERBASE_CLOSE_MM = 0.06
+UNDERBASE_MAX_CLOSE_PX = 2
+UNDERBASE_MAX_CHOKE_PX = 8
 
 # Marching-squares segment table. Case index = TL*8 + TR*4 + BR*2 + BL, where
 # the four corners of a cell are sampled clockwise from the top-left. Each entry
@@ -149,6 +152,32 @@ def _erode(mask: np.ndarray, iterations: int) -> np.ndarray:
     return out
 
 
+def _dilate(mask: np.ndarray, iterations: int) -> np.ndarray:
+    """Grow the mask by ``iterations`` pixels (8-neighbour dilation)."""
+    if iterations <= 0:
+        return mask
+    out = mask
+    for _ in range(iterations):
+        padded = np.pad(out, 1, mode="constant", constant_values=False)
+        out = (
+            padded[1:-1, 1:-1]
+            | padded[:-2, :-2]
+            | padded[:-2, 1:-1]
+            | padded[:-2, 2:]
+            | padded[1:-1, :-2]
+            | padded[1:-1, 2:]
+            | padded[2:, :-2]
+            | padded[2:, 1:-1]
+            | padded[2:, 2:]
+        )
+    return out
+
+
+def _close(mask: np.ndarray, iterations: int) -> np.ndarray:
+    """Fill tiny pinholes/gaps without changing the overall silhouette much."""
+    return _erode(_dilate(mask, iterations), iterations) if iterations > 0 else mask
+
+
 def _edge_point(edge: str, r: int, c: int) -> tuple[float, float]:
     if edge == "T":
         return (c + 0.5, float(r))
@@ -253,6 +282,26 @@ def _signed_area(points: list[tuple[float, float]]) -> float:
     return area * 0.5
 
 
+def _filtered_contours(mask: np.ndarray) -> list[list[tuple[float, float]]]:
+    loops = [
+        loop for loop in _trace_contours(mask)
+        if abs(_signed_area(loop)) >= TRACE_MIN_AREA_PX
+    ]
+    loops.sort(key=lambda loop: abs(_signed_area(loop)), reverse=True)
+    return loops
+
+
+def _unique_steps(*values: int) -> list[int]:
+    seen: set[int] = set()
+    out: list[int] = []
+    for value in values:
+        value = max(0, int(value))
+        if value not in seen:
+            seen.add(value)
+            out.append(value)
+    return out
+
+
 def _placement_number(item: dict, key: str, default: float = 0.0) -> float:
     try:
         return float(item.get(key, default))
@@ -320,13 +369,20 @@ def build_print_pdf(
     full_mask = _binary_mask(gray)
     mask, _ = _downsample(full_mask)
     px_per_mm = mask.shape[1] / width_mm if width_mm else 1.0
-    choke_px = int(round(max(0.0, choke_mm) * px_per_mm))
-    mask = _erode(mask, min(choke_px, 6))
-    loops = [
-        loop for loop in _trace_contours(mask)
-        if abs(_signed_area(loop)) >= TRACE_MIN_AREA_PX
-    ]
-    loops.sort(key=lambda loop: abs(_signed_area(loop)), reverse=True)
+    close_px = min(UNDERBASE_MAX_CLOSE_PX, int(round(UNDERBASE_CLOSE_MM * px_per_mm)))
+    mask = _close(mask, close_px)
+    choke_px = min(UNDERBASE_MAX_CHOKE_PX, int(round(max(0.0, choke_mm) * px_per_mm)))
+    base_area = int(mask.sum())
+    loops: list[list[tuple[float, float]]] = []
+    for step in _unique_steps(choke_px, choke_px - 1, choke_px // 2, 0):
+        candidate = _erode(mask, step)
+        if base_area and int(candidate.sum()) < max(1, base_area * 0.04):
+            continue
+        candidate_loops = _filtered_contours(candidate)
+        if candidate_loops:
+            mask = candidate
+            loops = candidate_loops
+            break
 
     rows, cols = mask.shape
     sx = page_w / cols if cols else 1.0
