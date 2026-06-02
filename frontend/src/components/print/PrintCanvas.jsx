@@ -341,6 +341,46 @@ const makeLogoId = () => (
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`
 );
 
+// Crop fully transparent margins so a logo's footprint is just its artwork,
+// which keeps the print sheet tight. Returns null when there is nothing to trim.
+const trimTransparent = (sourceCanvas) => {
+    const w = sourceCanvas.width;
+    const h = sourceCanvas.height;
+    const ctx = sourceCanvas.getContext('2d');
+    let data;
+    try {
+        data = ctx.getImageData(0, 0, w, h).data;
+    } catch {
+        return null;
+    }
+    let minX = w;
+    let minY = h;
+    let maxX = -1;
+    let maxY = -1;
+    const alphaThreshold = 8;
+    for (let y = 0; y < h; y += 1) {
+        for (let x = 0; x < w; x += 1) {
+            if (data[(y * w + x) * 4 + 3] > alphaThreshold) {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+            }
+        }
+    }
+    if (maxX < minX || maxY < minY) return null; // fully transparent — keep as-is
+    if (minX === 0 && minY === 0 && maxX === w - 1 && maxY === h - 1) return null; // already tight
+    const cw = maxX - minX + 1;
+    const ch = maxY - minY + 1;
+    const cropped = document.createElement('canvas');
+    cropped.width = cw;
+    cropped.height = ch;
+    const cctx = cropped.getContext('2d', { alpha: true, colorSpace: 'srgb' });
+    if (!cctx) return null;
+    cctx.drawImage(sourceCanvas, minX, minY, cw, ch, 0, 0, cw, ch);
+    return { canvas: cropped, width: cw, height: ch };
+};
+
 const prepareLogoFile = async (file) => {
     const browserFile = await prepareBrowserLogoFile(file);
     const [source, dpi] = await Promise.all([
@@ -365,28 +405,37 @@ const prepareLogoFile = async (file) => {
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(image, 0, 0, width, height);
 
+    const trimmed = trimTransparent(canvas);
+    const content = trimmed ? trimmed.canvas : canvas;
+    const contentW = trimmed ? trimmed.width : width;
+    const contentH = trimmed ? trimmed.height : height;
+
     let hasTransparentCorners = false;
     try {
-        const data = ctx.getImageData(0, 0, width, height).data;
+        const data = content.getContext('2d').getImageData(0, 0, contentW, contentH).data;
         const corners = [
             3,
-            (width - 1) * 4 + 3,
-            ((height - 1) * width) * 4 + 3,
-            ((height - 1) * width + width - 1) * 4 + 3,
+            (contentW - 1) * 4 + 3,
+            ((contentH - 1) * contentW) * 4 + 3,
+            ((contentH - 1) * contentW + contentW - 1) * 4 + 3,
         ];
         hasTransparentCorners = corners.some((index) => data[index] < 32);
     } catch {
         hasTransparentCorners = false;
     }
 
-    const aspect = width / height;
-    const widthMm = clamp(pxToMm(sourceWidth, dpi.dpiX), MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
+    const aspect = contentW / contentH;
+    // Map the trimmed pixels back to the source resolution for an accurate
+    // physical size (DPI is defined against the original image).
+    const sourceContentW = Math.max(1, Math.round(contentW / scale));
+    const sourceContentH = Math.max(1, Math.round(contentH / scale));
+    const widthMm = clamp(pxToMm(sourceContentW, dpi.dpiX), MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
     return {
         id: makeLogoId(),
         name: file.name || browserFile.name || 'logo.png',
-        src: canvas.toDataURL('image/png'),
-        widthPx: sourceWidth,
-        heightPx: sourceHeight,
+        src: content.toDataURL('image/png'),
+        widthPx: sourceContentW,
+        heightPx: sourceContentH,
         widthMm,
         shape: hasTransparentCorners && aspect > 0.82 && aspect < 1.18 ? 'round' : 'auto',
     };
@@ -594,6 +643,13 @@ export const PrintCanvas = ({ onBack }) => {
             setBusy(false);
         }
     }, [language]);
+
+    const updateLogoWidth = useCallback((id, mm) => {
+        const value = clamp(Number(mm) || 0, MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
+        setLogos((current) => current.map((logo) => (
+            logo.id === id ? { ...logo, widthMm: value } : logo
+        )));
+    }, []);
 
     const removeLogo = useCallback((id) => {
         setLogos((current) => current.filter((logo) => logo.id !== id));
@@ -1119,22 +1175,42 @@ export const PrintCanvas = ({ onBack }) => {
                                                     </button>
                                                 </div>
                                             </div>
-                                            <div className="mt-2 flex items-center justify-between gap-2 border-t border-white/8 pt-2">
-                                                <span className="text-[10px] font-black uppercase tracking-wider text-white/42">
-                                                    {logoSizeLabel(logo)}
-                                                </span>
-                                                <div className="flex min-w-0 items-center gap-1">
-                                                    <QuantityButton disabled={quantity <= 1} onClick={() => setLogoCount(logo.id, quantity - 1)}>−</QuantityButton>
-                                                    <input
-                                                        type="number"
-                                                        min="1"
-                                                        max={MAX_COPIES}
-                                                        value={quantity}
-                                                        aria-label={t(language, 'printCanvasQuantity')}
-                                                        onChange={(event) => setLogoCount(logo.id, clamp(Number(event.target.value) || 1, 1, MAX_COPIES))}
-                                                        className="h-8 w-12 rounded-[8px] border border-white/14 bg-[#211a1d] text-center text-[12px] font-black text-white outline-none [color-scheme:dark] focus:border-[#fff9ec]/70"
-                                                    />
-                                                    <QuantityButton onClick={() => setLogoCount(logo.id, quantity + 1)}>+</QuantityButton>
+                                            <div className="mt-2 space-y-2 border-t border-white/8 pt-2">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-white/42">
+                                                        {t(language, 'printCanvasLogoWidth')}
+                                                    </span>
+                                                    <div className="flex items-center gap-1">
+                                                        <input
+                                                            type="number"
+                                                            min={MIN_LOGO_WIDTH_MM}
+                                                            max={MAX_LOGO_WIDTH_MM}
+                                                            step="1"
+                                                            value={Math.round(logoWidthMm(logo) * 10) / 10}
+                                                            aria-label={t(language, 'printCanvasLogoWidth')}
+                                                            onChange={(event) => updateLogoWidth(logo.id, event.target.value)}
+                                                            className="h-7 w-16 rounded-[7px] border border-white/14 bg-[#211a1d] text-center text-[11px] font-black text-white outline-none [color-scheme:dark] focus:border-[#fff9ec]/70"
+                                                        />
+                                                        <span className="text-[10px] font-bold text-white/45">мм</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-white/38">
+                                                        {logoSizeLabel(logo)}
+                                                    </span>
+                                                    <div className="flex min-w-0 items-center gap-1">
+                                                        <QuantityButton disabled={quantity <= 1} onClick={() => setLogoCount(logo.id, quantity - 1)}>−</QuantityButton>
+                                                        <input
+                                                            type="number"
+                                                            min="1"
+                                                            max={MAX_COPIES}
+                                                            value={quantity}
+                                                            aria-label={t(language, 'printCanvasQuantity')}
+                                                            onChange={(event) => setLogoCount(logo.id, clamp(Number(event.target.value) || 1, 1, MAX_COPIES))}
+                                                            className="h-8 w-12 rounded-[8px] border border-white/14 bg-[#211a1d] text-center text-[12px] font-black text-white outline-none [color-scheme:dark] focus:border-[#fff9ec]/70"
+                                                        />
+                                                        <QuantityButton onClick={() => setLogoCount(logo.id, quantity + 1)}>+</QuantityButton>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
