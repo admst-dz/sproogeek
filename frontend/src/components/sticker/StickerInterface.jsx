@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { captureRender, STICKER_SLOT_COUNT, useConfigurator } from '../../store';
+import { captureRender, getStickerSlotShape, STICKER_SLOT_COUNT, useConfigurator } from '../../store';
 import { t } from '../../i18n';
 import {
     ColorDropdown,
@@ -36,8 +36,15 @@ const STICKER_PRINT_SLOTS = [
     { x: 1.08, y: -2.05 },
 ];
 
+const stickerSheetModeLabel = (language, mode) => {
+    if (mode === 'square') return t(language, 'stickerSheetModeSquare');
+    if (mode === 'circle') return t(language, 'stickerSheetModeCircle');
+    return t(language, 'stickerSheetModeMixed');
+};
+
 const buildStickerPrintPayload = ({
     stickerSheetColor,
+    stickerSheetMode,
     stickerBackgroundImages,
     stickerImages,
 }) => ({
@@ -47,8 +54,10 @@ const buildStickerPrintPayload = ({
     scene_height_units: STICKER_PRINT_SHEET.heightUnits,
     export_dpi: STICKER_PRINT_SHEET.dpi,
     sheet_color: stickerSheetColor,
+    sheet_mode: stickerSheetMode,
     slots: STICKER_PRINT_SLOTS.map((slot, index) => ({
         index,
+        shape: getStickerSlotShape(stickerSheetMode, index),
         x_units: slot.x,
         y_units: slot.y,
         center_x_mm: STICKER_PRINT_SHEET.widthMm / 2 + (slot.x / STICKER_PRINT_SHEET.widthUnits) * STICKER_PRINT_SHEET.widthMm,
@@ -69,7 +78,9 @@ const buildStickerPrintPayload = ({
         filename: image.filename,
         texture: image.texture,
         slot: Number.isInteger(image.slot) ? image.slot : index,
-        shape: image.shape || 'circle',
+        shape: stickerSheetMode === 'mixed'
+            ? (image.shape || getStickerSlotShape('mixed', Number.isInteger(image.slot) ? image.slot : index))
+            : getStickerSlotShape(stickerSheetMode, Number.isInteger(image.slot) ? image.slot : index),
         position: image.position || [0, 0],
         rotation: image.rotation || 0,
         scale: image.scale || 0.72,
@@ -79,11 +90,13 @@ const buildStickerPrintPayload = ({
 export const StickerInterface = ({ onFinish }) => {
     const {
         stickerSheetColor,
+        stickerSheetMode,
         stickerBackgroundImages,
         selectedStickerBackgroundImageId,
         stickerImages,
         selectedStickerImageId,
         setStickerSheetColor,
+        setStickerSheetMode,
         addStickerBackgroundImage,
         selectStickerBackgroundImage,
         removeStickerBackgroundImage,
@@ -112,13 +125,14 @@ export const StickerInterface = ({ onFinish }) => {
 
     const buildStickerCartItem = (snapshot) => ({
         productName: t(language, 'sticker3d'),
-        design: `${t(language, 'stickerCanvasSize')}: ${stickerSizeLabel}, ${t(language, 'stickerSheetColor')}: ${stickerSheetColor}, ${t(language, 'stickerBackgroundImages')}: ${stickerBackgroundImages.length}, ${t(language, 'printCanvasItems')}: ${stickerImages.length}/${STICKER_SLOT_COUNT}`,
+        design: `${t(language, 'stickerCanvasSize')}: ${stickerSizeLabel}, ${t(language, 'stickerSheetMode')}: ${stickerSheetModeLabel(language, stickerSheetMode)}, ${t(language, 'stickerSheetColor')}: ${stickerSheetColor}, ${t(language, 'stickerBackgroundImages')}: ${stickerBackgroundImages.length}, ${t(language, 'printCanvasItems')}: ${stickerImages.length}/${STICKER_SLOT_COUNT}`,
         priceBYN: 0,
         type: 'sticker',
         activeProduct: 'sticker',
         stickerWidthMm: 40,
         stickerHeightMm: 45,
         stickerSheetColor,
+        stickerSheetMode,
         stickerBackgroundImages,
         stickerImages,
         status: 'draft',
@@ -162,6 +176,17 @@ export const StickerInterface = ({ onFinish }) => {
                             colors={STICKER_SHEET_COLOR_PALETTE}
                             currentColor={stickerSheetColor}
                             onSelect={setStickerSheetColor}
+                        />
+                    </SettingRow>
+                    <SettingRow label={t(language, 'stickerSheetMode')}>
+                        <MiniSegment
+                            value={stickerSheetMode}
+                            onChange={setStickerSheetMode}
+                            options={[
+                                { value: 'square', label: t(language, 'stickerSheetModeSquare') },
+                                { value: 'circle', label: t(language, 'stickerSheetModeCircle') },
+                                { value: 'mixed', label: t(language, 'stickerSheetModeMixed') },
+                            ]}
                         />
                     </SettingRow>
                     <SettingRow label={t(language, 'stickerSlots')} inline>
@@ -225,7 +250,13 @@ export const StickerInterface = ({ onFinish }) => {
                         selectedLogoId={selectedStickerImageId}
                         selectLogo={selectStickerImage}
                         removeLogo={removeStickerImage}
-                        metaForLogo={(logo) => `${t(language, 'stickerSlot')} ${(logo.slot ?? stickerImages.indexOf(logo)) + 1} · ${logo.shape === 'square' ? t(language, 'stickerShapeSquare') : t(language, 'stickerShapeCircle')}`}
+                        metaForLogo={(logo) => {
+                            const slot = logo.slot ?? stickerImages.indexOf(logo);
+                            const shape = stickerSheetMode === 'mixed'
+                                ? (logo.shape || getStickerSlotShape('mixed', slot))
+                                : getStickerSlotShape(stickerSheetMode, slot);
+                            return `${t(language, 'stickerSlot')} ${slot + 1} · ${shape === 'square' ? t(language, 'stickerShapeSquare') : t(language, 'stickerShapeCircle')}`;
+                        }}
                     />
                 </SettingGroup>
 
@@ -233,32 +264,36 @@ export const StickerInterface = ({ onFinish }) => {
                     <SettingGroup title={t(language, 'selectedImage')}>
                         <div className="space-y-3 xl:hidden">
                             <LogoBackgroundRemovalButton logo={selected} language={language} onApply={(file) => replaceStickerImageFile(selected.id, file)} />
-                            <SettingRow label={t(language, 'stickerShape')}>
-                                <MiniSegment
-                                    value={selected.shape ?? 'circle'}
-                                    onChange={setStickerImageShape}
-                                    options={[
-                                        { value: 'circle', label: t(language, 'stickerShapeCircle') },
-                                        { value: 'square', label: t(language, 'stickerShapeSquare') },
-                                    ]}
-                                />
-                            </SettingRow>
+                            {stickerSheetMode === 'mixed' && (
+                                <SettingRow label={t(language, 'stickerShape')}>
+                                    <MiniSegment
+                                        value={selected.shape ?? getStickerSlotShape('mixed', selected.slot ?? 0)}
+                                        onChange={setStickerImageShape}
+                                        options={[
+                                            { value: 'circle', label: t(language, 'stickerShapeCircle') },
+                                            { value: 'square', label: t(language, 'stickerShapeSquare') },
+                                        ]}
+                                    />
+                                </SettingRow>
+                            )}
                             <TransformPad label={t(language, 'position')} value={selected.position} onChange={setStickerImagePosition} onReset={resetStickerImageTransform} aspect="aspect-square" xRange={0.92} yRange={0.92} />
                             <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setStickerImageRotation} />
                             <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.72} min={0.22} max={3} step={0.03} onChange={setStickerImageScale} />
                         </div>
                         <FloatingLogoSettings title={t(language, 'selectedImage')} subtitle={selected.filename}>
                             <LogoBackgroundRemovalButton logo={selected} language={language} onApply={(file) => replaceStickerImageFile(selected.id, file)} />
-                            <SettingRow label={t(language, 'stickerShape')}>
-                                <MiniSegment
-                                    value={selected.shape ?? 'circle'}
-                                    onChange={setStickerImageShape}
-                                    options={[
-                                        { value: 'circle', label: t(language, 'stickerShapeCircle') },
-                                        { value: 'square', label: t(language, 'stickerShapeSquare') },
-                                    ]}
-                                />
-                            </SettingRow>
+                            {stickerSheetMode === 'mixed' && (
+                                <SettingRow label={t(language, 'stickerShape')}>
+                                    <MiniSegment
+                                        value={selected.shape ?? getStickerSlotShape('mixed', selected.slot ?? 0)}
+                                        onChange={setStickerImageShape}
+                                        options={[
+                                            { value: 'circle', label: t(language, 'stickerShapeCircle') },
+                                            { value: 'square', label: t(language, 'stickerShapeSquare') },
+                                        ]}
+                                    />
+                                </SettingRow>
+                            )}
                             <TransformPad label={t(language, 'position')} value={selected.position} onChange={setStickerImagePosition} onReset={resetStickerImageTransform} aspect="aspect-square" xRange={0.92} yRange={0.92} />
                             <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setStickerImageRotation} />
                             <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.72} min={0.22} max={3} step={0.03} onChange={setStickerImageScale} />
@@ -276,6 +311,7 @@ export const StickerInterface = ({ onFinish }) => {
                 extraPayload={{
                     sticker_print_payload: buildStickerPrintPayload({
                         stickerSheetColor,
+                        stickerSheetMode,
                         stickerBackgroundImages,
                         stickerImages,
                     }),

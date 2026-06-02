@@ -163,6 +163,7 @@ export const POWERBANK_DEFAULTS = {
 };
 export const STICKER_DEFAULTS = {
     stickerSheetColor: '#F6F1E7',
+    stickerSheetMode: 'mixed',
     stickerBackgroundImages: [],
     selectedStickerBackgroundImageId: null,
     stickerImages: [],
@@ -251,8 +252,18 @@ const makeLogoId = () => (
 
 export const STICKER_SLOT_COUNT = 6;
 export const STICKER_DEFAULT_SLOT_SHAPES = ['circle', 'square', 'circle', 'square', 'square', 'circle'];
+export const STICKER_SHEET_MODES = ['mixed', 'square', 'circle'];
 
 const normalizeStickerShape = (shape) => (shape === 'square' ? 'square' : 'circle');
+export const normalizeStickerSheetMode = (mode) => (
+    STICKER_SHEET_MODES.includes(mode) ? mode : 'mixed'
+);
+export const getStickerSlotShape = (mode, slot) => {
+    const normalized = normalizeStickerSheetMode(mode);
+    if (normalized === 'square') return 'square';
+    if (normalized === 'circle') return 'circle';
+    return normalizeStickerShape(STICKER_DEFAULT_SLOT_SHAPES[slot] ?? 'circle');
+};
 
 const LANYARD_MATERIAL_WIDTH_MM = {
     polyester_10: 10,
@@ -336,6 +347,7 @@ export const useConfigurator = create(temporal((set, get) => ({
 
     // --- Параметры 3D стикера ---
     stickerSheetColor: '#F6F1E7',
+    stickerSheetMode: 'mixed',
     stickerBackgroundImages: [],
     selectedStickerBackgroundImageId: null,
     stickerImages: [],
@@ -676,6 +688,21 @@ export const useConfigurator = create(temporal((set, get) => ({
 
     // --- ACTIONS: 3D СТИКЕР ---
     setStickerSheetColor: (color) => set({ stickerSheetColor: color }),
+    setStickerSheetMode: (mode) => set((state) => {
+        const stickerSheetMode = normalizeStickerSheetMode(mode);
+        return {
+            stickerSheetMode,
+            stickerImages: state.stickerImages.map((image, index) => {
+                const slot = Number.isInteger(image.slot) ? image.slot : index;
+                return {
+                    ...image,
+                    shape: stickerSheetMode === 'mixed'
+                        ? normalizeStickerShape(image.shape ?? getStickerSlotShape('mixed', slot))
+                        : getStickerSlotShape(stickerSheetMode, slot),
+                };
+            }),
+        };
+    }),
     addStickerBackgroundImage: async (file) => {
         if (file instanceof File) {
             const id = makeLogoId();
@@ -752,7 +779,7 @@ export const useConfigurator = create(temporal((set, get) => ({
                                     texture,
                                     filename: file.name,
                                     slot,
-                                    shape: STICKER_DEFAULT_SLOT_SHAPES[slot],
+                                    shape: getStickerSlotShape(state.stickerSheetMode, slot),
                                     position: [0, 0],
                                     rotation: 0,
                                     scale: 0.72,
