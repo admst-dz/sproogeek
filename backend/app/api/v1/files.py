@@ -50,6 +50,7 @@ PDF_RASTER_MAX_DPI = 300
 PDF_SPLIT_GAP_MM = 8.0
 PDF_SPLIT_MAX_GROUPS = 24
 PDF_SPLIT_MIN_AREA_PT = 4.0
+PDF_CLIP_ALPHA_THRESHOLD = 1
 
 
 def _pdf_first_page_png(content: bytes) -> bytes:
@@ -162,6 +163,40 @@ def _render_pdf_clip_png(page, rect) -> bytes:
     return pixmap.tobytes("png")
 
 
+def _visible_pdf_clip_rect(page, rect):
+    try:
+        import fitz  # PyMuPDF
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail="PDF support is not available") from exc
+
+    longest_pt = max(rect.width, rect.height) or 1.0
+    zoom = min(PDF_RASTER_MAX_DPI / 72.0, PDF_RASTER_MAX_EDGE_PX / longest_pt)
+    pixmap = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), clip=rect, alpha=True)
+    if not getattr(pixmap, "alpha", False) or pixmap.width <= 0 or pixmap.height <= 0:
+        return rect
+
+    try:
+        image = Image.frombytes("RGBA", (pixmap.width, pixmap.height), pixmap.samples)
+    except ValueError:
+        return rect
+
+    alpha = image.getchannel("A")
+    if PDF_CLIP_ALPHA_THRESHOLD > 1:
+        alpha = alpha.point(lambda value: 255 if value >= PDF_CLIP_ALPHA_THRESHOLD else 0)
+    bbox = alpha.getbbox()
+    if not bbox:
+        return rect
+
+    x0, y0, x1, y1 = bbox
+    tight = fitz.Rect(
+        rect.x0 + x0 / zoom,
+        rect.y0 + y0 / zoom,
+        rect.x0 + x1 / zoom,
+        rect.y0 + y1 / zoom,
+    )
+    return tight if tight.width > 0 and tight.height > 0 else rect
+
+
 def _pdf_clip_to_single_page(doc, rect) -> bytes:
     try:
         import fitz  # PyMuPDF
@@ -209,6 +244,7 @@ def _pdf_split_logos(content: bytes) -> list[dict[str, bytes | float]]:
 
             logos: list[dict[str, bytes | float]] = []
             for rect in rects:
+                rect = _visible_pdf_clip_rect(page, rect)
                 logos.append({
                     "image": _render_pdf_clip_png(page, rect),
                     "pdf": _pdf_clip_to_single_page(doc, rect),
