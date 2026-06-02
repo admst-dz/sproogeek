@@ -24,6 +24,7 @@ from app.core.event_logger import event_logger
 from app.crud import print_canvas as crud_print_canvas
 from app.database import get_db
 from app.schemas.print_canvas import PrintCanvasExportResponse
+from app.services.print_canvas_pdf import build_print_pdf
 from app.services.settings_store import read_settings
 
 
@@ -69,6 +70,13 @@ def _ensure_can_use_print_canvas(current_user) -> None:
 
 def _is_tiff(content: bytes) -> bool:
     return len(content) >= 4 and content[:4] in TIFF_SIGNATURES
+
+
+async def _read_tiff_bytes(file: UploadFile) -> bytes:
+    content = await file.read()
+    if not _is_tiff(content):
+        raise HTTPException(status_code=400, detail="File content is not TIFF")
+    return content
 
 
 async def _save_tiff_upload(file: UploadFile, file_path: str) -> int:
@@ -180,6 +188,7 @@ def _email_body(item, metadata: dict) -> str:
         logo_lines.append(f"- ...и ещё {len(logos) - 30}")
 
     created = item.created_at.isoformat() if item.created_at else datetime.utcnow().isoformat()
+    kind = "PDF" if (item.content_type or "").endswith("pdf") else "TIFF"
     return "\n".join([
         "Новая выгрузка полотна на печать",
         "",
@@ -193,14 +202,14 @@ def _email_body(item, metadata: dict) -> str:
         f"- расстояние между логотипами: {item.logo_gap_mm:g} мм",
         f"- элементов: {item.items_count}",
         f"- плотность: {item.density}%",
-        f"- TIFF: {item.filename}",
-        f"- размер TIFF: {round(item.file_size / 1024 / 1024, 2)} МБ",
+        f"- файл ({kind}): {item.filename}",
+        f"- размер файла: {round(item.file_size / 1024 / 1024, 2)} МБ",
         f"- DPI экспорта: {item.export_dpi}",
         "",
         "Файлы в раскладке:",
         *(logo_lines or ["- нет данных"]),
         "",
-        "TIFF сохранён на сервере и доступен клиенту в личном кабинете во вкладке «Полотно на печать».",
+        "Файл сохранён на сервере и доступен клиенту в личном кабинете во вкладке «Полотно на печать».",
     ])
 
 
@@ -212,7 +221,7 @@ async def _send_export_email(item, metadata: dict, file_path: str) -> None:
                 attachments.append({
                     "filename": item.filename,
                     "content": export_file.read(),
-                    "mime_type": "image/tiff",
+                    "mime_type": item.content_type or "application/octet-stream",
                 })
         except OSError as exc:
             sentry_sdk.capture_exception(exc)
@@ -232,31 +241,56 @@ async def create_print_canvas_export(
     request: Request,
     background_tasks: BackgroundTasks,
     metadata: str = Form(...),
-    file: UploadFile = File(...),
+    export_format: str = Form("tiff", alias="format"),
+    file: UploadFile | None = File(None),
+    color: UploadFile | None = File(None),
+    mask: UploadFile | None = File(None),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user_optional),
 ):
     _ensure_can_use_print_canvas(current_user)
     parsed = _metadata_from_form(metadata)
 
-    content_type = (file.content_type or "").split(";")[0].lower()
-    if content_type not in {"", "image/tiff", "image/tif", "image/x-tiff", "application/octet-stream"}:
-        raise HTTPException(status_code=400, detail="Only TIFF export is supported")
-
     export_id = uuid.uuid4()
-    filename = f"print-canvas-{export_id.hex}.tiff"
-    file_path = os.path.join(EXPORT_DIR, filename)
 
-    file_size = await _save_tiff_upload(file, file_path)
-
-    # Print is produced in CMYK when the sheet can be transcoded safely.
-    converted = await run_in_threadpool(_to_cmyk_tiff_from_path, file_path)
-    if converted is not None:
+    if export_format == "pdf":
+        # PDF is built from two same-size RGB TIFF rasters: the colour artwork
+        # and a black silhouette of its alpha used to trace the white underbase.
+        if color is None or mask is None:
+            raise HTTPException(status_code=400, detail="PDF export requires color and mask rasters")
+        color_bytes = await _read_tiff_bytes(color)
+        mask_bytes = await _read_tiff_bytes(mask)
+        width_mm = _number(parsed.get("sheet_width_mm"), 0) or _number(parsed.get("used_width_mm"), 0)
+        height_mm = _number(parsed.get("used_height_mm"), 0)
+        pdf_bytes = await run_in_threadpool(build_print_pdf, color_bytes, mask_bytes, width_mm, height_mm)
+        filename = f"print-canvas-{export_id.hex}.pdf"
+        file_path = os.path.join(EXPORT_DIR, filename)
         async with aiofiles.open(file_path, "wb") as out_file:
-            await out_file.write(converted)
-        file_size = len(converted)
+            await out_file.write(pdf_bytes)
+        file_size = len(pdf_bytes)
+        content_type = "application/pdf"
+        log_label = "Client exported print canvas PDF"
     else:
-        file_size = os.path.getsize(file_path)
+        if file is None:
+            raise HTTPException(status_code=400, detail="TIFF export requires a file")
+        upload_type = (file.content_type or "").split(";")[0].lower()
+        if upload_type not in {"", "image/tiff", "image/tif", "image/x-tiff", "application/octet-stream"}:
+            raise HTTPException(status_code=400, detail="Only TIFF export is supported")
+
+        filename = f"print-canvas-{export_id.hex}.tiff"
+        file_path = os.path.join(EXPORT_DIR, filename)
+        file_size = await _save_tiff_upload(file, file_path)
+
+        # Print is produced in CMYK when the sheet can be transcoded safely.
+        converted = await run_in_threadpool(_to_cmyk_tiff_from_path, file_path)
+        if converted is not None:
+            async with aiofiles.open(file_path, "wb") as out_file:
+                await out_file.write(converted)
+            file_size = len(converted)
+        else:
+            file_size = os.path.getsize(file_path)
+        content_type = "image/tiff"
+        log_label = "Client exported print canvas TIFF"
 
     item = await crud_print_canvas.create_export(db, {
         "id": export_id,
@@ -265,7 +299,7 @@ async def create_print_canvas_export(
         "filename": filename,
         "file_path": file_path,
         "file_size": file_size,
-        "content_type": "image/tiff",
+        "content_type": content_type,
         "sheet_width_mm": _int_number(parsed.get("sheet_width_mm"), 0),
         "used_width_mm": _number(parsed.get("used_width_mm"), 0),
         "used_height_mm": _number(parsed.get("used_height_mm"), 0),
@@ -280,7 +314,7 @@ async def create_print_canvas_export(
     background_tasks.add_task(_send_export_email, item, parsed, file_path)
     event_logger.log(
         "PRINT_CANVAS_EXPORT_CREATED",
-        "Client exported print canvas TIFF",
+        log_label,
         direction="client->backend" if current_user else "guest->backend",
         actor_type=current_user.role if current_user else "anonymous",
         actor_id=str(current_user.id) if current_user else None,
@@ -332,9 +366,9 @@ async def download_print_canvas_export(
     if not (is_owner or is_admin or is_public_guest_export):
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.exists(item.file_path):
-        raise HTTPException(status_code=404, detail="TIFF file not found")
+        raise HTTPException(status_code=404, detail="Export file not found")
     return FileResponse(
         item.file_path,
-        media_type="image/tiff",
+        media_type=item.content_type or "application/octet-stream",
         filename=item.filename,
     )

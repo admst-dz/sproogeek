@@ -224,7 +224,8 @@ export const ClientDashboard = ({
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = exportItem.filename || `print-canvas-${exportItem.id}.tiff`;
+            const ext = (exportItem.content_type || '').endsWith('pdf') ? 'pdf' : 'tiff';
+            link.download = exportItem.filename || `print-canvas-${exportItem.id}.${ext}`;
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -695,7 +696,7 @@ export const ClientDashboard = ({
                                                 onClick={() => downloadPrintCanvasTiff(item)}
                                                 className="w-full rounded-[12px] bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-[#0B0F19] transition hover:bg-gray-100 active:scale-[0.98] sm:w-auto xl:justify-self-end"
                                             >
-                                                {t(language, 'printCanvasDownloadTiff')}
+                                                {t(language, (item.content_type || '').endsWith('pdf') ? 'printCanvasDownloadPdf' : 'printCanvasDownloadTiff')}
                                             </button>
                                         </div>
                                     </div>
