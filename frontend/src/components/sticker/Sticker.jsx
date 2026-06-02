@@ -368,3 +368,4 @@ export function Sticker({ config = null, preview = false, position = [0, 0, 0] }
 
 useGLTF.preload(squareStickerModelUrl);
 useGLTF.preload(circleStickerModelUrl);
+
