@@ -52,7 +52,7 @@ export default {
     "stickerSheetModeSquare": "Только квадратные",
     "stickerSheetModeCircle": "Только круглые",
     "stickerSheetModeMixed": "Квадратные + круглые",
-    "stickerSheetFormat": "лист на 6 стикеров",
+    "stickerSheetFormat": "A6 · лист на 6 стикеров",
     "stickerSlots": "Стикеров на листе",
     "stickerSlotsLeft": "мест",
     "stickerSlot": "Стикер",

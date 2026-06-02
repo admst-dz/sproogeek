@@ -206,6 +206,11 @@ export const mediaApi = {
         const query = trim ? '' : '?trim=false';
         return apiClient.post(`/files/remove-logo-background${query}`, formData, { responseType: 'blob' });
     },
+    stickerFit: (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return apiClient.post('/files/sticker-fit', formData);
+    },
 };
 
 export const printCanvasApi = {

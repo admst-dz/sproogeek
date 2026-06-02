@@ -2,6 +2,11 @@ import { create } from 'zustand'
 import { temporal } from 'zundo'
 import { getCookie, setCookie, deleteCookie, hasCookieConsent } from './utils/cookies'
 import { canvasToDataURL, normalizeImageFile } from './utils/images'
+import { mediaApi } from './api'
+
+// Sticker slot scale slider bounds (mirrors SizeSlider in StickerInterface).
+const STICKER_SCALE_MIN = 0.22;
+const STICKER_SCALE_MAX = 3;
 
 const CART_COOKIE = 'spruzhuk_cart';
 const AUTH_COOKIE = 'spruzhuk_auth';
@@ -767,10 +772,12 @@ export const useConfigurator = create(temporal((set, get) => ({
             const id = makeLogoId();
             try {
                 const texture = await normalizeImageFile(file);
+                let added = false;
                 set((state) => ({
                     ...(() => {
                         const slot = getNextStickerSlot(state.stickerImages);
                         if (slot < 0) return {};
+                        added = true;
                         return {
                             stickerImages: [
                                 ...state.stickerImages,
@@ -790,6 +797,24 @@ export const useConfigurator = create(temporal((set, get) => ({
                         };
                     })(),
                 }));
+                // Computer-vision auto-fit: detect the subject and scale it into the
+                // slot. Best-effort — the manual size slider keeps working regardless.
+                if (added) {
+                    try {
+                        const { data } = await mediaApi.stickerFit(file);
+                        const suggested = Number(data?.suggested_scale);
+                        if (Number.isFinite(suggested)) {
+                            const scale = Math.min(STICKER_SCALE_MAX, Math.max(STICKER_SCALE_MIN, suggested));
+                            set((state) => ({
+                                stickerImages: state.stickerImages.map((l) => (
+                                    l.id === id ? { ...l, scale } : l
+                                )),
+                            }));
+                        }
+                    } catch (fitError) {
+                        console.warn('Sticker auto-fit unavailable', fitError);
+                    }
+                }
             } catch (error) {
                 console.error('Failed to prepare sticker image', error);
             }

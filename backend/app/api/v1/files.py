@@ -20,6 +20,7 @@ from app.core.deps import get_staff_user, request_id
 from app.core.event_logger import event_logger
 from app.services.background_removal import BackgroundRemovalError, remove_logo_background
 from app.services.imposition import qr_png_bytes
+from app.services.sticker_fit import StickerFitError, analyze as analyze_sticker_fit
 
 
 router = APIRouter()
@@ -621,6 +622,52 @@ async def remove_uploaded_logo_background(
             "X-Background-Removed-Ratio": f"{result.removed_ratio:.4f}",
         },
     )
+
+
+@router.post("/sticker-fit")
+async def sticker_fit(
+    request: Request,
+    file: UploadFile = File(...),
+):
+    """Detect the subject of a sticker image and suggest how to scale it into a slot.
+
+    Returns the image dimensions, the normalized subject bounding box and a
+    ``suggested_scale`` the frontend applies as the initial slot scale. The user
+    can still adjust scale and position manually afterwards.
+    """
+    upload = await _read_logo_upload(file)
+    try:
+        fit = await run_in_threadpool(analyze_sticker_fit, upload["content"])
+    except StickerFitError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    event_logger.log(
+        "STICKER_AUTO_FIT",
+        "Sticker artwork auto-fit computed",
+        direction="user->backend",
+        actor_type="anonymous",
+        method=request.method,
+        path=request.url.path,
+        status_code=200,
+        request_id=request_id(request),
+        entity_type="sticker_fit",
+        entity_id=uuid.uuid4().hex,
+        details={
+            "engine": fit.engine,
+            "width": fit.width,
+            "height": fit.height,
+            "object_fraction": round(fit.object_fraction, 4),
+            "suggested_scale": fit.suggested_scale,
+        },
+    )
+    return {
+        "width": fit.width,
+        "height": fit.height,
+        "object_bbox": list(fit.object_bbox),
+        "object_fraction": fit.object_fraction,
+        "suggested_scale": fit.suggested_scale,
+        "engine": fit.engine,
+    }
 
 
 @router.post("/prepare-logo-pdf")

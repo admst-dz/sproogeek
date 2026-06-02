@@ -28,9 +28,10 @@ from types import SimpleNamespace
 from typing import Any, Optional
 
 import httpx
+import numpy as np
 import sentry_sdk
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from PIL import Image, ImageColor, ImageDraw, ImageFont
+from PIL import Image, ImageCms, ImageColor, ImageDraw
 from pydantic import BaseModel, EmailStr, Field
 from slowapi import Limiter
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,6 +45,7 @@ from app.crud import order as crud_order
 from app.database import get_db
 from app.schemas.order import OrderCreate
 from app.services.imposition import qr_png_bytes
+from app.services.image_upscale import upscale_to_min
 from app.services.settings_store import read_settings
 from app.services.unwrap_client import fetch_block_pdf, fetch_unwrap_zip
 
@@ -67,8 +69,10 @@ _RENDER_MIME_EXTENSIONS = {
     "image/webp": "webp",
 }
 _STICKER_MAX_ASSET_BYTES = 10_000_000
-_STICKER_DEFAULT_SHEET_WIDTH_MM = 100.0
-_STICKER_DEFAULT_SHEET_HEIGHT_MM = 141.0
+# The pack is printed on A6 (105x148 mm); these are only fallbacks when the
+# frontend payload omits the sheet size. Overridable via settings.
+_STICKER_DEFAULT_SHEET_WIDTH_MM = 105.0
+_STICKER_DEFAULT_SHEET_HEIGHT_MM = 148.0
 _STICKER_DEFAULT_SCENE_WIDTH_UNITS = 4.2
 _STICKER_DEFAULT_SCENE_HEIGHT_UNITS = 5.92
 _STICKER_DEFAULT_DPI = 300
@@ -76,6 +80,8 @@ _STICKER_SLOT_WIDTH_MM = 40.0
 _STICKER_SLOT_HEIGHT_MM = 45.0
 _STICKER_BACKGROUND_MAX_SIDE_UNITS = 3.2
 _STICKER_LOGO_MAX_SIDE_UNITS = {"circle": 0.74, "square": 0.78}
+_MM_PER_INCH = 25.4
+_PT_PER_MM = 72.0 / _MM_PER_INCH
 
 
 class GuestApprovalRequest(BaseModel):
@@ -291,11 +297,15 @@ def _sticker_is_square(shape: Any) -> bool:
 
 
 def _sticker_sheet_meta(data: dict[str, Any]) -> dict[str, float | int | str]:
-    width_mm = max(20.0, _float(data.get("sheet_width_mm"), _STICKER_DEFAULT_SHEET_WIDTH_MM))
-    height_mm = max(20.0, _float(data.get("sheet_height_mm"), _STICKER_DEFAULT_SHEET_HEIGHT_MM))
+    settings = get_settings()
+    default_w = float(getattr(settings, "sticker_sheet_width_mm", _STICKER_DEFAULT_SHEET_WIDTH_MM))
+    default_h = float(getattr(settings, "sticker_sheet_height_mm", _STICKER_DEFAULT_SHEET_HEIGHT_MM))
+    default_dpi = int(getattr(settings, "sticker_print_dpi", _STICKER_DEFAULT_DPI))
+    width_mm = max(20.0, _float(data.get("sheet_width_mm"), default_w))
+    height_mm = max(20.0, _float(data.get("sheet_height_mm"), default_h))
     scene_width = max(0.1, _float(data.get("scene_width_units"), _STICKER_DEFAULT_SCENE_WIDTH_UNITS))
     scene_height = max(0.1, _float(data.get("scene_height_units"), _STICKER_DEFAULT_SCENE_HEIGHT_UNITS))
-    dpi = min(600, max(72, _safe_int(data.get("export_dpi"), _STICKER_DEFAULT_DPI)))
+    dpi = min(600, max(72, _safe_int(data.get("export_dpi"), default_dpi)))
     return {
         "width_mm": width_mm,
         "height_mm": height_mm,
@@ -375,36 +385,84 @@ def _clip_to_sticker_shape(layer: Image.Image, shape: str, width_px: int, height
     return out
 
 
-def _draw_sticker_guides(
-    canvas: Image.Image,
-    draw: ImageDraw.ImageDraw,
-    *,
-    slot_meta: list[dict[str, Any]],
-    dpi: int,
-) -> None:
-    font = ImageFont.load_default()
-    line = max(1, _mm_to_px(0.25, dpi))
-    for slot in slot_meta:
-        cx = int(slot["center_x_px"])
-        cy = int(slot["center_y_px"])
-        half_w = int(slot["width_px"] / 2)
-        half_h = int(slot["height_px"] / 2)
-        box = [cx - half_w, cy - half_h, cx + half_w, cy + half_h]
-        color = (225, 0, 140, 255)
-        if _sticker_is_square(slot["shape"]):
-            draw.rounded_rectangle(box, radius=max(4, half_w // 8), outline=color, width=line)
-        else:
-            side = min(slot["width_px"], slot["height_px"])
-            circle = [cx - side // 2, cy - side // 2, cx + side // 2, cy + side // 2]
-            draw.ellipse(circle, outline=color, width=line)
-        draw.line([cx - _mm_to_px(2, dpi), cy, cx + _mm_to_px(2, dpi), cy], fill=color, width=line)
-        draw.line([cx, cy - _mm_to_px(2, dpi), cx, cy + _mm_to_px(2, dpi)], fill=color, width=line)
-        text = (
-            f"#{slot['index'] + 1} "
-            f"X={slot['center_x_mm']:.2f}mm "
-            f"Y={slot['center_y_mm']:.2f}mm"
-        )
-        draw.text((box[0], max(0, box[1] - _mm_to_px(4, dpi))), text, fill=(0, 0, 0, 255), font=font)
+def _prepare_artwork(image: Image.Image, max_side_px: int) -> Image.Image:
+    """Upscale low-resolution artwork so it stays crisp at the print target.
+
+    ``max_side_px`` is the longest side the artwork will occupy on the 300 DPI
+    sheet. When the source is smaller, Real-ESRGAN (or the Lanczos fallback)
+    raises it; otherwise the image is returned untouched. Aspect is preserved.
+    """
+    src_w, src_h = image.size
+    if src_w <= 0 or src_h <= 0 or max_side_px <= 0:
+        return image
+    if src_w >= src_h:
+        target_w = max_side_px
+        target_h = max(1, round(max_side_px * src_h / src_w))
+    else:
+        target_h = max_side_px
+        target_w = max(1, round(max_side_px * src_w / src_h))
+    try:
+        return upscale_to_min(image, target_w, target_h).image
+    except Exception as exc:  # noqa: BLE001 - upscale must never break export
+        sentry_sdk.capture_exception(exc)
+        return image
+
+
+def _apply_white_fade(base: Image.Image, fade_px: float) -> Image.Image:
+    """Fade the sheet artwork to white over its outermost ``fade_px`` pixels.
+
+    A6 sheets have no hard colour edge at the trim line: the background ramps to
+    pure white across the outer band so cutting tolerance never exposes a sharp
+    colour boundary. The fade is applied to the full background composite while
+    leaving alpha intact.
+    """
+    if fade_px < 1.0:
+        return base
+    rgba = np.asarray(base.convert("RGBA"), dtype=np.float32)
+    h, w = rgba.shape[:2]
+    ys = np.minimum(np.arange(h), h - 1 - np.arange(h)).astype(np.float32)
+    xs = np.minimum(np.arange(w), w - 1 - np.arange(w)).astype(np.float32)
+    dist = np.minimum(ys[:, None], xs[None, :])
+    factor = np.clip(dist / fade_px, 0.0, 1.0)[..., None]  # 1 inside, 0 at edge
+    rgba[..., :3] = rgba[..., :3] * factor + 255.0 * (1.0 - factor)
+    return Image.fromarray(np.clip(rgba, 0, 255).astype(np.uint8), mode="RGBA")
+
+
+def _rgb_to_cmyk(rgb: Image.Image) -> Image.Image:
+    """Convert the flattened RGB sheet to CMYK using the configured ICC profile."""
+    settings = get_settings()
+    try:
+        profile_path = settings.cmyk_icc_profile
+        if profile_path and os.path.exists(profile_path):
+            return ImageCms.profileToProfile(
+                rgb,
+                ImageCms.createProfile("sRGB"),
+                ImageCms.getOpenProfile(profile_path),
+                outputMode="CMYK",
+            )
+    except Exception as exc:  # noqa: BLE001 - colour conversion must not break export
+        sentry_sdk.capture_exception(exc)
+    return rgb.convert("CMYK")
+
+
+def _sheet_to_pdf(base: Image.Image, width_mm: float, height_mm: float) -> bytes:
+    """Render the composite sheet as a single clean A6 CMYK 300 DPI PDF page."""
+    import fitz  # PyMuPDF (imported lazily, mirrors files.py / print_canvas_pdf)
+
+    flattened = Image.new("RGB", base.size, (255, 255, 255))
+    flattened.paste(base, mask=base.getchannel("A") if base.mode == "RGBA" else None)
+    cmyk = _rgb_to_cmyk(flattened)
+
+    page_w = max(1.0, width_mm) * _PT_PER_MM
+    page_h = max(1.0, height_mm) * _PT_PER_MM
+    doc = fitz.open()
+    page = doc.new_page(width=page_w, height=page_h)
+    pix = fitz.Pixmap(fitz.csCMYK, cmyk.width, cmyk.height, cmyk.tobytes(), False)
+    page.insert_image(fitz.Rect(0, 0, page_w, page_h), pixmap=pix)
+    out = io.BytesIO()
+    doc.save(out, deflate=True, garbage=3)
+    doc.close()
+    return out.getvalue()
 
 
 def _sticker_slot_list(data: dict[str, Any], meta: dict[str, float | int | str]) -> list[dict[str, Any]]:
@@ -450,6 +508,7 @@ def _build_sticker_print_files(payload: GuestApprovalRequest, guest_order_id: st
         center_x_mm, center_y_mm = _sticker_unit_to_mm(pos_x, pos_y, meta)
         max_side_units = _STICKER_BACKGROUND_MAX_SIDE_UNITS * max(0.1, _float(item.get("scale"), 1.0))
         max_side_px = max(1, round(max_side_units * min(px_per_scene_x, px_per_scene_y)))
+        image = _prepare_artwork(image, max_side_px)
         _paste_transformed(
             base,
             image,
@@ -491,6 +550,12 @@ def _build_sticker_print_files(payload: GuestApprovalRequest, guest_order_id: st
             "height_px": _mm_to_px(_STICKER_SLOT_HEIGHT_MM, dpi),
         })
 
+    # Fade the sheet background to white over the outer A6 band so there is no
+    # hard colour edge at the trim line. Applied before stickers so the stickers
+    # themselves stay crisp (their slots are well inside the fade band anyway).
+    fade_mm = float(getattr(get_settings(), "sticker_white_fade_mm", 4.0))
+    base = _apply_white_fade(base, fade_mm * px_per_mm)
+
     sticker_by_slot: dict[int, dict[str, Any]] = {}
     for index, item in enumerate(sticker_items[:6]):
         if not isinstance(item, dict):
@@ -512,6 +577,7 @@ def _build_sticker_print_files(payload: GuestApprovalRequest, guest_order_id: st
         local_y_px = round(-pos_y * px_per_scene_y)
         max_side_units = _STICKER_LOGO_MAX_SIDE_UNITS.get(shape, 0.74) * max(0.1, _float(item.get("scale"), 0.72))
         max_side_px = max(1, round(max_side_units * min(px_per_scene_x, px_per_scene_y)))
+        image = _prepare_artwork(image, max_side_px)
         layer = Image.new("RGBA", (int(slot["width_px"]), int(slot["height_px"])), (0, 0, 0, 0))
         _paste_transformed(
             layer,
@@ -533,30 +599,17 @@ def _build_sticker_print_files(payload: GuestApprovalRequest, guest_order_id: st
             "scale": _float(item.get("scale"), 0.72),
         }
 
-    technical = base.copy()
-    draw = ImageDraw.Draw(technical)
-    grid_step_px = _mm_to_px(10, dpi)
-    for x in range(0, sheet_width_px, grid_step_px):
-        draw.line([x, 0, x, sheet_height_px], fill=(0, 0, 0, 34), width=1)
-    for y in range(0, sheet_height_px, grid_step_px):
-        draw.line([0, y, sheet_width_px, y], fill=(0, 0, 0, 34), width=1)
-    draw.rectangle([0, 0, sheet_width_px - 1, sheet_height_px - 1], outline=(0, 0, 0, 255), width=max(1, _mm_to_px(0.2, dpi)))
-    _draw_sticker_guides(technical, draw, slot_meta=slot_meta, dpi=dpi)
-
-    def to_tiff_bytes(image: Image.Image) -> bytes:
-        out = io.BytesIO()
-        image.convert("CMYK").save(out, format="TIFF", compression="tiff_lzw", dpi=(dpi, dpi))
-        return out.getvalue()
-
     spec = {
         "guest_order_id": guest_order_id,
         "product": "sticker",
         "sheet": {
             "width_mm": float(meta["width_mm"]),
             "height_mm": float(meta["height_mm"]),
+            "format": "A6",
             "dpi": dpi,
             "pixel_size": [sheet_width_px, sheet_height_px],
             "color": meta["sheet_color"],
+            "white_fade_mm": float(getattr(get_settings(), "sticker_white_fade_mm", 4.0)),
         },
         "coordinate_system": {
             "origin": "top-left",
@@ -568,8 +621,7 @@ def _build_sticker_print_files(payload: GuestApprovalRequest, guest_order_id: st
         "background_count": len(background_items),
     }
     return {
-        "plain_tiff": to_tiff_bytes(base),
-        "technical_tiff": to_tiff_bytes(technical),
+        "pdf": _sheet_to_pdf(base, float(meta["width_mm"]), float(meta["height_mm"])),
         "spec_json": json.dumps(spec, ensure_ascii=False, indent=2, default=str).encode("utf-8"),
     }
 
@@ -669,15 +721,11 @@ async def _build_guest_print_archive(
             sticker_print_files = _build_sticker_print_files(payload, guest_order_id)
             if sticker_print_files:
                 suffix = guest_order_id[-8:]
-                zf.writestr(f"print/sticker-print-{suffix}.tiff", sticker_print_files["plain_tiff"])
-                zf.writestr(
-                    f"print/sticker-print-with-coordinates-{suffix}.tiff",
-                    sticker_print_files["technical_tiff"],
-                )
+                zf.writestr(f"print/sticker-print-{suffix}.pdf", sticker_print_files["pdf"])
                 zf.writestr(f"print/sticker-print-spec-{suffix}.json", sticker_print_files["spec_json"])
         except Exception as exc:  # noqa: BLE001
             sentry_sdk.capture_exception(exc)
-            zf.writestr("print/ERROR.txt", f"sticker TIFF generation failed: {exc}\n")
+            zf.writestr("print/ERROR.txt", f"sticker PDF generation failed: {exc}\n")
 
         try:
             unwrap_bytes = await fetch_unwrap_zip(order_like)
@@ -901,21 +949,16 @@ async def request_guest_approval(
     try:
         sticker_print_files = _build_sticker_print_files(payload, guest_order_id)
     except Exception as exc:  # noqa: BLE001
-        log.exception("sticker print TIFF generation failed")
+        log.exception("sticker print PDF generation failed")
         sentry_sdk.capture_exception(exc)
 
     if sticker_print_files:
         suffix = guest_order_id[-8:]
         attachments.extend([
             {
-                "filename": f"sticker-print-{suffix}.tiff",
-                "content": sticker_print_files["plain_tiff"],
-                "mime_type": "image/tiff",
-            },
-            {
-                "filename": f"sticker-print-with-coordinates-{suffix}.tiff",
-                "content": sticker_print_files["technical_tiff"],
-                "mime_type": "image/tiff",
+                "filename": f"sticker-print-{suffix}.pdf",
+                "content": sticker_print_files["pdf"],
+                "mime_type": "application/pdf",
             },
             {
                 "filename": f"sticker-print-spec-{suffix}.json",
@@ -923,7 +966,7 @@ async def request_guest_approval(
                 "mime_type": "application/json",
             },
         ])
-        body_lines.insert(4, "Для 3D-стикеров также прикреплены TIFF-файлы для печати.")
+        body_lines.insert(4, "Для 3D-стикеров также прикреплён PDF-файл (A6, 300 DPI) для печати.")
         body_lines.insert(5, "")
 
     event_logger.log(

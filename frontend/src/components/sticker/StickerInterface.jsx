@@ -20,8 +20,9 @@ import { GuestApprovalModal } from '../shared/GuestApprovalModal';
 import { LogoBackgroundRemovalButton } from '../shared/LogoBackgroundRemovalButton';
 
 const STICKER_PRINT_SHEET = {
-    widthMm: 100,
-    heightMm: 141,
+    // Final pack size is A6 (105 x 148 mm), printed at 300 DPI.
+    widthMm: 105,
+    heightMm: 148,
     widthUnits: 4.2,
     heightUnits: 5.92,
     dpi: 300,

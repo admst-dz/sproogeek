@@ -52,7 +52,7 @@ export default {
     "stickerSheetModeSquare": "Толькі квадратныя",
     "stickerSheetModeCircle": "Толькі круглыя",
     "stickerSheetModeMixed": "Квадратныя + круглыя",
-    "stickerSheetFormat": "ліст на 6 стыкераў",
+    "stickerSheetFormat": "A6 · ліст на 6 стыкераў",
     "stickerSlots": "Стыкераў на лісце",
     "stickerSlotsLeft": "месцаў",
     "stickerSlot": "Стыкер",
