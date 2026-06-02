@@ -651,6 +651,7 @@ export const PrintCanvas = ({ onBack }) => {
     const previewScrollRef = useRef(null);
     const dragStateRef = useRef(null);
     const itemDragRef = useRef(null);
+    const resizeDragRef = useRef(null);
     const clipboardRef = useRef([]);
     const previewScaleRef = useRef(1);
     const stateRef = useRef({});
@@ -981,6 +982,66 @@ export const PrintCanvas = ({ onBack }) => {
         if (!drag || drag.pointerId !== event.pointerId) return;
         event.currentTarget.releasePointerCapture?.(event.pointerId);
         itemDragRef.current = null;
+    }, []);
+
+    // ── On-canvas resize handles (CorelDRAW-style) ──────────────────────────
+    // Dragging a corner scales the logo proportionally with the opposite corner
+    // pinned. Scaling changes the parent logo's width (shared by its copies).
+    const startResize = useCallback((event, item, corner) => {
+        if (event.button !== undefined && event.button !== 0) return;
+        event.stopPropagation();
+        const logo = stateRef.current.logoMap.get(item.logoId);
+        if (!logo) return;
+        setSelectedIds(new Set([item.id]));
+        resizeDragRef.current = {
+            pointerId: event.pointerId,
+            corner,
+            id: item.id,
+            logoId: item.logoId,
+            startX: event.clientX,
+            oldW: item.w,
+            oldH: item.h,
+            x: item.x,
+            y: item.y,
+            curWidthMm: logoWidthMm(logo),
+        };
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+    }, []);
+
+    const moveResize = useCallback((event) => {
+        const drag = resizeDragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        const scale = previewScaleRef.current || 1;
+        const dx = (event.clientX - drag.startX) / scale;
+        const grows = drag.corner === 'se' || drag.corner === 'ne' ? 1 : -1;
+        const ratio = drag.oldH / Math.max(0.0001, drag.oldW);
+        const targetFootW = Math.max(1, drag.oldW + grows * dx);
+        const newWidthMm = clamp(drag.curWidthMm * (targetFootW / drag.oldW), MIN_LOGO_WIDTH_MM, MAX_LOGO_WIDTH_MM);
+        const newFootW = drag.oldW * (newWidthMm / drag.curWidthMm);
+        const newFootH = newFootW * ratio;
+        const right = drag.x + drag.oldW;
+        const bottom = drag.y + drag.oldH;
+        let x = drag.x;
+        let y = drag.y;
+        if (drag.corner === 'nw') { x = right - newFootW; y = bottom - newFootH; }
+        else if (drag.corner === 'ne') { x = drag.x; y = bottom - newFootH; }
+        else if (drag.corner === 'sw') { x = right - newFootW; y = drag.y; }
+        x = Math.max(SHEET_PADDING_MM, x);
+        y = Math.max(SHEET_PADDING_MM, y);
+        setLogos((current) => current.map((logo) => (
+            logo.id === drag.logoId ? { ...logo, widthMm: newWidthMm } : logo
+        )));
+        setPlacements((current) => current.map((p) => (
+            p.id === drag.id ? { ...p, x, y } : p
+        )));
+        event.preventDefault();
+    }, []);
+
+    const stopResize = useCallback((event) => {
+        const drag = resizeDragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
+        resizeDragRef.current = null;
     }, []);
 
     // ── Export ───────────────────────────────────────────────────────────────
@@ -1477,6 +1538,27 @@ export const PrintCanvas = ({ onBack }) => {
                                                     transform: 'translate(-50%, -50%) rotate(90deg)',
                                                 } : undefined}
                                             />
+                                            {selected && (
+                                                <span className="pointer-events-none absolute -top-5 left-0 whitespace-nowrap rounded bg-[#211a1d]/90 px-1.5 py-0.5 text-[9px] font-black text-[#fff9ec]">
+                                                    {formatMmValue(item.w)} × {formatMmValue(item.h)} мм
+                                                </span>
+                                            )}
+                                            {selected && selectedIds.size === 1 && [
+                                                ['nw', { left: -5, top: -5, cursor: 'nwse-resize' }],
+                                                ['ne', { right: -5, top: -5, cursor: 'nesw-resize' }],
+                                                ['sw', { left: -5, bottom: -5, cursor: 'nesw-resize' }],
+                                                ['se', { right: -5, bottom: -5, cursor: 'nwse-resize' }],
+                                            ].map(([corner, pos]) => (
+                                                <span
+                                                    key={corner}
+                                                    onPointerDown={(event) => startResize(event, item, corner)}
+                                                    onPointerMove={moveResize}
+                                                    onPointerUp={stopResize}
+                                                    onPointerCancel={stopResize}
+                                                    className="absolute z-10 h-2.5 w-2.5 touch-none rounded-[2px] border border-[#211a1d] bg-[#fff9ec]"
+                                                    style={pos}
+                                                />
+                                            ))}
                                         </div>
                                     );
                                 })}
