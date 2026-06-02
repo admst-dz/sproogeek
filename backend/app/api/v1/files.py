@@ -1,4 +1,6 @@
+import base64
 import json
+import math
 import os
 import re
 import uuid
@@ -42,6 +44,12 @@ TIFF_CONTENT_TYPES = {"image/tiff", "image/tif"}
 
 PDF_RASTER_MAX_EDGE_PX = 2500
 PDF_RASTER_MAX_DPI = 300
+# Splitting a vector PDF cover into its visual logos: elements whose bounding
+# boxes are within this gap are treated as one logo (merges glyphs/words within
+# a logo, keeps spatially separated logos apart).
+PDF_SPLIT_GAP_MM = 8.0
+PDF_SPLIT_MAX_GROUPS = 24
+PDF_SPLIT_MIN_AREA_PT = 4.0
 
 
 def _pdf_first_page_png(content: bytes) -> bytes:
@@ -67,6 +75,103 @@ def _pdf_first_page_png(content: bytes) -> bytes:
         raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Could not rasterize PDF") from exc
+
+
+def _collect_pdf_item_boxes(page) -> list[tuple[float, float, float, float]]:
+    """Bounding boxes of every drawable item on the page (vectors, raster
+    images, text blocks) — the atoms we cluster into logos."""
+    boxes: list[tuple[float, float, float, float]] = []
+    for path in page.get_drawings():
+        rect = path["rect"]
+        if rect.width >= 0.5 and rect.height >= 0.5 and rect.width * rect.height >= PDF_SPLIT_MIN_AREA_PT:
+            boxes.append((rect.x0, rect.y0, rect.x1, rect.y1))
+    try:
+        for image in page.get_image_info():
+            bbox = image.get("bbox")
+            if bbox:
+                boxes.append(tuple(bbox))
+    except Exception:  # noqa: BLE001 - image info is best-effort
+        pass
+    try:
+        for block in page.get_text("dict").get("blocks", []):
+            if block.get("type") == 0 and block.get("bbox"):
+                boxes.append(tuple(block["bbox"]))
+    except Exception:  # noqa: BLE001 - text info is best-effort
+        pass
+    return boxes
+
+
+def _cluster_boxes(boxes: list[tuple], gap: float) -> list[tuple[float, float, float, float]]:
+    """Union-find clustering: boxes whose separation is <= gap join one group.
+    Returns the merged bounding box of each group."""
+    n = len(boxes)
+    parent = list(range(n))
+
+    def find(a: int) -> int:
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    def separation(a, b) -> float:
+        dx = max(0.0, a[0] - b[2], b[0] - a[2])
+        dy = max(0.0, a[1] - b[3], b[1] - a[3])
+        return math.hypot(dx, dy)
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if separation(boxes[i], boxes[j]) <= gap:
+                parent[find(i)] = find(j)
+
+    groups: dict[int, list[int]] = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(i)
+
+    merged = []
+    for members in groups.values():
+        x0 = min(boxes[i][0] for i in members)
+        y0 = min(boxes[i][1] for i in members)
+        x1 = max(boxes[i][2] for i in members)
+        y1 = max(boxes[i][3] for i in members)
+        merged.append((x0, y0, x1, y1))
+    return merged
+
+
+def _pdf_split_logos_png(content: bytes) -> list[bytes]:
+    """Split a single-page PDF cover into its visual logos.
+
+    Clusters the page's drawable items by proximity and renders each cluster to
+    an isolated PNG (with correct DPI). Falls back to a single full-page render
+    when the page is one blob (e.g. an enclosing frame) or too fragmented."""
+    try:
+        import fitz  # PyMuPDF
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail="PDF support is not available") from exc
+    try:
+        with fitz.open(stream=content, filetype="pdf") as doc:
+            if doc.page_count == 0:
+                raise HTTPException(status_code=400, detail="PDF has no pages")
+            page = doc.load_page(0)
+            boxes = _collect_pdf_item_boxes(page)
+            gap_pt = PDF_SPLIT_GAP_MM * 72.0 / 25.4
+            clusters = _cluster_boxes(boxes, gap_pt) if boxes else []
+            if len(clusters) <= 1 or len(clusters) > PDF_SPLIT_MAX_GROUPS:
+                return [_pdf_first_page_png(content)]
+            clusters.sort(key=lambda b: (round(b[1]), round(b[0])))
+            images: list[bytes] = []
+            for x0, y0, x1, y1 in clusters:
+                rect = fitz.Rect(x0, y0, x1, y1)
+                longest_pt = max(rect.width, rect.height) or 1.0
+                zoom = min(PDF_RASTER_MAX_DPI / 72.0, PDF_RASTER_MAX_EDGE_PX / longest_pt)
+                pixmap = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), clip=rect, alpha=True)
+                dpi = max(1, round(72.0 * zoom))
+                pixmap.set_dpi(dpi, dpi)
+                images.append(pixmap.tobytes("png"))
+            return images
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Could not split PDF") from exc
 
 
 def _tiff_to_png(content: bytes) -> bytes:
@@ -428,6 +533,22 @@ async def remove_uploaded_logo_background(
             "X-Background-Removed-Ratio": f"{result.removed_ratio:.4f}",
         },
     )
+
+
+@router.post("/prepare-logo-pdf")
+async def prepare_pdf_logos(file: UploadFile = File(...)):
+    """Split a single-page PDF into its visual logos as base64 PNGs."""
+    content_type = (file.content_type or "").split(";")[0].lower()
+    name = os.path.basename(file.filename or "").lower()
+    if content_type != "application/pdf" and not name.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF is supported")
+    content = await file.read()
+    if settings.max_logo_bytes is not None and len(content) > settings.max_logo_bytes:
+        raise HTTPException(status_code=413, detail="File is too large")
+    if content[:5] != b"%PDF-":
+        raise HTTPException(status_code=400, detail="File content is not PDF")
+    images = await run_in_threadpool(_pdf_split_logos_png, content)
+    return {"images": [base64.b64encode(png).decode("ascii") for png in images]}
 
 
 @router.post("/prepare-logo")
