@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../../i18n';
 import { mediaApi, printCanvasApi } from '../../api';
 import { useConfigurator } from '../../store';
@@ -10,7 +10,7 @@ const DEFAULT_LOGO_WIDTH_MM = 72;
 const MIN_LOGO_WIDTH_MM = 10;
 const MAX_LOGO_WIDTH_MM = 560;
 const DEFAULT_IMAGE_DPI = 72;
-const LOGO_FILE_ACCEPT = 'image/*,.tif,.tiff';
+const LOGO_FILE_ACCEPT = 'image/*,.tif,.tiff,application/pdf,.pdf';
 const MAX_IMAGE_EDGE = 1400;
 const LOGO_GAP_OPTIONS_MM = [3, 5];
 const DEFAULT_LOGO_GAP_MM = 3;
@@ -23,6 +23,11 @@ const TIFF_EXPORT_DPI = 150;
 const MM_PER_INCH = 25.4;
 // Kept well under browser per-canvas area/dimension caps (Safari ~16.7M px).
 const TIFF_STRIP_ROWS = 2048;
+// Manual-placement editing constants.
+const NUDGE_MM = 1;
+const NUDGE_LARGE_MM = 10;
+const DUPLICATE_OFFSET_MM = 6;
+const MAX_COPIES = 999;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -170,8 +175,16 @@ const isTiffFile = (file) => {
     return type === 'image/tiff' || type === 'image/tif' || name.endsWith('.tif') || name.endsWith('.tiff');
 };
 
+const isPdfFile = (file) => {
+    const type = (file?.type || '').split(';')[0].toLowerCase();
+    const name = (file?.name || '').toLowerCase();
+    return type === 'application/pdf' || name.endsWith('.pdf');
+};
+
+// TIFF and PDF are rasterised to PNG on the backend (`/files/prepare-logo`,
+// which takes the first PDF page) before they become browser-drawable logos.
 const prepareBrowserLogoFile = async (file) => {
-    if (!isTiffFile(file)) return file;
+    if (!isTiffFile(file) && !isPdfFile(file)) return file;
     const { data } = await mediaApi.prepareLogo(file);
     const baseName = (file?.name || 'logo').replace(/\.[^.]+$/, '') || 'logo';
     return new File([data], `${baseName}.png`, { type: data.type || 'image/png' });
@@ -374,7 +387,6 @@ const prepareLogoFile = async (file) => {
         src: canvas.toDataURL('image/png'),
         widthPx: sourceWidth,
         heightPx: sourceHeight,
-        quantity: 1,
         widthMm,
         shape: hasTransparentCorners && aspect > 0.82 && aspect < 1.18 ? 'round' : 'auto',
     };
@@ -396,342 +408,112 @@ const logoSizeLabel = (logo) => {
     return `${formatMmValue(width)} × ${formatMmValue(logoHeightMm(logo, width))} мм`;
 };
 
-const expandInstances = (logos) => logos.flatMap((logo, logoIndex) => {
-    const width = logoWidthMm(logo);
-    const height = logoHeightMm(logo, width);
-    return Array.from({ length: Math.max(0, Number(logo.quantity) || 0) }, (_, copyIndex) => ({
-        id: `${logo.id}-${copyIndex}`,
-        logoId: logo.id,
-        logoIndex,
-        copyIndex,
-        name: logo.name,
-        src: logo.src,
-        width,
-        height,
-        shape: logo.shape,
-    }));
-});
+// ── Manual placement model helpers ──────────────────────────────────────────
 
-const getItemFootprint = (item, rotated = false) => {
-    const drawWidth = rotated ? item.height : item.width;
-    const drawHeight = rotated ? item.width : item.height;
-    return {
-        drawWidth,
-        drawHeight,
-        width: drawWidth,
-        height: drawHeight,
-    };
+const sheetWidthValue = (sheetWidth) =>
+    (SHEET_WIDTH_OPTIONS_MM.includes(Number(sheetWidth)) ? Number(sheetWidth) : DEFAULT_SHEET_WIDTH_MM);
+
+const gapValue = (logoGapMm) =>
+    (LOGO_GAP_OPTIONS_MM.includes(Number(logoGapMm)) ? Number(logoGapMm) : DEFAULT_LOGO_GAP_MM);
+
+// Base (unrotated) footprint of a logo in mm.
+const baseFootprint = (logo) => {
+    const w = logoWidthMm(logo);
+    return { w, h: logoHeightMm(logo, w) };
 };
 
-const rectsIntersect = (a, b) => (
-    a.x < b.x + b.width - RECT_EPSILON
-    && a.x + a.width > b.x + RECT_EPSILON
-    && a.y < b.y + b.height - RECT_EPSILON
-    && a.y + a.height > b.y + RECT_EPSILON
-);
-
-const isRectContained = (a, b) => (
-    a.x >= b.x - RECT_EPSILON
-    && a.y >= b.y - RECT_EPSILON
-    && a.x + a.width <= b.x + b.width + RECT_EPSILON
-    && a.y + a.height <= b.y + b.height + RECT_EPSILON
-);
-
-const splitFreeRect = (freeRect, usedRect) => {
-    if (!rectsIntersect(freeRect, usedRect)) return [freeRect];
-
-    const next = [];
-    const freeRight = freeRect.x + freeRect.width;
-    const freeBottom = freeRect.y + freeRect.height;
-    const usedRight = usedRect.x + usedRect.width;
-    const usedBottom = usedRect.y + usedRect.height;
-
-    if (usedRect.y > freeRect.y + RECT_EPSILON) {
-        next.push({
-            x: freeRect.x,
-            y: freeRect.y,
-            width: freeRect.width,
-            height: usedRect.y - freeRect.y,
-        });
-    }
-
-    if (usedBottom < freeBottom - RECT_EPSILON) {
-        next.push({
-            x: freeRect.x,
-            y: usedBottom,
-            width: freeRect.width,
-            height: freeBottom - usedBottom,
-        });
-    }
-
-    if (usedRect.x > freeRect.x + RECT_EPSILON) {
-        next.push({
-            x: freeRect.x,
-            y: freeRect.y,
-            width: usedRect.x - freeRect.x,
-            height: freeRect.height,
-        });
-    }
-
-    if (usedRight < freeRight - RECT_EPSILON) {
-        next.push({
-            x: usedRight,
-            y: freeRect.y,
-            width: freeRight - usedRight,
-            height: freeRect.height,
-        });
-    }
-
-    return next.filter((rect) => rect.width > RECT_EPSILON && rect.height > RECT_EPSILON);
+// Effective footprint of a placement, accounting for rotation.
+const placementFootprint = (placement, logo) => {
+    const { w, h } = baseFootprint(logo);
+    return placement.rotated ? { w: h, h: w } : { w, h };
 };
 
-const pruneFreeRects = (rects) => {
-    const pruned = [];
-    rects.forEach((rect, index) => {
-        const contained = rects.some((other, otherIndex) => (
-            index !== otherIndex && isRectContained(rect, other)
-        ));
-        if (!contained) pruned.push(rect);
-    });
-    return pruned;
-};
-
-const applyPlacementToFreeRects = (freeRects, usedRect) => {
-    const splitRects = freeRects.flatMap((rect) => splitFreeRect(rect, usedRect));
-    return pruneFreeRects(splitRects);
-};
-
-const uniqueNumbers = (values) => values.reduce((result, value) => {
-    if (!Number.isFinite(value)) return result;
-    if (!result.some((item) => Math.abs(item - value) < RECT_EPSILON)) {
-        result.push(value);
-    }
-    return result;
+// Resolve placements into drawable rects (mm), dropping any whose logo is gone.
+const resolveRects = (placements, logoMap) => placements.reduce((acc, placement) => {
+    const logo = logoMap.get(placement.logoId);
+    if (!logo) return acc;
+    const { w, h } = placementFootprint(placement, logo);
+    acc.push({ ...placement, w, h, logo, src: logo.src, name: logo.name, shape: logo.shape });
+    return acc;
 }, []);
 
-const comparePlacementRanks = (a, b) => {
-    for (let index = 0; index < a.length; index += 1) {
-        const delta = a[index] - b[index];
-        if (Math.abs(delta) > RECT_EPSILON) return delta;
-    }
-    return 0;
-};
-
-const overlapsOnX = (a, b, gap) => (
-    a.x < b.x + b.drawWidth + gap - RECT_EPSILON
-    && a.x + a.drawWidth + gap > b.x + RECT_EPSILON
+const rectsOverlap = (a, b, gap = 0) => (
+    a.x < b.x + b.w + gap - RECT_EPSILON
+    && a.x + a.w + gap > b.x + RECT_EPSILON
+    && a.y < b.y + b.h + gap - RECT_EPSILON
+    && a.y + a.h + gap > b.y + RECT_EPSILON
 );
 
-const overlapsOnY = (a, b, gap) => (
-    a.y < b.y + b.drawHeight + gap - RECT_EPSILON
-    && a.y + a.drawHeight + gap > b.y + RECT_EPSILON
-);
+// Dynamic roll length: grows to fit the lowest element, never below the minimum.
+const sheetHeightFor = (rects) => {
+    if (!rects.length) return EMPTY_SHEET_HEIGHT_MM;
+    const bottom = Math.max(...rects.map((r) => r.y + r.h)) + SHEET_PADDING_MM;
+    return Math.max(EMPTY_SHEET_HEIGHT_MM, Math.ceil(bottom));
+};
 
-const compactPlacements = (placements, { gap, sheetPadding, widthLimit, maxLengthMm }) => {
-    const compacted = placements.map((item) => ({ ...item }));
-    const ordered = [...compacted].sort((a, b) => (a.y - b.y) || (a.x - b.x));
-    const maxRight = widthLimit - sheetPadding;
-    const maxBottom = maxLengthMm - sheetPadding;
+const sortedUnique = (values) => {
+    const out = [];
+    values.forEach((value) => {
+        if (!Number.isFinite(value)) return;
+        if (!out.some((item) => Math.abs(item - value) < RECT_EPSILON)) out.push(value);
+    });
+    return out.sort((a, b) => a - b);
+};
 
-    for (let pass = 0; pass < 3; pass += 1) {
-        let moved = false;
-        ordered.forEach((item) => {
-            const others = compacted.filter((other) => other.id !== item.id);
-            const maxX = Math.max(sheetPadding, maxRight - item.drawWidth);
-            const maxY = Math.max(sheetPadding, maxBottom - item.drawHeight);
-
-            let nextY = sheetPadding;
-            others.forEach((other) => {
-                if (
-                    overlapsOnX(item, other, gap)
-                    && other.y + other.drawHeight + gap <= item.y + RECT_EPSILON
-                ) {
-                    nextY = Math.max(nextY, other.y + other.drawHeight + gap);
-                }
-            });
-            nextY = clamp(nextY, sheetPadding, Math.min(item.y, maxY));
-            if (nextY < item.y - RECT_EPSILON) {
-                item.y = nextY;
-                moved = true;
-            }
-
-            let nextX = sheetPadding;
-            others.forEach((other) => {
-                if (
-                    overlapsOnY(item, other, gap)
-                    && other.x + other.drawWidth + gap <= item.x + RECT_EPSILON
-                ) {
-                    nextX = Math.max(nextX, other.x + other.drawWidth + gap);
-                }
-            });
-            nextX = clamp(nextX, sheetPadding, Math.min(item.x, maxX));
-            if (nextX < item.x - RECT_EPSILON) {
-                item.x = nextX;
-                moved = true;
-            }
-        });
-        if (!moved) break;
+// First-fit free spot for a single new/duplicated rect, scanning candidate edges
+// left-to-right, top-to-bottom. Falls back to a fresh row below everything.
+const findFreeSpot = (rects, w, h, sheetWidth, gap) => {
+    const pad = SHEET_PADDING_MM;
+    const maxX = Math.max(pad, sheetWidth - pad - w);
+    const xs = sortedUnique([pad, ...rects.map((r) => r.x), ...rects.map((r) => r.x + r.w + gap)])
+        .filter((x) => x >= pad - RECT_EPSILON && x <= maxX + RECT_EPSILON);
+    const ys = sortedUnique([pad, ...rects.map((r) => r.y + r.h + gap)]);
+    for (const y of ys) {
+        for (const x of xs) {
+            if (x + w > sheetWidth - pad + RECT_EPSILON) continue;
+            const cand = { x, y, w, h };
+            if (rects.every((r) => !rectsOverlap(cand, r, gap))) return { x, y };
+        }
     }
-
-    return compacted;
+    const bottom = rects.length ? Math.max(...rects.map((r) => r.y + r.h)) + gap : pad;
+    return { x: pad, y: bottom };
 };
 
-const packRows = (instances, { sheetWidth, logoGapMm }) => {
-    const gap = LOGO_GAP_OPTIONS_MM.includes(Number(logoGapMm)) ? Number(logoGapMm) : DEFAULT_LOGO_GAP_MM;
-    const sheetPadding = SHEET_PADDING_MM;
-    const widthLimit = SHEET_WIDTH_OPTIONS_MM.includes(Number(sheetWidth)) ? Number(sheetWidth) : DEFAULT_SHEET_WIDTH_MM;
-    const maxItemHeight = instances.length
-        ? Math.max(...instances.map((item) => Math.max(item.width, item.height)))
-        : EMPTY_SHEET_HEIGHT_MM;
-    const maxLengthMm = Math.max(
-        EMPTY_SHEET_HEIGHT_MM,
-        SHEET_PADDING_MM * 2 + instances.length * (maxItemHeight + gap)
-    );
-    const innerWidthLimit = Math.max(1, widthLimit - sheetPadding * 2);
-    const innerHeightLimit = Math.max(1, maxLengthMm - sheetPadding * 2);
-    const byArea = (a, b) => {
-        const areaDelta = (b.width * b.height) - (a.width * a.height);
-        if (Math.abs(areaDelta) > 0.1) return areaDelta;
-        return Math.max(b.width, b.height) - Math.max(a.width, a.height);
-    };
-    const byHeight = (a, b) => (b.height - a.height) || byArea(a, b);
-    const byWidth = (a, b) => (b.width - a.width) || byArea(a, b);
-    const byAspect = (a, b) => Math.abs(1 - (a.width / Math.max(1, a.height))) - Math.abs(1 - (b.width / Math.max(1, b.height))) || byArea(a, b);
-    const packingOrders = [
-        [...instances].sort(byArea),
-        [...instances].sort(byHeight),
-        [...instances].sort(byWidth),
-        [...instances].sort(byAspect),
-        [...instances],
-    ];
-
-    const packOrder = (sorted) => {
-        const placements = [];
-        const unplaced = [];
-        let freeRects = [{
-            x: sheetPadding,
-            y: sheetPadding,
-            width: innerWidthLimit,
-            height: innerHeightLimit,
-        }];
-
-        sorted.forEach((item) => {
-            let best = null;
-            const canRotate = item.shape !== 'round' && Math.abs(item.width - item.height) > 0.1;
-            const orientationOptions = canRotate ? [false, true] : [false];
-
-            orientationOptions.forEach((rotated) => {
-                const footprint = getItemFootprint(item, rotated);
-                const drawWidth = footprint.drawWidth;
-                const drawHeight = footprint.drawHeight;
-                if (drawWidth > innerWidthLimit + RECT_EPSILON || drawHeight > innerHeightLimit + RECT_EPSILON) return;
-
-                freeRects.forEach((rect) => {
-                    if (drawWidth > rect.width + RECT_EPSILON || drawHeight > rect.height + RECT_EPSILON) return;
-
-                    const x = rect.x;
-                    const y = rect.y;
-                    const maxRight = widthLimit - sheetPadding;
-                    const maxBottom = maxLengthMm - sheetPadding;
-                    if (x + drawWidth > maxRight + RECT_EPSILON || y + drawHeight > maxBottom + RECT_EPSILON) return;
-
-                    const placeWidth = Math.min(drawWidth + gap, maxRight - x);
-                    const placeHeight = Math.min(drawHeight + gap, maxBottom - y);
-                    if (placeWidth < drawWidth - RECT_EPSILON || placeHeight < drawHeight - RECT_EPSILON) return;
-
-                    const shortSideWaste = Math.min(rect.width - placeWidth, rect.height - placeHeight);
-                    const longSideWaste = Math.max(rect.width - placeWidth, rect.height - placeHeight);
-                    const areaWaste = (rect.width * rect.height) - (placeWidth * placeHeight);
-                    const usedBottom = y + drawHeight;
-                    const usedRight = x + drawWidth;
-                    const rotationCost = rotated ? 0.02 : 0;
-                    const next = {
-                        x,
-                        y,
-                        rank: [
-                            usedBottom,
-                            shortSideWaste,
-                            longSideWaste,
-                            areaWaste,
-                            usedRight,
-                            rotationCost,
-                            y,
-                            x,
-                        ],
-                        placeWidth,
-                        placeHeight,
-                        drawWidth,
-                        drawHeight,
-                        rotated,
-                    };
-                    if (!best || comparePlacementRanks(next.rank, best.rank) < 0) {
-                        best = next;
-                    }
-                });
-            });
-
-            const placement = best || orientationOptions
-                .map((rotated) => ({ ...getItemFootprint(item, rotated), rotated }))
-                .filter((footprint) => footprint.drawWidth <= innerWidthLimit + RECT_EPSILON && footprint.drawHeight <= innerHeightLimit + RECT_EPSILON)
-                .sort((a, b) => (a.drawHeight - b.drawHeight) || (a.drawWidth - b.drawWidth))[0];
-            if (!placement) {
-                unplaced.push(item);
-                return;
-            }
-            if (!best) {
-                placement.x = sheetPadding;
-                placement.y = placements.length
-                    ? Math.max(...placements.map((placed) => placed.y + placed.drawHeight + gap))
-                    : sheetPadding;
-                placement.placeWidth = Math.min(placement.drawWidth + gap, innerWidthLimit);
-                placement.placeHeight = placement.drawHeight + gap;
-            }
-
-            placements.push({
-                ...item,
-                x: placement.x,
-                y: placement.y,
-                drawWidth: placement.drawWidth,
-                drawHeight: placement.drawHeight,
-                rotated: placement.rotated,
-            });
-            freeRects = applyPlacementToFreeRects(freeRects, {
-                x: placement.x,
-                y: placement.y,
-                width: placement.placeWidth,
-                height: placement.placeHeight,
-            }).sort((a, b) => (a.y - b.y) || (a.x - b.x) || (a.height - b.height));
-        });
-
-        const usedHeight = placements.length
-            ? Math.max(...placements.map((item) => item.y + item.drawHeight)) + sheetPadding
-            : EMPTY_SHEET_HEIGHT_MM;
-        const usedWidth = placements.length
-            ? Math.min(widthLimit, Math.max(...placements.map((item) => item.x + item.drawWidth)) + sheetPadding)
-            : widthLimit;
-
-        return {
-            placements,
-            unplaced,
-            width: widthLimit,
-            height: Math.max(260, Math.ceil(usedHeight)),
-            usedWidth,
-            usedHeight,
-            maxLengthMm,
-        };
-    };
-
-    return packingOrders
-        .map(packOrder)
-        .reduce((best, next) => {
-            if (!best) return next;
-            if ((next.unplaced?.length || 0) < (best.unplaced?.length || 0)) return next;
-            if ((next.unplaced?.length || 0) > (best.unplaced?.length || 0)) return best;
-            if (next.usedHeight < best.usedHeight - RECT_EPSILON) return next;
-            if (Math.abs(next.usedHeight - best.usedHeight) <= RECT_EPSILON && next.usedWidth < best.usedWidth) return next;
-            return best;
-        }, null);
+// Compact shelf packer powering the "Auto-arrange" button: predictable
+// left-to-right rows wrapping at the sheet width; rotates an item only when
+// that is the only way it fits the width.
+const shelfArrange = (items, sheetWidth, gap) => {
+    const pad = SHEET_PADDING_MM;
+    const inner = Math.max(1, sheetWidth - pad * 2);
+    const ordered = [...items].sort((a, b) => (b.h - a.h) || (b.w - a.w));
+    const result = new Map();
+    let cursorX = pad;
+    let cursorY = pad;
+    let rowH = 0;
+    ordered.forEach((item) => {
+        let { w, h } = item;
+        let rotated = false;
+        if (w > inner && h <= inner && item.canRotate) {
+            [w, h] = [h, w];
+            rotated = true;
+        }
+        if (cursorX > pad && cursorX + w > sheetWidth - pad + RECT_EPSILON) {
+            cursorX = pad;
+            cursorY += rowH + gap;
+            rowH = 0;
+        }
+        result.set(item.id, { x: cursorX, y: cursorY, rotated });
+        cursorX += w + gap;
+        rowH = Math.max(rowH, h);
+    });
+    return result;
 };
+
+const computeDensity = (rects, sheetWidth, sheetHeight) => (
+    rects.length
+        ? Math.round((rects.reduce((sum, r) => sum + r.w * r.h, 0) / (sheetWidth * sheetHeight)) * 100)
+        : 0
+);
 
 const mmLabel = (value) => `${formatMmValue(value)} мм`;
 
@@ -750,7 +532,13 @@ export const PrintCanvas = ({ onBack }) => {
     const language = useConfigurator((state) => state.language);
     const previewScrollRef = useRef(null);
     const dragStateRef = useRef(null);
+    const itemDragRef = useRef(null);
+    const clipboardRef = useRef([]);
+    const previewScaleRef = useRef(1);
+    const stateRef = useRef({});
     const [logos, setLogos] = useState([]);
+    const [placements, setPlacements] = useState([]);
+    const [selectedIds, setSelectedIds] = useState(() => new Set());
     const [logoGapMm, setLogoGapMm] = useState(DEFAULT_LOGO_GAP_MM);
     const [sheetWidthMm, setSheetWidthMm] = useState(DEFAULT_SHEET_WIDTH_MM);
     const [zoom, setZoom] = useState(1);
@@ -760,15 +548,46 @@ export const PrintCanvas = ({ onBack }) => {
     const [exportBusy, setExportBusy] = useState(false);
     const [exportMsg, setExportMsg] = useState('');
 
+    const logoMap = useMemo(() => new Map(logos.map((logo) => [logo.id, logo])), [logos]);
+    const sheetWidth = sheetWidthValue(sheetWidthMm);
+    const gap = gapValue(logoGapMm);
+    const rects = useMemo(() => resolveRects(placements, logoMap), [placements, logoMap]);
+    const sheetHeight = sheetHeightFor(rects);
+    const previewFitScale = Math.min(1, 1080 / sheetWidth);
+    const previewScale = previewFitScale * zoom;
+    previewScaleRef.current = previewScale;
+    const density = computeDensity(rects, sheetWidth, sheetHeight);
+    const contentRight = rects.length ? Math.max(...rects.map((r) => r.x + r.w)) : 0;
+    const usedWidth = rects.length ? Math.min(sheetWidth, contentRight + SHEET_PADDING_MM) : sheetWidth;
+    const usedHeight = sheetHeight;
+    const tooWide = rects.some((r) => r.w > sheetWidth - SHEET_PADDING_MM * 2 + RECT_EPSILON);
+    const countByLogo = useMemo(() => {
+        const counts = new Map();
+        placements.forEach((p) => counts.set(p.logoId, (counts.get(p.logoId) || 0) + 1));
+        return counts;
+    }, [placements]);
+
+    // Latest values for event handlers / keyboard shortcuts (avoids stale closures).
+    stateRef.current = { logos, placements, selectedIds, logoMap, sheetWidth, gap };
+
     const addFiles = useCallback(async (fileList) => {
-        const files = Array.from(fileList || []).filter((file) => file?.type?.startsWith('image/') || isTiffFile(file));
+        const files = Array.from(fileList || []).filter((file) => file?.type?.startsWith('image/') || isTiffFile(file) || isPdfFile(file));
         if (!files.length) return;
         setBusy(true);
         setError('');
         try {
-            const next = [];
-            for (const file of files) next.push(await prepareLogoFile(file));
-            setLogos((current) => [...current, ...next]);
+            const prepared = [];
+            for (const file of files) prepared.push(await prepareLogoFile(file));
+            const { placements: curPlacements, logoMap: curLogoMap, sheetWidth: sw, gap: g } = stateRef.current;
+            const rectsAccu = resolveRects(curPlacements, curLogoMap).map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h }));
+            const additions = prepared.map((logo) => {
+                const { w, h } = baseFootprint(logo);
+                const spot = findFreeSpot(rectsAccu, w, h, sw, g);
+                rectsAccu.push({ x: spot.x, y: spot.y, w, h });
+                return { id: makeLogoId(), logoId: logo.id, x: spot.x, y: spot.y, rotated: false };
+            });
+            setLogos((current) => [...current, ...prepared]);
+            setPlacements((current) => [...current, ...additions]);
         } catch {
             setError(t(language, 'printCanvasUploadError'));
         } finally {
@@ -776,20 +595,178 @@ export const PrintCanvas = ({ onBack }) => {
         }
     }, [language]);
 
-    const updateLogo = useCallback((id, patch) => {
-        setLogos((current) => current.map((logo) => (
-            logo.id === id ? { ...logo, ...patch } : logo
-        )));
-    }, []);
-
     const removeLogo = useCallback((id) => {
         setLogos((current) => current.filter((logo) => logo.id !== id));
+        setPlacements((current) => current.filter((p) => p.logoId !== id));
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            stateRef.current.placements.forEach((p) => { if (p.logoId === id) next.delete(p.id); });
+            return next;
+        });
     }, []);
 
+    // Reconcile the number of placements for a logo with the requested count.
+    const setLogoCount = useCallback((logoId, count) => {
+        const { placements: cur, logoMap: map, sheetWidth: sw, gap: g } = stateRef.current;
+        const logo = map.get(logoId);
+        if (!logo) return;
+        const own = cur.filter((p) => p.logoId === logoId);
+        const target = clamp(Math.round(count) || 1, 1, MAX_COPIES);
+        if (target === own.length) return;
+        if (target > own.length) {
+            const { w, h } = baseFootprint(logo);
+            const rectsAccu = resolveRects(cur, map).map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h }));
+            const additions = [];
+            for (let i = own.length; i < target; i += 1) {
+                const spot = findFreeSpot(rectsAccu, w, h, sw, g);
+                rectsAccu.push({ x: spot.x, y: spot.y, w, h });
+                additions.push({ id: makeLogoId(), logoId, x: spot.x, y: spot.y, rotated: false });
+            }
+            setPlacements((current) => [...current, ...additions]);
+        } else {
+            const removeIds = new Set(own.slice(target).map((p) => p.id));
+            setPlacements((current) => current.filter((p) => !removeIds.has(p.id)));
+            setSelectedIds((prev) => {
+                const next = new Set(prev);
+                removeIds.forEach((id) => next.delete(id));
+                return next;
+            });
+        }
+    }, []);
+
+    const duplicateLogo = useCallback((logoId) => {
+        setLogoCount(logoId, (stateRef.current.placements.filter((p) => p.logoId === logoId).length) + 1);
+    }, [setLogoCount]);
+
+    const duplicateSelected = useCallback(() => {
+        const { placements: cur, selectedIds: sel, logoMap: map, sheetWidth: sw } = stateRef.current;
+        if (!sel.size) return;
+        const copies = [];
+        cur.forEach((p) => {
+            if (!sel.has(p.id)) return;
+            const logo = map.get(p.logoId);
+            if (!logo) return;
+            const { w } = placementFootprint(p, logo);
+            copies.push({
+                id: makeLogoId(),
+                logoId: p.logoId,
+                rotated: p.rotated,
+                x: clamp(p.x + DUPLICATE_OFFSET_MM, SHEET_PADDING_MM, Math.max(SHEET_PADDING_MM, sw - SHEET_PADDING_MM - w)),
+                y: Math.max(SHEET_PADDING_MM, p.y + DUPLICATE_OFFSET_MM),
+            });
+        });
+        if (!copies.length) return;
+        setPlacements((current) => [...current, ...copies]);
+        setSelectedIds(new Set(copies.map((p) => p.id)));
+    }, []);
+
+    const copySelected = useCallback(() => {
+        const { placements: cur, selectedIds: sel } = stateRef.current;
+        clipboardRef.current = cur
+            .filter((p) => sel.has(p.id))
+            .map((p) => ({ logoId: p.logoId, rotated: p.rotated, x: p.x, y: p.y }));
+    }, []);
+
+    const pasteClipboard = useCallback(() => {
+        const { logoMap: map, sheetWidth: sw } = stateRef.current;
+        const buffer = clipboardRef.current;
+        if (!buffer.length) return;
+        const copies = buffer.reduce((acc, spec) => {
+            const logo = map.get(spec.logoId);
+            if (!logo) return acc;
+            const { w } = spec.rotated ? { w: logoHeightMm(logo, logoWidthMm(logo)) } : { w: logoWidthMm(logo) };
+            acc.push({
+                id: makeLogoId(),
+                logoId: spec.logoId,
+                rotated: spec.rotated,
+                x: clamp(spec.x + DUPLICATE_OFFSET_MM, SHEET_PADDING_MM, Math.max(SHEET_PADDING_MM, sw - SHEET_PADDING_MM - w)),
+                y: Math.max(SHEET_PADDING_MM, spec.y + DUPLICATE_OFFSET_MM),
+            });
+            return acc;
+        }, []);
+        if (!copies.length) return;
+        setPlacements((current) => [...current, ...copies]);
+        setSelectedIds(new Set(copies.map((p) => p.id)));
+    }, []);
+
+    const deleteSelected = useCallback(() => {
+        const { selectedIds: sel } = stateRef.current;
+        if (!sel.size) return;
+        setPlacements((current) => current.filter((p) => !sel.has(p.id)));
+        setSelectedIds(new Set());
+    }, []);
+
+    const nudgeSelected = useCallback((dx, dy) => {
+        const { selectedIds: sel, logoMap: map, sheetWidth: sw } = stateRef.current;
+        if (!sel.size) return;
+        setPlacements((current) => current.map((p) => {
+            if (!sel.has(p.id)) return p;
+            const logo = map.get(p.logoId);
+            if (!logo) return p;
+            const { w } = placementFootprint(p, logo);
+            const maxX = Math.max(SHEET_PADDING_MM, sw - SHEET_PADDING_MM - w);
+            return {
+                ...p,
+                x: clamp(p.x + dx, SHEET_PADDING_MM, maxX),
+                y: Math.max(SHEET_PADDING_MM, p.y + dy),
+            };
+        }));
+    }, []);
+
+    const selectAll = useCallback(() => {
+        setSelectedIds(new Set(stateRef.current.placements.map((p) => p.id)));
+    }, []);
+
+    const autoArrange = useCallback(() => {
+        const { placements: cur, logoMap: map, sheetWidth: sw, gap: g } = stateRef.current;
+        if (!cur.length) return;
+        const items = cur.map((p) => {
+            const logo = map.get(p.logoId);
+            const { w, h } = baseFootprint(logo);
+            const canRotate = logo.shape !== 'round' && Math.abs(w - h) > 0.1;
+            return { id: p.id, w, h, canRotate };
+        });
+        const arranged = shelfArrange(items, sw, g);
+        setPlacements((current) => current.map((p) => {
+            const slot = arranged.get(p.id);
+            return slot ? { ...p, x: slot.x, y: slot.y, rotated: slot.rotated } : p;
+        }));
+    }, []);
+
+    // Keyboard shortcuts (skipped while typing in inputs).
+    useEffect(() => {
+        const onKey = (event) => {
+            const active = document.activeElement;
+            const tag = active?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || active?.isContentEditable) return;
+            const meta = event.ctrlKey || event.metaKey;
+            const key = event.key;
+            const hasSelection = stateRef.current.selectedIds.size > 0;
+            if (meta && (key === 'd' || key === 'D')) { event.preventDefault(); duplicateSelected(); }
+            else if (meta && (key === 'c' || key === 'C')) { event.preventDefault(); copySelected(); }
+            else if (meta && (key === 'v' || key === 'V')) { event.preventDefault(); pasteClipboard(); }
+            else if (meta && (key === 'a' || key === 'A')) { event.preventDefault(); selectAll(); }
+            else if (key === 'Delete' || key === 'Backspace') { if (hasSelection) { event.preventDefault(); deleteSelected(); } }
+            else if (key === 'Escape') { if (hasSelection) setSelectedIds(new Set()); }
+            else if (key.startsWith('Arrow')) {
+                if (!hasSelection) return;
+                event.preventDefault();
+                const step = event.shiftKey ? NUDGE_LARGE_MM : NUDGE_MM;
+                const dx = key === 'ArrowLeft' ? -step : key === 'ArrowRight' ? step : 0;
+                const dy = key === 'ArrowUp' ? -step : key === 'ArrowDown' ? step : 0;
+                nudgeSelected(dx, dy);
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [duplicateSelected, copySelected, pasteClipboard, selectAll, deleteSelected, nudgeSelected]);
+
+    // ── Background panning (empty canvas) ───────────────────────────────────
     const startPreviewDrag = useCallback((event) => {
         if (event.button !== undefined && event.button !== 0) return;
         const target = previewScrollRef.current;
         if (!target) return;
+        setSelectedIds(new Set());
         dragStateRef.current = {
             pointerId: event.pointerId,
             startX: event.clientX,
@@ -820,126 +797,209 @@ export const PrintCanvas = ({ onBack }) => {
         setIsDraggingPreview(false);
     }, []);
 
-    const instances = useMemo(() => expandInstances(logos), [logos]);
-    const layout = useMemo(
-        () => packRows(instances, { sheetWidth: sheetWidthMm, logoGapMm }),
-        [instances, logoGapMm, sheetWidthMm]
-    );
-    const previewFitScale = Math.min(1, 1080 / layout.width);
-    const previewScale = previewFitScale * zoom;
-    const density = layout.placements.length
-        ? Math.round((layout.placements.reduce((sum, item) => sum + item.drawWidth * item.drawHeight, 0) / (layout.width * layout.height)) * 100)
-        : 0;
-
-    const buildTiffExport = useCallback(async () => {
-        if (!layout.placements.length) {
-            throw new Error('empty-layout');
+    // ── Element dragging ────────────────────────────────────────────────────
+    const startItemDrag = useCallback((event, placementId) => {
+        if (event.button !== undefined && event.button !== 0) return;
+        event.stopPropagation();
+        const additive = event.shiftKey;
+        const curSel = stateRef.current.selectedIds;
+        let group;
+        if (additive) {
+            const next = new Set(curSel);
+            if (next.has(placementId)) next.delete(placementId); else next.add(placementId);
+            setSelectedIds(next);
+            group = [...next];
+        } else if (curSel.has(placementId)) {
+            group = [...curSel];
+        } else {
+            group = [placementId];
+            setSelectedIds(new Set([placementId]));
         }
-        if (layout.unplaced?.length) {
-            throw new Error('items-not-fit');
-        }
+        const origin = new Map();
+        stateRef.current.placements.forEach((p) => {
+            if (group.includes(p.id)) origin.set(p.id, { x: p.x, y: p.y });
+        });
+        itemDragRef.current = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            origin,
+        };
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+    }, []);
 
+    const moveItemDrag = useCallback((event) => {
+        const drag = itemDragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        const scale = previewScaleRef.current || 1;
+        const dxMm = (event.clientX - drag.startX) / scale;
+        const dyMm = (event.clientY - drag.startY) / scale;
+        const { logoMap: map, sheetWidth: sw } = stateRef.current;
+        setPlacements((current) => current.map((p) => {
+            const o = drag.origin.get(p.id);
+            if (!o) return p;
+            const logo = map.get(p.logoId);
+            if (!logo) return p;
+            const { w } = placementFootprint(p, logo);
+            const maxX = Math.max(SHEET_PADDING_MM, sw - SHEET_PADDING_MM - w);
+            return {
+                ...p,
+                x: clamp(o.x + dxMm, SHEET_PADDING_MM, maxX),
+                y: Math.max(SHEET_PADDING_MM, o.y + dyMm),
+            };
+        }));
+        event.preventDefault();
+    }, []);
+
+    const stopItemDrag = useCallback((event) => {
+        const drag = itemDragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
+        itemDragRef.current = null;
+    }, []);
+
+    // ── Export ───────────────────────────────────────────────────────────────
+    const buildExportPlan = useCallback(() => {
+        const { placements: cur, logoMap: map, sheetWidth: sw, gap: g } = stateRef.current;
+        if (!cur.length) throw new Error('empty-layout');
+        const items = resolveRects(cur, map);
+        if (items.some((r) => r.w > sw - SHEET_PADDING_MM * 2 + RECT_EPSILON)) throw new Error('items-not-fit');
+        const height = sheetHeightFor(items);
         const pxPerMm = TIFF_EXPORT_DPI / MM_PER_INCH;
-        const widthPx = Math.max(1, Math.ceil(layout.width * pxPerMm));
-        const heightPx = Math.max(1, Math.ceil(layout.usedHeight * pxPerMm));
-
-        const imageCache = new Map();
-        const drawItems = layout.placements.map((item) => ({
+        const widthPx = Math.max(1, Math.ceil(sw * pxPerMm));
+        const heightPx = Math.max(1, Math.ceil(height * pxPerMm));
+        const drawItems = items.map((item) => ({
             ...item,
             px: {
                 x: Math.round(item.x * pxPerMm),
                 y: Math.round(item.y * pxPerMm),
-                width: Math.round(item.drawWidth * pxPerMm),
-                height: Math.round(item.drawHeight * pxPerMm),
+                width: Math.round(item.w * pxPerMm),
+                height: Math.round(item.h * pxPerMm),
             },
         }));
-        for (const item of drawItems) {
-            if (!imageCache.has(item.logoId)) {
-                imageCache.set(item.logoId, await loadImage(item.src));
-            }
-        }
-
-        const renderStrip = (ctx, topPx, rows) => {
-            const bottomPx = topPx + rows;
-            ctx.save();
-            ctx.translate(0, -topPx);
-            for (const item of drawItems) {
-                const { x, y, width, height } = item.px;
-                if (y >= bottomPx || y + height <= topPx) continue;
-                if (item.rotated) {
-                    ctx.save();
-                    ctx.translate(x + width / 2, y + height / 2);
-                    ctx.rotate(Math.PI / 2);
-                    ctx.drawImage(imageCache.get(item.logoId), -height / 2, -width / 2, height, width);
-                    ctx.restore();
-                } else {
-                    ctx.drawImage(imageCache.get(item.logoId), x, y, width, height);
-                }
-            }
-            ctx.restore();
-        };
-
-        const blob = buildStripedTiff({
-            width: widthPx,
-            height: heightPx,
-            dpi: TIFF_EXPORT_DPI,
-            rowsPerStrip: TIFF_STRIP_ROWS,
-            renderStrip,
-        });
+        const usedW = Math.min(sw, Math.max(...items.map((r) => r.x + r.w)) + SHEET_PADDING_MM);
         const metadata = {
-            sheet_width_mm: layout.width,
-            used_width_mm: layout.usedWidth,
-            used_height_mm: layout.usedHeight,
-            max_length_m: Math.ceil(layout.usedHeight / 1000),
-            logo_gap_mm: logoGapMm,
-            items_count: layout.placements.length,
-            density,
+            sheet_width_mm: sw,
+            used_width_mm: usedW,
+            used_height_mm: height,
+            max_length_m: Math.ceil(height / 1000),
+            logo_gap_mm: g,
+            items_count: items.length,
+            density: computeDensity(items, sw, height),
             export_dpi: TIFF_EXPORT_DPI,
             pixel_width: widthPx,
             pixel_height: heightPx,
-            logos: logos.map((logo) => {
+            logos: stateRef.current.logos.map((logo) => {
                 const widthMm = logoWidthMm(logo);
                 return {
                     id: logo.id,
                     name: logo.name,
-                    quantity: logo.quantity,
+                    quantity: cur.filter((p) => p.logoId === logo.id).length,
                     width_px: logo.widthPx,
                     height_px: logo.heightPx,
                     width_mm: widthMm,
                     height_mm: logoHeightMm(logo, widthMm),
                 };
             }),
-            placements: layout.placements.map((item) => ({
+            placements: items.map((item) => ({
                 logo_id: item.logoId,
                 name: item.name,
-                copy_index: item.copyIndex,
                 x_mm: item.x,
                 y_mm: item.y,
-                width_mm: item.drawWidth,
-                height_mm: item.drawHeight,
+                width_mm: item.w,
+                height_mm: item.h,
                 rotated: Boolean(item.rotated),
             })),
         };
+        return { drawItems, widthPx, heightPx, metadata };
+    }, []);
 
-        return { blob, metadata };
-    }, [density, layout, logoGapMm, logos]);
+    // Render placed logos into a strip. `mode` 'color' draws the artwork;
+    // 'mask' draws an opaque black silhouette of the artwork's alpha channel.
+    const makeStripRenderer = (drawItems, imageCache, mode) => (ctx, topPx, rows) => {
+        const bottomPx = topPx + rows;
+        ctx.save();
+        ctx.translate(0, -topPx);
+        for (const item of drawItems) {
+            const { x, y, width, height } = item.px;
+            if (y >= bottomPx || y + height <= topPx) continue;
+            const image = imageCache.get(item.logoId);
+            const draw = (dx, dy, dw, dh) => {
+                if (mode === 'mask') {
+                    const off = document.createElement('canvas');
+                    off.width = Math.max(1, Math.round(dw));
+                    off.height = Math.max(1, Math.round(dh));
+                    const octx = off.getContext('2d');
+                    octx.imageSmoothingEnabled = true;
+                    octx.imageSmoothingQuality = 'high';
+                    octx.drawImage(image, 0, 0, off.width, off.height);
+                    octx.globalCompositeOperation = 'source-in';
+                    octx.fillStyle = '#000000';
+                    octx.fillRect(0, 0, off.width, off.height);
+                    ctx.drawImage(off, dx, dy, dw, dh);
+                } else {
+                    ctx.drawImage(image, dx, dy, dw, dh);
+                }
+            };
+            if (item.rotated) {
+                ctx.save();
+                ctx.translate(x + width / 2, y + height / 2);
+                ctx.rotate(Math.PI / 2);
+                draw(-height / 2, -width / 2, height, width);
+                ctx.restore();
+            } else {
+                draw(x, y, width, height);
+            }
+        }
+        ctx.restore();
+    };
 
-    const exportTiff = useCallback(async () => {
+    const exportCanvas = useCallback(async (format) => {
         setExportBusy(true);
         setExportMsg('');
         setError('');
         try {
-            const { blob, metadata } = await buildTiffExport();
+            const { drawItems, widthPx, heightPx, metadata } = buildExportPlan();
+            const imageCache = new Map();
+            for (const item of drawItems) {
+                if (!imageCache.has(item.logoId)) imageCache.set(item.logoId, await loadImage(item.src));
+            }
+            const colorBlob = buildStripedTiff({
+                width: widthPx,
+                height: heightPx,
+                dpi: TIFF_EXPORT_DPI,
+                rowsPerStrip: TIFF_STRIP_ROWS,
+                renderStrip: makeStripRenderer(drawItems, imageCache, 'color'),
+            });
             const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+            if (format === 'pdf') {
+                const maskBlob = buildStripedTiff({
+                    width: widthPx,
+                    height: heightPx,
+                    dpi: TIFF_EXPORT_DPI,
+                    rowsPerStrip: TIFF_STRIP_ROWS,
+                    renderStrip: makeStripRenderer(drawItems, imageCache, 'mask'),
+                });
+                const filename = `print-canvas-${stamp}.pdf`;
+                const colorFile = new File([colorBlob], 'color.tiff', { type: 'image/tiff' });
+                const maskFile = new File([maskBlob], 'mask.tiff', { type: 'image/tiff' });
+                const { data: item } = await printCanvasApi.createPdfExport(colorFile, maskFile, metadata);
+                const { data: pdfBlob } = await printCanvasApi.downloadExport(item.id);
+                downloadBlob(pdfBlob, filename);
+                setExportMsg(t(language, 'printCanvasExportSaved'));
+                return;
+            }
+
             const filename = `print-canvas-${stamp}.tiff`;
-            const file = new File([blob], filename, { type: 'image/tiff' });
+            const file = new File([colorBlob], filename, { type: 'image/tiff' });
             const { data: item } = await printCanvasApi.createExport(file, metadata);
             // Backend stores the print-ready CMYK TIFF — download that, not the local RGB raster.
             try {
                 const { data: cmykBlob } = await printCanvasApi.downloadExport(item.id);
                 downloadBlob(cmykBlob, filename);
             } catch {
-                downloadBlob(blob, filename);
+                downloadBlob(colorBlob, filename);
             }
             setExportMsg(t(language, 'printCanvasExportSaved'));
         } catch (err) {
@@ -953,7 +1013,9 @@ export const PrintCanvas = ({ onBack }) => {
         } finally {
             setExportBusy(false);
         }
-    }, [buildTiffExport, language]);
+    }, [buildExportPlan, language]);
+
+    const exportDisabled = exportBusy || !rects.length || tooWide;
 
     return (
         <main className="app-bg h-full w-full overflow-y-auto overflow-x-hidden font-zen text-white">
@@ -1003,7 +1065,7 @@ export const PrintCanvas = ({ onBack }) => {
                                     {error}
                                 </div>
                             )}
-                            {!!layout.unplaced?.length && (
+                            {tooWide && (
                                 <div className="mt-3 rounded-[9px] border border-amber-300/25 bg-amber-500/12 px-3 py-2 text-[12px] font-bold text-amber-100">
                                     {t(language, 'printCanvasItemsNotFit')}
                                 </div>
@@ -1011,7 +1073,7 @@ export const PrintCanvas = ({ onBack }) => {
 
                             <div className="mt-4 flex shrink-0 items-center justify-between gap-3">
                                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/42">{t(language, 'printCanvasLogos')}</span>
-                                <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-black text-white/55">{instances.length}</span>
+                                <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-black text-white/55">{placements.length}</span>
                             </div>
 
                             <div className="mt-3 min-h-[160px] flex-1 space-y-2 overflow-y-auto overflow-x-hidden pr-1 custom-scrollbar">
@@ -1020,50 +1082,64 @@ export const PrintCanvas = ({ onBack }) => {
                                         {t(language, 'printCanvasEmpty')}
                                     </div>
                                 )}
-                                {logos.map((logo) => (
-                                    <div key={logo.id} className="min-w-0 rounded-[12px] border border-white/12 bg-white/7 p-3">
-                                        <div className="grid min-w-0 grid-cols-[56px_minmax(0,1fr)_auto_28px] items-center gap-2">
-                                            <div className="grid h-14 w-14 place-items-center overflow-hidden rounded-[9px] border border-white/14 bg-white">
-                                                <img src={logo.src} alt={logo.name} className="max-h-full max-w-full object-contain" />
+                                {logos.map((logo) => {
+                                    const quantity = countByLogo.get(logo.id) || 0;
+                                    return (
+                                        <div key={logo.id} className="min-w-0 rounded-[12px] border border-white/12 bg-white/7 p-3">
+                                            <div className="grid min-w-0 grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-2">
+                                                <div className="grid h-14 w-14 place-items-center overflow-hidden rounded-[9px] border border-white/14 bg-white">
+                                                    <img src={logo.src} alt={logo.name} className="max-h-full max-w-full object-contain" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="max-h-9 overflow-hidden break-all text-[12px] font-black leading-tight sm:text-[13px]">{logo.name}</p>
+                                                    <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-white/38">
+                                                        {Math.round(logo.widthPx)} x {Math.round(logo.heightPx)} px
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => duplicateLogo(logo.id)}
+                                                        className="grid h-7 w-7 place-items-center rounded-[7px] border border-white/14 bg-white/8 text-white/70 transition hover:bg-white/14 hover:text-white"
+                                                        aria-label={t(language, 'printCanvasDuplicate')}
+                                                        title={t(language, 'printCanvasDuplicate')}
+                                                    >
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                            <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="2" />
+                                                            <path d="M5 15V5a2 2 0 0 1 2-2h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                                        </svg>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeLogo(logo.id)}
+                                                        className="grid h-7 w-7 place-items-center rounded-full text-[18px] leading-none text-white/38 transition hover:bg-white/10 hover:text-white"
+                                                        aria-label={t(language, 'cartDeleteBtn')}
+                                                    >
+                                                        ×
+                                                    </button>
+                                                </div>
                                             </div>
-                                            <div className="min-w-0">
-                                                <p className="max-h-9 overflow-hidden break-all text-[12px] font-black leading-tight sm:text-[13px]">{logo.name}</p>
-                                                <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-white/38">
-                                                    {Math.round(logo.widthPx)} x {Math.round(logo.heightPx)} px
-                                                </p>
+                                            <div className="mt-2 flex items-center justify-between gap-2 border-t border-white/8 pt-2">
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-white/42">
+                                                    {logoSizeLabel(logo)}
+                                                </span>
+                                                <div className="flex min-w-0 items-center gap-1">
+                                                    <QuantityButton disabled={quantity <= 1} onClick={() => setLogoCount(logo.id, quantity - 1)}>−</QuantityButton>
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        max={MAX_COPIES}
+                                                        value={quantity}
+                                                        aria-label={t(language, 'printCanvasQuantity')}
+                                                        onChange={(event) => setLogoCount(logo.id, clamp(Number(event.target.value) || 1, 1, MAX_COPIES))}
+                                                        className="h-8 w-12 rounded-[8px] border border-white/14 bg-[#211a1d] text-center text-[12px] font-black text-white outline-none [color-scheme:dark] focus:border-[#fff9ec]/70"
+                                                    />
+                                                    <QuantityButton onClick={() => setLogoCount(logo.id, quantity + 1)}>+</QuantityButton>
+                                                </div>
                                             </div>
-                                            <div className="flex min-w-0 items-center gap-1">
-                                                <QuantityButton disabled={logo.quantity <= 1} onClick={() => updateLogo(logo.id, { quantity: Math.max(1, logo.quantity - 1) })}>−</QuantityButton>
-                                                <input
-                                                    type="number"
-                                                    min="1"
-                                                    max="999"
-                                                    value={logo.quantity}
-                                                    aria-label={t(language, 'printCanvasQuantity')}
-                                                    onChange={(event) => updateLogo(logo.id, { quantity: clamp(Number(event.target.value) || 1, 1, 999) })}
-                                                    className="h-8 w-12 rounded-[8px] border border-white/14 bg-[#211a1d] text-center text-[12px] font-black text-white outline-none [color-scheme:dark] focus:border-[#fff9ec]/70"
-                                                />
-                                                <QuantityButton onClick={() => updateLogo(logo.id, { quantity: Math.min(999, logo.quantity + 1) })}>+</QuantityButton>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => removeLogo(logo.id)}
-                                                className="h-7 w-7 rounded-full text-[18px] leading-none text-white/38 transition hover:bg-white/10 hover:text-white"
-                                                aria-label={t(language, 'cartDeleteBtn')}
-                                            >
-                                                ×
-                                            </button>
                                         </div>
-                                        <div className="mt-2 flex items-center justify-between gap-2 border-t border-white/8 pt-2">
-                                            <span className="text-[10px] font-black uppercase tracking-wider text-white/42">
-                                                {t(language, 'printCanvasLogoSize')}
-                                            </span>
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-white/38">
-                                                {logoSizeLabel(logo)}
-                                            </span>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </aside>
@@ -1073,6 +1149,7 @@ export const PrintCanvas = ({ onBack }) => {
                             <div className="min-w-0">
                                 <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/42">{t(language, 'printCanvasPreview')}</p>
                                 <h2 className="mt-1 text-[20px] font-black leading-tight">{t(language, 'printCanvasTitle')}</h2>
+                                <p className="mt-1 text-[10px] font-bold text-white/38">{t(language, 'printCanvasShortcutsHint')}</p>
                             </div>
                         </div>
 
@@ -1099,32 +1176,32 @@ export const PrintCanvas = ({ onBack }) => {
                                     </div>
                                 </div>
                                 <p className="mt-2 text-[10px] font-bold text-white/38">
-                                    {mmLabel(layout.usedWidth)} x {mmLabel(layout.usedHeight)}
+                                    {mmLabel(usedWidth)} x {mmLabel(usedHeight)}
                                 </p>
                             </div>
                             <div className="rounded-[10px] border border-white/10 bg-white/7 px-3 py-2">
                                 <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/36">{t(language, 'printCanvasLogoGap')}</p>
                                 <div className="mt-2 grid grid-cols-2 gap-1" aria-label={t(language, 'printCanvasLogoGap')}>
-                                    {LOGO_GAP_OPTIONS_MM.map((gap) => (
+                                    {LOGO_GAP_OPTIONS_MM.map((gapOption) => (
                                         <button
-                                            key={gap}
+                                            key={gapOption}
                                             type="button"
-                                            onClick={() => setLogoGapMm(gap)}
+                                            onClick={() => setLogoGapMm(gapOption)}
                                             className="h-8 rounded-[8px] border px-2 text-[12px] font-black transition"
                                             style={{
-                                                borderColor: logoGapMm === gap ? '#fff9ec' : 'rgba(255,255,255,0.14)',
-                                                backgroundColor: logoGapMm === gap ? '#fff9ec' : '#211a1d',
-                                                color: logoGapMm === gap ? '#211a1d' : '#fff',
+                                                borderColor: logoGapMm === gapOption ? '#fff9ec' : 'rgba(255,255,255,0.14)',
+                                                backgroundColor: logoGapMm === gapOption ? '#fff9ec' : '#211a1d',
+                                                color: logoGapMm === gapOption ? '#211a1d' : '#fff',
                                             }}
                                         >
-                                            {gap} мм
+                                            {gapOption} мм
                                         </button>
                                     ))}
                                 </div>
                             </div>
                             <div className="rounded-[10px] border border-white/10 bg-white/7 px-3 py-2">
                                 <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/36">{t(language, 'printCanvasItems')}</p>
-                                <p className="mt-1 text-[14px] font-black">{instances.length}</p>
+                                <p className="mt-1 text-[14px] font-black">{placements.length}</p>
                             </div>
                             <div className="rounded-[10px] border border-white/10 bg-white/7 px-3 py-2">
                                 <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/36">{t(language, 'printCanvasDensity')}</p>
@@ -1133,19 +1210,34 @@ export const PrintCanvas = ({ onBack }) => {
                         </div>
 
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-                            <div className="flex min-w-0 flex-col gap-1">
-                                <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/36">{t(language, 'printCanvasZoom')}</span>
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={autoArrange}
+                                    disabled={!placements.length}
+                                    className="h-8 rounded-[8px] border border-white/14 bg-white/8 px-3 text-[11px] font-black uppercase tracking-wider text-white/80 transition hover:bg-white/14 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    {t(language, 'printCanvasAutoArrange')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => exportCanvas('pdf')}
+                                    disabled={exportDisabled}
+                                    className="h-8 rounded-[8px] border border-[#fff9ec]/35 bg-[#fff9ec] px-3 text-[11px] font-black uppercase tracking-wider text-[#211a1d] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    {exportBusy ? t(language, 'printCanvasExporting') : t(language, 'printCanvasExportPdf')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => exportCanvas('tiff')}
+                                    disabled={exportDisabled}
+                                    className="h-8 rounded-[8px] border border-white/14 bg-white/8 px-3 text-[11px] font-black uppercase tracking-wider text-white/80 transition hover:bg-white/14 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    {t(language, 'printCanvasExportTiff')}
+                                </button>
                                 {exportMsg && <span className="text-[11px] font-bold text-emerald-300">{exportMsg}</span>}
                             </div>
                             <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={exportTiff}
-                                    disabled={exportBusy || !layout.placements.length || !!layout.unplaced?.length}
-                                    className="h-8 rounded-[8px] border border-[#fff9ec]/35 bg-[#fff9ec] px-3 text-[11px] font-black uppercase tracking-wider text-[#211a1d] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                    {exportBusy ? t(language, 'printCanvasExporting') : t(language, 'printCanvasExportTiff')}
-                                </button>
                                 <button
                                     type="button"
                                     onClick={() => setZoom((value) => clamp(Number((value - ZOOM_STEP).toFixed(2)), MIN_ZOOM, MAX_ZOOM))}
@@ -1193,49 +1285,60 @@ export const PrintCanvas = ({ onBack }) => {
                             }`}
                         >
                             <div
-                                className="relative mx-auto rounded-[8px] border border-[#fff9ec]/55 bg-[#fff9ec]/8 shadow-[0_0_0_1px_rgba(255,249,236,0.16),0_18px_60px_rgba(0,0,0,0.32)] backdrop-blur-[2px] pointer-events-none"
+                                className="relative mx-auto rounded-[8px] border border-[#fff9ec]/55 bg-[#fff9ec]/8 shadow-[0_0_0_1px_rgba(255,249,236,0.16),0_18px_60px_rgba(0,0,0,0.32)] backdrop-blur-[2px]"
                                 style={{
-                                    width: layout.width * previewScale,
-                                    height: layout.height * previewScale,
+                                    width: sheetWidth * previewScale,
+                                    height: sheetHeight * previewScale,
                                     backgroundImage: 'linear-gradient(rgba(255,249,236,0.10) 1px, transparent 1px), linear-gradient(90deg, rgba(255,249,236,0.10) 1px, transparent 1px)',
                                     backgroundSize: `${20 * previewScale}px ${20 * previewScale}px`,
                                 }}
                             >
-                                {!layout.placements.length && (
-                                    <div className="absolute inset-0 grid place-items-center px-8 text-center text-[14px] font-black uppercase tracking-wider text-white/40">
+                                {!rects.length && (
+                                    <div className="pointer-events-none absolute inset-0 grid place-items-center px-8 text-center text-[14px] font-black uppercase tracking-wider text-white/40">
                                         {t(language, 'printCanvasEmptyCanvas')}
                                     </div>
                                 )}
-                                {layout.placements.map((item) => (
-                                    <div
-                                        key={item.id}
-                                        className="absolute grid place-items-center overflow-hidden bg-white/8"
-                                        title={`${item.name} #${item.copyIndex + 1}`}
-                                        style={{
-                                            left: item.x * previewScale,
-                                            top: item.y * previewScale,
-                                            width: item.drawWidth * previewScale,
-                                            height: item.drawHeight * previewScale,
-                                            borderRadius: item.shape === 'round' ? '999px' : 4,
-                                            boxShadow: 'inset 0 0 0 1px rgba(255,249,236,0.2)',
-                                        }}
-                                    >
-                                        <img
-                                            src={item.src}
-                                            alt=""
-                                            className={item.rotated ? 'absolute object-contain' : 'h-full w-full object-contain'}
-                                            style={item.rotated ? {
-                                                left: '50%',
-                                                top: '50%',
-                                                width: item.drawHeight * previewScale,
-                                                height: item.drawWidth * previewScale,
-                                                maxWidth: 'none',
-                                                maxHeight: 'none',
-                                                transform: 'translate(-50%, -50%) rotate(90deg)',
-                                            } : undefined}
-                                        />
-                                    </div>
-                                ))}
+                                {rects.map((item) => {
+                                    const selected = selectedIds.has(item.id);
+                                    return (
+                                        <div
+                                            key={item.id}
+                                            onPointerDown={(event) => startItemDrag(event, item.id)}
+                                            onPointerMove={moveItemDrag}
+                                            onPointerUp={stopItemDrag}
+                                            onPointerCancel={stopItemDrag}
+                                            className="absolute grid cursor-move touch-none place-items-center overflow-hidden bg-white/8"
+                                            title={item.name}
+                                            style={{
+                                                left: item.x * previewScale,
+                                                top: item.y * previewScale,
+                                                width: item.w * previewScale,
+                                                height: item.h * previewScale,
+                                                borderRadius: item.shape === 'round' ? '999px' : 4,
+                                                boxShadow: selected
+                                                    ? '0 0 0 2px #fff9ec, 0 0 0 4px rgba(255,249,236,0.35)'
+                                                    : 'inset 0 0 0 1px rgba(255,249,236,0.2)',
+                                                zIndex: selected ? 2 : 1,
+                                            }}
+                                        >
+                                            <img
+                                                src={item.src}
+                                                alt=""
+                                                draggable={false}
+                                                className={item.rotated ? 'pointer-events-none absolute object-contain' : 'pointer-events-none h-full w-full object-contain'}
+                                                style={item.rotated ? {
+                                                    left: '50%',
+                                                    top: '50%',
+                                                    width: item.h * previewScale,
+                                                    height: item.w * previewScale,
+                                                    maxWidth: 'none',
+                                                    maxHeight: 'none',
+                                                    transform: 'translate(-50%, -50%) rotate(90deg)',
+                                                } : undefined}
+                                            />
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     </section>

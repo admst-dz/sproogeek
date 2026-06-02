@@ -207,6 +207,15 @@ export const printCanvasApi = {
     createExport: (file, metadata) => {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('format', 'tiff');
+        formData.append('metadata', JSON.stringify(metadata || {}));
+        return apiClient.post('/print-canvas/exports', formData);
+    },
+    createPdfExport: (colorFile, maskFile, metadata) => {
+        const formData = new FormData();
+        formData.append('color', colorFile);
+        formData.append('mask', maskFile);
+        formData.append('format', 'pdf');
         formData.append('metadata', JSON.stringify(metadata || {}));
         return apiClient.post('/print-canvas/exports', formData);
     },

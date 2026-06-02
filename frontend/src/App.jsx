@@ -511,14 +511,17 @@ function MainApp() {
     }, [screen]);
 
     useEffect(() => {
-        if (authLoading || screen !== 'print_canvas') return undefined;
+        // Wait for both auth and public settings before deciding access, so a
+        // direct load / reload of /print-canvas isn't bounced to home while the
+        // server's section visibility is still being fetched.
+        if (authLoading || !publicSettingsReady || screen !== 'print_canvas') return undefined;
         if (printCanvasEnabledForCurrentUser) return undefined;
         const frame = window.requestAnimationFrame(() => {
             setScreen(currentUser ? 'client_dashboard' : 'home');
             if (currentUser) setClientTab('catalog');
         });
         return () => window.cancelAnimationFrame(frame);
-    }, [authLoading, currentUser, printCanvasEnabledForCurrentUser, screen]);
+    }, [authLoading, publicSettingsReady, currentUser, printCanvasEnabledForCurrentUser, screen]);
 
     useEffect(() => {
         if (screen !== 'configurator') return undefined;
