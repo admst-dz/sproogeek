@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { captureRender, getStickerSlotShape, STICKER_SLOT_COUNT, useConfigurator } from '../../store';
 import { t } from '../../i18n';
 import {
@@ -63,73 +62,66 @@ const StickerPackList = ({
     selectStickerImage,
     removeStickerImage,
 }) => {
-    if (typeof document === 'undefined') return null;
-
-    return createPortal(
-        <aside className="pointer-events-auto hidden xl:flex fixed right-[430px] top-[4.75rem] z-[90] w-[340px] max-w-[calc(100vw-1.5rem)] max-h-[min(640px,calc(100vh-6rem))] flex-col overflow-hidden rounded-[12px] border border-white/30 bg-[#3f3438]/94 font-zen text-white shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-2xl">
-            <div className="border-b border-white/12 px-5 py-4">
-                <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/42">{t(language, 'stickerPackList')}</p>
-                        <h3 className="mt-1 text-[18px] font-black leading-tight">{stickerImages.length}/{STICKER_SLOT_COUNT}</h3>
-                    </div>
-                    <FileUploadChip label={t(language, 'addImage')} onFile={addStickerImage} />
+    return (
+        <div className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/42">{t(language, 'stickerPackList')}</p>
+                    <h3 className="mt-1 text-[18px] font-black leading-tight text-white">{stickerImages.length}/{STICKER_SLOT_COUNT}</h3>
                 </div>
-                <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-white/45">
-                    {Math.max(0, STICKER_SLOT_COUNT - stickerImages.length)} {t(language, 'stickerSlotsLeft')}
-                </p>
+                <FileUploadChip label={t(language, 'addImage')} onFile={addStickerImage} />
             </div>
+            <p className="text-[10px] font-black uppercase tracking-wider text-white/45">
+                {Math.max(0, STICKER_SLOT_COUNT - stickerImages.length)} {t(language, 'stickerSlotsLeft')}
+            </p>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-3 custom-scrollbar">
-                {stickerImages.length === 0 ? (
-                    <div className="rounded-[10px] border border-dashed border-white/18 bg-white/6 px-4 py-6 text-center text-[12px] font-bold leading-snug text-white/45">
-                        {t(language, 'stickerPackEmpty')}
-                    </div>
-                ) : (
-                    <div className="space-y-2">
-                        {stickerImages.map((logo, index) => {
-                            const active = logo.id === selectedStickerImageId;
-                            return (
-                                <div
-                                    key={logo.id}
-                                    className={`group grid grid-cols-[52px_minmax(0,1fr)_28px] items-center gap-3 rounded-[10px] border px-2.5 py-2 transition ${
-                                        active ? 'border-[#fff9ec]/75 bg-[#fff9ec]/14' : 'border-white/12 bg-white/7 hover:border-white/28 hover:bg-white/10'
-                                    }`}
+            {stickerImages.length === 0 ? (
+                <div className="rounded-[10px] border border-dashed border-white/18 bg-white/6 px-4 py-6 text-center text-[12px] font-bold leading-snug text-white/45">
+                    {t(language, 'stickerPackEmpty')}
+                </div>
+            ) : (
+                <div className="space-y-2">
+                    {stickerImages.map((logo, index) => {
+                        const active = logo.id === selectedStickerImageId;
+                        return (
+                            <div
+                                key={logo.id}
+                                className={`group grid grid-cols-[52px_minmax(0,1fr)_28px] items-center gap-3 rounded-[10px] border px-2.5 py-2 transition ${
+                                    active ? 'border-[#fff9ec]/75 bg-[#fff9ec]/14' : 'border-white/12 bg-white/7 hover:border-white/28 hover:bg-white/10'
+                                }`}
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => selectStickerImage(logo.id)}
+                                    className="h-[52px] w-[52px] overflow-hidden rounded-[8px] border border-white/12 bg-black/18"
+                                    aria-label={logo.filename}
                                 >
-                                    <button
-                                        type="button"
-                                        onClick={() => selectStickerImage(logo.id)}
-                                        className="h-[52px] w-[52px] overflow-hidden rounded-[8px] border border-white/12 bg-black/18"
-                                        aria-label={logo.filename}
-                                    >
-                                        <img src={logo.texture} alt="" className="h-full w-full object-contain" />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => selectStickerImage(logo.id)}
-                                        className="min-w-0 text-left"
-                                    >
-                                        <span className="block truncate text-[13px] font-black leading-tight text-white">{logo.filename}</span>
-                                        <span className="mt-1 block truncate text-[10px] font-black uppercase tracking-wider text-white/45">
-                                            {getStickerImageMeta(language, stickerSheetMode, logo, index)}
-                                        </span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => removeStickerImage(logo.id)}
-                                        className="h-7 w-7 rounded-full border border-white/15 bg-black/20 text-[15px] font-black leading-none text-white/50 transition hover:border-white/35 hover:bg-white/12 hover:text-white"
-                                        aria-label={`${t(language, 'cartDeleteBtn')} ${logo.filename}`}
-                                    >
-                                        ×
-                                    </button>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
-        </aside>,
-        document.body
+                                    <img src={logo.texture} alt="" className="h-full w-full object-contain" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => selectStickerImage(logo.id)}
+                                    className="min-w-0 text-left"
+                                >
+                                    <span className="block truncate text-[13px] font-black leading-tight text-white">{logo.filename}</span>
+                                    <span className="mt-1 block truncate text-[10px] font-black uppercase tracking-wider text-white/45">
+                                        {getStickerImageMeta(language, stickerSheetMode, logo, index)}
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => removeStickerImage(logo.id)}
+                                    className="h-7 w-7 rounded-full border border-white/15 bg-black/20 text-[15px] font-black leading-none text-white/50 transition hover:border-white/35 hover:bg-white/12 hover:text-white"
+                                    aria-label={`${t(language, 'cartDeleteBtn')} ${logo.filename}`}
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
     );
 };
 
@@ -283,15 +275,6 @@ export const StickerInterface = ({ onFinish }) => {
 
     return (
         <>
-            <StickerPackList
-                language={language}
-                stickerImages={stickerImages}
-                selectedStickerImageId={selectedStickerImageId}
-                stickerSheetMode={stickerSheetMode}
-                addStickerImage={addStickerImage}
-                selectStickerImage={selectStickerImage}
-                removeStickerImage={removeStickerImage}
-            />
             {selected && (
                 <FloatingLogoSettings
                     title={t(language, 'selectedImage')}
@@ -386,24 +369,16 @@ export const StickerInterface = ({ onFinish }) => {
                     </SettingGroup>
                 )}
 
-                <SettingGroup title={t(language, 'stickerImages')}>
-                    <SettingRow label={t(language, 'stickerImages')}>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <FileUploadChip label={t(language, 'addImage')} onFile={addStickerImage} />
-                            <span className="rounded-full border border-white/15 bg-white/8 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-white/45">
-                                {Math.max(0, STICKER_SLOT_COUNT - stickerImages.length)} {t(language, 'stickerSlotsLeft')}
-                            </span>
-                        </div>
-                    </SettingRow>
-                    <div className="xl:hidden">
-                        <LogoList
-                            logos={stickerImages}
-                            selectedLogoId={selectedStickerImageId}
-                            selectLogo={selectStickerImage}
-                            removeLogo={removeStickerImage}
-                            metaForLogo={(logo) => getStickerImageMeta(language, stickerSheetMode, logo, stickerImages.indexOf(logo))}
-                        />
-                    </div>
+                <SettingGroup>
+                    <StickerPackList
+                        language={language}
+                        stickerImages={stickerImages}
+                        selectedStickerImageId={selectedStickerImageId}
+                        stickerSheetMode={stickerSheetMode}
+                        addStickerImage={addStickerImage}
+                        selectStickerImage={selectStickerImage}
+                        removeStickerImage={removeStickerImage}
+                    />
                 </SettingGroup>
 
                 {selected && (
