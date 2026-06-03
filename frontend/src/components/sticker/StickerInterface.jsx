@@ -18,6 +18,7 @@ import {
 import { STICKER_SHEET_COLOR_PALETTE } from '../../config/productPalettes';
 import { GuestApprovalModal } from '../shared/GuestApprovalModal';
 import { LogoBackgroundRemovalButton } from '../shared/LogoBackgroundRemovalButton';
+import { hexToCmyk } from '../../utils/cmyk';
 
 const STICKER_PRINT_SHEET = {
     // Final pack size is A6 (105 x 148 mm), printed at 300 DPI.
@@ -143,6 +144,7 @@ const buildStickerPrintPayload = ({
     scene_height_units: STICKER_PRINT_SHEET.heightUnits,
     export_dpi: STICKER_PRINT_SHEET.dpi,
     sheet_color: stickerSheetColor,
+    sheet_cmyk: hexToCmyk(stickerSheetColor),
     sheet_mode: stickerSheetMode,
     slots: STICKER_PRINT_SLOTS.map((slot, index) => ({
         index,

@@ -281,6 +281,29 @@ def _list2(value: Any, default: tuple[float, float] = (0.0, 0.0)) -> tuple[float
     return default
 
 
+def _cmyk_value(value: Any) -> Optional[dict[str, int]]:
+    if isinstance(value, dict):
+        raw = (value.get("c"), value.get("m"), value.get("y"), value.get("k"))
+    elif isinstance(value, (list, tuple)) and len(value) >= 4:
+        raw = (value[0], value[1], value[2], value[3])
+    else:
+        return None
+    channels = [min(100, max(0, _safe_int(channel, 0))) for channel in raw]
+    return {"c": channels[0], "m": channels[1], "y": channels[2], "k": channels[3]}
+
+
+def _cmyk_to_rgb(cmyk: dict[str, int]) -> tuple[int, int, int]:
+    c = min(1.0, max(0.0, cmyk["c"] / 100))
+    m = min(1.0, max(0.0, cmyk["m"] / 100))
+    y = min(1.0, max(0.0, cmyk["y"] / 100))
+    k = min(1.0, max(0.0, cmyk["k"] / 100))
+    return (
+        round(255 * (1 - c) * (1 - k)),
+        round(255 * (1 - m) * (1 - k)),
+        round(255 * (1 - y) * (1 - k)),
+    )
+
+
 def _sticker_payload(payload: GuestApprovalRequest) -> Optional[dict[str, Any]]:
     product_config = (payload.configuration or {}).get("productConfig") or payload.configuration or {}
     active = str(product_config.get("activeProduct") or product_config.get("type") or "").lower()
@@ -313,6 +336,7 @@ def _sticker_sheet_meta(data: dict[str, Any]) -> dict[str, float | int | str]:
         "scene_height": scene_height,
         "dpi": dpi,
         "sheet_color": str(data.get("sheet_color") or "#F6F1E7"),
+        "sheet_cmyk": _cmyk_value(data.get("sheet_cmyk")),
     }
 
 
@@ -488,10 +512,13 @@ def _build_sticker_print_files(payload: GuestApprovalRequest, guest_order_id: st
     dpi = int(meta["dpi"])
     sheet_width_px = _mm_to_px(float(meta["width_mm"]), dpi)
     sheet_height_px = _mm_to_px(float(meta["height_mm"]), dpi)
-    try:
-        sheet_rgb = ImageColor.getrgb(str(meta["sheet_color"]))
-    except ValueError:
-        sheet_rgb = ImageColor.getrgb("#F6F1E7")
+    if isinstance(meta.get("sheet_cmyk"), dict):
+        sheet_rgb = _cmyk_to_rgb(meta["sheet_cmyk"])
+    else:
+        try:
+            sheet_rgb = ImageColor.getrgb(str(meta["sheet_color"]))
+        except ValueError:
+            sheet_rgb = ImageColor.getrgb("#F6F1E7")
     base = Image.new("RGBA", (sheet_width_px, sheet_height_px), (*sheet_rgb[:3], 255))
     px_per_scene_x = sheet_width_px / float(meta["scene_width"])
     px_per_scene_y = sheet_height_px / float(meta["scene_height"])
@@ -609,6 +636,7 @@ def _build_sticker_print_files(payload: GuestApprovalRequest, guest_order_id: st
             "dpi": dpi,
             "pixel_size": [sheet_width_px, sheet_height_px],
             "color": meta["sheet_color"],
+            "cmyk": meta["sheet_cmyk"],
             "white_fade_mm": float(getattr(get_settings(), "sticker_white_fade_mm", 4.0)),
         },
         "coordinate_system": {

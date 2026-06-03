@@ -8,6 +8,7 @@ import {
     useConfigurator,
 } from '../../store';
 import { logoSizeFromTexture, useLogoTexture } from '../../utils/threeTextures';
+import { hexToCmykPreviewHex } from '../../utils/cmyk';
 import squareStickerModelUrl from '../../assets/kvadrat_for_list.glb?url';
 import circleStickerModelUrl from '../../assets/crug_for_list.glb?url';
 
@@ -370,6 +371,7 @@ export function Sticker({ config = null, preview = false, position = [0, 0, 0] }
     const configuredBackgroundImages = config?.stickerBackgroundImages;
     const configuredImages = config?.stickerImages;
     const sheetColor = hasConfig ? (config.stickerSheetColor ?? '#F6F1E7') : stickerSheetColor;
+    const sheetPreviewColor = useMemo(() => hexToCmykPreviewHex(sheetColor), [sheetColor]);
     const sheetMode = hasConfig ? (config.stickerSheetMode ?? 'mixed') : stickerSheetMode;
     const backgroundImages = useMemo(() => (
         hasConfig ? (configuredBackgroundImages ?? EMPTY_IMAGES) : stickerBackgroundImages
@@ -388,7 +390,7 @@ export function Sticker({ config = null, preview = false, position = [0, 0, 0] }
             rotation={preview ? [0.12, -0.18, 0.04] : [0, 0, 0]}
             scale={MODEL_SCALE}
         >
-            <SheetModel color={sheetColor} />
+            <SheetModel color={sheetPreviewColor} />
             <SheetStencilMask />
             {backgroundImages.map((image) => (
                 image?.texture ? <SheetBackgroundImage key={image.id} image={image} /> : null
@@ -422,4 +424,3 @@ export function Sticker({ config = null, preview = false, position = [0, 0, 0] }
 
 useGLTF.preload(squareStickerModelUrl);
 useGLTF.preload(circleStickerModelUrl);
-

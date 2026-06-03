@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { temporal } from 'zundo'
 import { getCookie, setCookie, deleteCookie, hasCookieConsent } from './utils/cookies'
 import { canvasToDataURL, normalizeImageFile } from './utils/images'
+import { imageDataUrlToCmykPreviewDataUrl } from './utils/cmyk'
 import { mediaApi } from './api'
 
 // Sticker slot scale slider bounds (mirrors SizeSlider in StickerInterface).
@@ -712,7 +713,7 @@ export const useConfigurator = create(temporal((set, get) => ({
         if (file instanceof File) {
             const id = makeLogoId();
             try {
-                const texture = await normalizeImageFile(file);
+                const texture = await imageDataUrlToCmykPreviewDataUrl(await normalizeImageFile(file));
                 set((state) => ({
                     stickerBackgroundImages: [
                         ...state.stickerBackgroundImages,
@@ -736,7 +737,7 @@ export const useConfigurator = create(temporal((set, get) => ({
     replaceStickerBackgroundImageFile: async (id, file) => {
         if (!id || !(file instanceof File)) return;
         try {
-            const texture = await normalizeImageFile(file);
+            const texture = await imageDataUrlToCmykPreviewDataUrl(await normalizeImageFile(file));
             set((state) => ({
                 stickerBackgroundImages: state.stickerBackgroundImages.map(l => l.id === id ? { ...l, texture, filename: file.name || l.filename } : l)
             }));
