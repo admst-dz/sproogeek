@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useConfigurator, captureRender, getNotebookBindingCapabilities } from "../../store";
 import { t } from '../../i18n';
 import { BlockPDFPreview } from './BlockPDFPreview';
 import { BlockBuilder } from './BlockBuilder';
 import {
     ColorDropdown,
-    ColorSwatches,
     ConstructorDock,
     DockGrid,
     FileUploadChip,
@@ -32,108 +31,9 @@ import { LogoBackgroundRemovalButton } from '../shared/LogoBackgroundRemovalButt
 const PATTERN_IDS = ['blank', 'lined', 'tlined', 'grid', 'dotted'];
 const PATTERN_ICONS = { blank: patternBlank, lined: patternLined, tlined: patternTlined, grid: patternGrid, dotted: patternDotted };
 const PATTERN_KEYS = { blank: 'patternBlank', lined: 'patternLined', tlined: 'patternTLined', grid: 'patternGrid', dotted: 'patternDotted' };
-const GAME_COPY = {
-    ru: {
-        modeGame: 'Игровой режим',
-        modePro: 'Детально',
-        stepFormat: 'Собери основу',
-        stepCover: 'Цвет обложки',
-        stepSpiral: 'Пружина',
-        stepLogo: 'Нанесение',
-        stepBlock: 'Блок',
-        stepFinish: 'Финиш',
-        gameTitle: 'Ежедневник на пружине',
-        gameSubtitle: 'Проходи шаги и сразу смотри результат на модели.',
-        gameProgress: 'шаг',
-        outerCoverHint: 'Лицевая сторона',
-        innerCoverHint: 'Внутренняя сторона',
-        stitchHint: 'Нить по краю',
-        spiralHint: 'Металл пружины',
-        elasticHint: 'Резинка',
-        logoEmpty: 'Можно оставить без логотипа или добавить файл.',
-        logoTune: 'Выбери логотип и настрой посадку на обложке.',
-        next: 'Далее',
-        back: 'Назад',
-        finishOrder: 'Оформить',
-        sampleToggle: 'Образец',
-        quantityShort: 'Тираж',
-        readyTitle: 'Готовый сценарий',
-        readyDesc: 'Проверь параметры и отправляй заказ.',
-        finalCover: 'Обложка',
-        finalSpring: 'Пружина',
-        finalLogos: 'Логотипы',
-        finalPattern: 'Блок',
-    },
-    en: {
-        modeGame: 'Game mode',
-        modePro: 'Detailed',
-        stepFormat: 'Build base',
-        stepCover: 'Cover color',
-        stepSpiral: 'Spring',
-        stepLogo: 'Logo',
-        stepBlock: 'Block',
-        stepFinish: 'Finish',
-        gameTitle: 'Spiral notebook',
-        gameSubtitle: 'Move step by step and watch the model update.',
-        gameProgress: 'step',
-        outerCoverHint: 'Front cover',
-        innerCoverHint: 'Inside cover',
-        stitchHint: 'Edge thread',
-        spiralHint: 'Spring metal',
-        elasticHint: 'Elastic band',
-        logoEmpty: 'Keep it clean or upload a logo file.',
-        logoTune: 'Select a logo and tune its placement on the cover.',
-        next: 'Next',
-        back: 'Back',
-        finishOrder: 'Order',
-        sampleToggle: 'Sample',
-        quantityShort: 'Qty',
-        readyTitle: 'Ready setup',
-        readyDesc: 'Check the details and send the order.',
-        finalCover: 'Cover',
-        finalSpring: 'Spring',
-        finalLogos: 'Logos',
-        finalPattern: 'Block',
-    },
-    by: {
-        modeGame: 'Гульнявы рэжым',
-        modePro: 'Падрабязна',
-        stepFormat: 'Збяры аснову',
-        stepCover: 'Колер вокладкі',
-        stepSpiral: 'Пружына',
-        stepLogo: 'Нанясенне',
-        stepBlock: 'Блок',
-        stepFinish: 'Фініш',
-        gameTitle: 'Штодзённік на пружыне',
-        gameSubtitle: 'Ідзі па кроках і адразу глядзі вынік на мадэлі.',
-        gameProgress: 'крок',
-        outerCoverHint: 'Ліцавы бок',
-        innerCoverHint: 'Унутраны бок',
-        stitchHint: 'Нітка па краі',
-        spiralHint: 'Метал пружыны',
-        elasticHint: 'Гумка',
-        logoEmpty: 'Можна пакінуць без лагатыпа або дадаць файл.',
-        logoTune: 'Выберы лагатып і наладзь яго месца на вокладцы.',
-        next: 'Далей',
-        back: 'Назад',
-        finishOrder: 'Аформіць',
-        sampleToggle: 'Узор',
-        quantityShort: 'Наклад',
-        readyTitle: 'Гатовы сцэнар',
-        readyDesc: 'Правер параметры і адпраўляй заказ.',
-        finalCover: 'Вокладка',
-        finalSpring: 'Пружына',
-        finalLogos: 'Лагатыпы',
-        finalPattern: 'Блок',
-    },
-};
-
-const gameText = (language, key) => GAME_COPY[language]?.[key] ?? GAME_COPY.ru[key] ?? key;
 
 export const Interface = ({ onFinish }) => {
     const [tab, setTab] = useState('cover');
-    const [mode, setMode] = useState('game');
-    const [gameStep, setGameStep] = useState(0);
     const [quantity, setQuantity] = useState(1);
     const [isSample, setIsSample] = useState(false);
 
@@ -157,25 +57,6 @@ export const Interface = ({ onFinish }) => {
 
     const [approvalOpen, setApprovalOpen] = useState(false);
     const [approvalSnapshot, setApprovalSnapshot] = useState(null);
-    const selectedLogo = logos.find(l => l.id === selectedLogoId) || null;
-    const gameSteps = useMemo(() => ([
-        { id: 'format', label: gameText(language, 'stepFormat') },
-        { id: 'cover', label: gameText(language, 'stepCover') },
-        { id: 'spiral', label: gameText(language, 'stepSpiral') },
-        { id: 'logo', label: gameText(language, 'stepLogo') },
-        { id: 'block', label: gameText(language, 'stepBlock') },
-        { id: 'finish', label: gameText(language, 'stepFinish') },
-    ]), [language]);
-
-    useEffect(() => {
-        if (mode !== 'game' || bindingType === 'spiral') return;
-        setBindingType('spiral');
-    }, [bindingType, mode, setBindingType]);
-
-    useEffect(() => {
-        if (mode !== 'game') return;
-        setNotebookOpen(gameSteps[gameStep]?.id === 'block');
-    }, [gameStep, gameSteps, mode, setNotebookOpen]);
 
     if (activeProduct === 'calendar') {
         return (
@@ -235,85 +116,26 @@ export const Interface = ({ onFinish }) => {
             onEmailApproval={guestApprovalEnabled ? handleEmailApproval : null}
             emailApprovalLabel={t(language, 'emailApproval')}
         >
-            <div className="mb-3 md:mb-4 flex flex-col items-center gap-2">
+            <div className="flex justify-center mb-3 md:mb-4">
                 <div className="flex gap-1 rounded-full border border-white/15 bg-white/10 p-1">
                     {[
-                        { id: 'game', label: gameText(language, 'modeGame') },
-                        { id: 'pro', label: gameText(language, 'modePro') },
+                        { id: 'cover', label: t(language, 'tabCover') },
+                        { id: 'block', label: t(language, 'tabBlock') },
                     ].map(({ id, label }) => (
                         <button
                             key={id}
                             type="button"
-                            onClick={() => { setMode(id); if (id === 'game') { setTab('cover'); setNotebookOpen(false); } }}
-                            className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition md:px-5 md:py-2 md:text-[12px] ${
-                                mode === id ? 'bg-[#fff9ec] text-[#1b1b1b]' : 'text-white/60 hover:text-white'
+                            onClick={() => { setTab(id); setNotebookOpen(id === 'block'); }}
+                            className={`rounded-full px-4 py-1.5 md:px-6 md:py-2 text-[11px] md:text-[12px] font-black uppercase tracking-wider transition ${
+                                tab === id ? 'bg-[#fff9ec] text-[#1b1b1b]' : 'text-white/60 hover:text-white'
                             }`}
                         >
                             {label}
                         </button>
                     ))}
                 </div>
-
-                {mode === 'pro' && (
-                    <div className="flex gap-1 rounded-full border border-white/15 bg-white/10 p-1">
-                        {[
-                            { id: 'cover', label: t(language, 'tabCover') },
-                            { id: 'block', label: t(language, 'tabBlock') },
-                        ].map(({ id, label }) => (
-                            <button
-                                key={id}
-                                type="button"
-                                onClick={() => { setTab(id); setNotebookOpen(id === 'block'); }}
-                                className={`rounded-full px-4 py-1.5 md:px-6 md:py-2 text-[11px] md:text-[12px] font-black uppercase tracking-wider transition ${
-                                    tab === id ? 'bg-[#fff9ec] text-[#1b1b1b]' : 'text-white/60 hover:text-white'
-                                }`}
-                            >
-                                {label}
-                            </button>
-                        ))}
-                    </div>
-                )}
             </div>
-
-            {mode === 'game' && (
-                <SpiralGameEditor
-                    steps={gameSteps}
-                    currentStep={gameStep}
-                    setCurrentStep={setGameStep}
-                    language={language}
-                    format={format}
-                    setFormat={setFormat}
-                    coverColor={coverColor}
-                    innerCoverColor={innerCoverColor}
-                    stitchColor={stitchColor}
-                    spiralColor={spiralColor}
-                    elasticColor={elasticColor}
-                    hasElastic={hasElastic}
-                    setHasElastic={setHasElastic}
-                    setColor={setColor}
-                    paperPattern={paperPattern}
-                    setPaperPattern={setPaperPattern}
-                    logos={logos}
-                    selectedLogo={selectedLogo}
-                    selectedLogoId={selectedLogoId}
-                    addLogo={addLogo}
-                    replaceLogoFile={replaceLogoFile}
-                    selectLogo={selectLogo}
-                    removeLogo={removeLogo}
-                    resetLogoTransform={resetLogoTransform}
-                    setLogoPosition={setLogoPosition}
-                    setLogoRotation={setLogoRotation}
-                    setLogoScale={setLogoScale}
-                    setLogoSide={setLogoSide}
-                    quantity={quantity}
-                    setQuantity={setQuantity}
-                    isSample={isSample}
-                    setIsSample={setIsSample}
-                    onFinishOrder={handleAddToCart}
-                />
-            )}
-
-            {mode === 'pro' && tab === 'cover' && (
+            {tab === 'cover' && (
                 <DockGrid
                     cols="md:grid-cols-2"
                 >
@@ -404,12 +226,25 @@ export const Interface = ({ onFinish }) => {
                 </DockGrid>
             )}
 
-            {mode === 'pro' && tab === 'block' && (
+            {tab === 'block' && (
                 <DockGrid
                     cols="md:grid-cols-1"
                 >
                     <div className="min-w-0 space-y-3 md:-mx-2 lg:-mx-1">
-                        <PatternChooser language={language} paperPattern={paperPattern} setPaperPattern={setPaperPattern} />
+                        <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-5 gap-2">
+                            {PATTERN_IDS.map((id) => (
+                                <button
+                                    key={id}
+                                    onClick={() => setPaperPattern(id)}
+                                    className={`rounded-[8px] border px-2 py-2 transition ${paperPattern === id ? 'border-[#fff9ec] bg-[#fff9ec] text-[#191919]' : 'border-white/18 bg-white/8 text-white/75 hover:text-white'}`}
+                                >
+                                    <div className="mx-auto mb-1 h-8 w-8 rounded-[6px] border border-current/20 p-1">
+                                        <img src={PATTERN_ICONS[id]} alt={t(language, PATTERN_KEYS[id])} className="h-full w-full object-contain" />
+                                    </div>
+                                    <span className="text-[10px] font-black uppercase tracking-wider">{t(language, PATTERN_KEYS[id])}</span>
+                                </button>
+                            ))}
+                        </div>
                         <BlockPDFPreview pattern={paperPattern} />
                         {paperPattern === 'blank' && (
                             <div className="rounded-[8px] border border-white/12 bg-white/8 p-3 text-center text-xs text-white/55">
@@ -434,293 +269,6 @@ export const Interface = ({ onFinish }) => {
 }
 
 // --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
-const SpiralGameEditor = ({
-    steps,
-    currentStep,
-    setCurrentStep,
-    language,
-    format,
-    setFormat,
-    coverColor,
-    innerCoverColor,
-    stitchColor,
-    spiralColor,
-    elasticColor,
-    hasElastic,
-    setHasElastic,
-    setColor,
-    paperPattern,
-    setPaperPattern,
-    logos,
-    selectedLogo,
-    selectedLogoId,
-    addLogo,
-    replaceLogoFile,
-    selectLogo,
-    removeLogo,
-    resetLogoTransform,
-    setLogoPosition,
-    setLogoRotation,
-    setLogoScale,
-    setLogoSide,
-    quantity,
-    setQuantity,
-    isSample,
-    setIsSample,
-    onFinishOrder,
-}) => {
-    const [uploadSide, setUploadSide] = useState('front');
-    const step = steps[currentStep] ?? steps[0];
-    const activeSide = selectedLogo?.side ?? uploadSide;
-    const canGoBack = currentStep > 0;
-    const canGoNext = currentStep < steps.length - 1;
-
-    const selectSide = (side) => {
-        setUploadSide(side);
-        if (selectedLogo) setLogoSide(side);
-    };
-
-    return (
-        <div className="space-y-4">
-            <div className="space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/42">
-                            {gameText(language, 'gameProgress')} {currentStep + 1}/{steps.length}
-                        </p>
-                        <h2 className="mt-1 text-[20px] font-black leading-tight text-white md:text-[24px]">
-                            {gameText(language, 'gameTitle')}
-                        </h2>
-                        <p className="mt-1 text-[11px] font-bold leading-snug text-white/52 md:text-[12px]">
-                            {gameText(language, 'gameSubtitle')}
-                        </p>
-                    </div>
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border border-white/18 bg-white/10 text-lg font-black">
-                        {currentStep + 1}
-                    </div>
-                </div>
-
-                <GameProgress steps={steps} currentStep={currentStep} setCurrentStep={setCurrentStep} />
-            </div>
-
-            <section className="min-h-[320px] rounded-[8px] border border-white/14 bg-white/7 p-3 md:p-4">
-                <p className="mb-3 text-[11px] font-black uppercase tracking-[0.18em] text-white/45">{step.label}</p>
-
-                {step.id === 'format' && (
-                    <div className="space-y-4">
-                        <FormatGlassTable value={format} onChange={setFormat} />
-                        <div className="grid grid-cols-2 gap-2">
-                            <StatusTile label={t(language, 'bindingTypeLabel')} value={t(language, 'bindingSpiral')} color="#fff9ec" />
-                            <StatusTile label={t(language, 'formatLabel')} value={format} color={coverColor} />
-                        </div>
-                    </div>
-                )}
-
-                {step.id === 'cover' && (
-                    <div className="space-y-4">
-                        <ColorQuestRow title={t(language, 'outerCoverColorLabel')} subtitle={gameText(language, 'outerCoverHint')} color={coverColor} onSelect={(c) => setColor('cover', c)} />
-                        <ColorQuestRow title={t(language, 'innerCoverColorLabel')} subtitle={gameText(language, 'innerCoverHint')} color={innerCoverColor} onSelect={(c) => setColor('innerCover', c)} />
-                    </div>
-                )}
-
-                {step.id === 'spiral' && (
-                    <div className="space-y-4">
-                        <ColorQuestRow title={t(language, 'spiralColorLabel')} subtitle={gameText(language, 'spiralHint')} color={spiralColor} onSelect={(c) => setColor('spiral', c)} />
-                        <ColorQuestRow title={t(language, 'threadColorLabel')} subtitle={gameText(language, 'stitchHint')} color={stitchColor} onSelect={(c) => setColor('stitch', c)} />
-                        <div className="rounded-[8px] border border-white/12 bg-white/7 p-3">
-                            <div className="flex items-center justify-between gap-3">
-                                <div className="min-w-0">
-                                    <p className="text-[13px] font-black text-white">{t(language, 'elasticLabel')}</p>
-                                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/38">{gameText(language, 'elasticHint')}</p>
-                                </div>
-                                <MiniToggle checked={hasElastic} onChange={setHasElastic} />
-                            </div>
-                            {hasElastic && (
-                                <div className="mt-3">
-                                    <ColorSwatches colors={NOTEBOOK_COLOR_PALETTE} currentColor={elasticColor} onSelect={(c) => setColor('elastic', c)} />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {step.id === 'logo' && (
-                    <div className="space-y-4">
-                        <div className="rounded-[8px] border border-white/12 bg-white/7 p-3">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="min-w-0">
-                                    <p className="text-[13px] font-black text-white">{t(language, 'embossing')}</p>
-                                    <p className="mt-1 text-[11px] font-bold leading-snug text-white/45">
-                                        {selectedLogo ? gameText(language, 'logoTune') : gameText(language, 'logoEmpty')}
-                                    </p>
-                                </div>
-                                <FileUploadChip label={t(language, 'addLogo')} onFile={(file) => addLogo(file, activeSide)} />
-                            </div>
-                            <div className="mt-3">
-                                <MiniSegment
-                                    value={activeSide}
-                                    onChange={selectSide}
-                                    options={[
-                                        { value: 'front', label: t(language, 'sideFront') },
-                                        { value: 'back', label: t(language, 'sideBack') },
-                                    ]}
-                                />
-                            </div>
-                        </div>
-
-                        <LogoList
-                            logos={logos}
-                            selectedLogoId={selectedLogoId}
-                            selectLogo={(id) => { selectLogo(id); const picked = logos.find(l => l.id === id); setUploadSide(picked?.side ?? 'front'); }}
-                            removeLogo={removeLogo}
-                            metaForLogo={(logo) => (logo.side ?? 'front') === 'back' ? t(language, 'sideBack') : t(language, 'sideFront')}
-                        />
-
-                        {selectedLogo && (
-                            <div className="space-y-3 rounded-[8px] border border-white/12 bg-white/7 p-3">
-                                <LogoBackgroundRemovalButton logo={selectedLogo} language={language} onApply={(file) => replaceLogoFile(selectedLogo.id, file)} />
-                                <TransformPad label={t(language, 'position')} value={selectedLogo.position} onChange={setLogoPosition} onReset={resetLogoTransform} />
-                                <RotationScrub label={t(language, 'rotation')} value={selectedLogo.rotation ?? 0} onChange={setLogoRotation} />
-                                <SizeSlider label={t(language, 'size')} value={selectedLogo.scale ?? 0.6} min={0.2} max={4.0} step={0.05} onChange={setLogoScale} />
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {step.id === 'block' && (
-                    <div className="space-y-3">
-                        <PatternChooser language={language} paperPattern={paperPattern} setPaperPattern={setPaperPattern} />
-                        <BlockPDFPreview pattern={paperPattern} />
-                        {paperPattern === 'blank' && (
-                            <div className="rounded-[8px] border border-white/12 bg-white/8 p-3 text-center text-xs text-white/55">
-                                {t(language, 'blankPages')}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {step.id === 'finish' && (
-                    <div className="space-y-4">
-                        <div>
-                            <h3 className="text-[18px] font-black leading-tight">{gameText(language, 'readyTitle')}</h3>
-                            <p className="mt-1 text-[11px] font-bold leading-snug text-white/48">{gameText(language, 'readyDesc')}</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                            <StatusTile label={gameText(language, 'finalCover')} value={format} color={coverColor} />
-                            <StatusTile label={gameText(language, 'finalSpring')} value={t(language, 'bindingSpiral')} color={spiralColor} />
-                            <StatusTile label={gameText(language, 'finalLogos')} value={`${logos.length}`} color="#fff9ec" />
-                            <StatusTile label={gameText(language, 'finalPattern')} value={t(language, PATTERN_KEYS[paperPattern])} color="#f7f5ef" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                            <QuantityStepper label={gameText(language, 'quantityShort')} value={quantity} setValue={setQuantity} />
-                            <div className="rounded-[8px] border border-white/12 bg-white/7 p-3">
-                                <div className="flex items-center justify-between gap-2">
-                                    <span className="text-[11px] font-black uppercase tracking-[0.16em] text-white/45">{gameText(language, 'sampleToggle')}</span>
-                                    <MiniToggle checked={isSample} onChange={setIsSample} />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </section>
-
-            <div className="grid grid-cols-2 gap-2">
-                <button
-                    type="button"
-                    disabled={!canGoBack}
-                    onClick={() => setCurrentStep(step => Math.max(0, step - 1))}
-                    className="rounded-full border border-white/20 bg-white/8 px-4 py-2 text-[12px] font-black uppercase tracking-widest text-white/75 transition hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-35"
-                >
-                    {gameText(language, 'back')}
-                </button>
-                <button
-                    type="button"
-                    onClick={() => canGoNext ? setCurrentStep(step => Math.min(steps.length - 1, step + 1)) : onFinishOrder()}
-                    className="rounded-full bg-[#fff9ec] px-4 py-2 text-[12px] font-black uppercase tracking-widest text-[#1b1b1b] shadow-lg transition hover:bg-white active:scale-95"
-                >
-                    {canGoNext ? gameText(language, 'next') : gameText(language, 'finishOrder')}
-                </button>
-            </div>
-        </div>
-    );
-};
-
-const GameProgress = ({ steps, currentStep, setCurrentStep }) => (
-    <div className="grid grid-cols-6 gap-1.5">
-        {steps.map((step, index) => {
-            const active = index === currentStep;
-            const done = index < currentStep;
-            return (
-                <button
-                    key={step.id}
-                    type="button"
-                    onClick={() => setCurrentStep(index)}
-                    className={`h-9 min-w-0 rounded-[8px] border px-1 text-[9px] font-black uppercase leading-tight transition md:h-10 ${
-                        active
-                            ? 'border-[#fff9ec] bg-[#fff9ec] text-[#171717]'
-                            : done
-                                ? 'border-white/24 bg-white/16 text-white'
-                                : 'border-white/12 bg-white/6 text-white/38 hover:text-white/70'
-                    }`}
-                    title={step.label}
-                >
-                    <span className="block truncate">{step.label}</span>
-                </button>
-            );
-        })}
-    </div>
-);
-
-const ColorQuestRow = ({ title, subtitle, color, onSelect }) => (
-    <div className="rounded-[8px] border border-white/12 bg-white/7 p-3">
-        <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-                <p className="text-[13px] font-black text-white">{title}</p>
-                <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/38">{subtitle}</p>
-            </div>
-            <span className="h-8 w-8 shrink-0 rounded-full border border-white/35 shadow-lg" style={{ backgroundColor: color }} />
-        </div>
-        <ColorSwatches colors={NOTEBOOK_COLOR_PALETTE} currentColor={color} onSelect={onSelect} />
-    </div>
-);
-
-const StatusTile = ({ label, value, color }) => (
-    <div className="min-w-0 rounded-[8px] border border-white/12 bg-white/7 p-3">
-        <div className="mb-2 h-4 w-4 rounded-full border border-white/30" style={{ backgroundColor: color }} />
-        <p className="truncate text-[10px] font-black uppercase tracking-[0.16em] text-white/38">{label}</p>
-        <p className="mt-1 truncate text-[14px] font-black text-white">{value}</p>
-    </div>
-);
-
-const QuantityStepper = ({ label, value, setValue }) => (
-    <div className="rounded-[8px] border border-white/12 bg-white/7 p-3">
-        <p className="mb-2 text-[11px] font-black uppercase tracking-[0.16em] text-white/45">{label}</p>
-        <div className="grid grid-cols-[32px_1fr_32px] items-center gap-1">
-            <button type="button" onClick={() => setValue(q => Math.max(1, q - 1))} className="h-8 rounded-full bg-white/10 text-lg font-black">−</button>
-            <span className="text-center text-lg font-black">{value}</span>
-            <button type="button" onClick={() => setValue(q => q + 1)} className="h-8 rounded-full bg-white/10 text-lg font-black">+</button>
-        </div>
-    </div>
-);
-
-const PatternChooser = ({ language, paperPattern, setPaperPattern }) => (
-    <div className="grid grid-cols-2 gap-2 min-[380px]:grid-cols-3 sm:grid-cols-5">
-        {PATTERN_IDS.map((id) => (
-            <button
-                key={id}
-                type="button"
-                onClick={() => setPaperPattern(id)}
-                className={`rounded-[8px] border px-2 py-2 transition ${paperPattern === id ? 'border-[#fff9ec] bg-[#fff9ec] text-[#191919]' : 'border-white/18 bg-white/8 text-white/75 hover:text-white'}`}
-            >
-                <div className="mx-auto mb-1 h-8 w-8 rounded-[6px] border border-current/20 p-1">
-                    <img src={PATTERN_ICONS[id]} alt={t(language, PATTERN_KEYS[id])} className="h-full w-full object-contain" />
-                </div>
-                <span className="block truncate text-[10px] font-black uppercase tracking-wider">{t(language, PATTERN_KEYS[id])}</span>
-            </button>
-        ))}
-    </div>
-);
-
 const FormatGlassTable = ({ value, onChange }) => (
     <div className="grid w-full grid-cols-2 overflow-hidden rounded-[9px] border border-white/25 bg-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.18)] backdrop-blur-md">
         {[
