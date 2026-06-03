@@ -46,7 +46,6 @@ export default {
     "addBackgroundImage": "Дадаць фон",
     "stickerPackList": "Стыкерпак",
     "stickerPackEmpty": "Дадайце карцінкі, каб сабраць стыкерпак.",
-    "stickerHint": "Вертыкальны ліст на 6 3D-стыкераў. Загружаныя лагатыпы трапляюць пад празрыстую верхнюю частку.",
     "stickerSheetColor": "Колер ліста",
     "stickerSheetMode": "Варыянт палатна",
     "stickerSheetModeSquare": "Толькі квадратныя",

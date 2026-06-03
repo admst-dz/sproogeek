@@ -46,7 +46,6 @@ export default {
     "addBackgroundImage": "Add background",
     "stickerPackList": "Sticker pack",
     "stickerPackEmpty": "Add images to build a sticker pack.",
-    "stickerHint": "Vertical sheet for 6 3D stickers. Uploaded logos sit under the transparent top layer.",
     "stickerSheetColor": "Sheet color",
     "stickerSheetMode": "Sheet layout",
     "stickerSheetModeSquare": "Square only",
