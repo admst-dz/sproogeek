@@ -80,6 +80,9 @@ _STICKER_SLOT_WIDTH_MM = 40.0
 _STICKER_SLOT_HEIGHT_MM = 45.0
 _STICKER_BACKGROUND_MAX_SIDE_UNITS = 3.2
 _STICKER_LOGO_MAX_SIDE_UNITS = {"circle": 0.74, "square": 0.78}
+# Die-cut square corner radius as a fraction of the slot's shorter side
+# (mirrors the rounded square shown in the 3D editor).
+_STICKER_SQUARE_CORNER_RATIO = 0.16
 _MM_PER_INCH = 25.4
 _PT_PER_MM = 72.0 / _MM_PER_INCH
 
@@ -379,6 +382,42 @@ def _paste_transformed(
     return left, top, left + source.width, top + source.height
 
 
+def _paste_cover(
+    canvas: Image.Image,
+    image: Image.Image,
+    *,
+    slot_width_px: int,
+    slot_height_px: int,
+    scale: float,
+    pan_x_px: float,
+    pan_y_px: float,
+    rotation_rad: float,
+) -> None:
+    """Cover-fill the slot with the artwork, exactly like the 3D editor.
+
+    The image is scaled so it fully covers the ``slot_width_px`` x
+    ``slot_height_px`` rectangle (``scale`` = 1 → exact cover, larger → zoom in),
+    centred with a pan offset, optionally rotated, then composited. The caller
+    clips the resulting layer to the slot shape, so any overflow is trimmed to
+    the die-cut silhouette — no sheet-colour gaps remain inside the sticker.
+    """
+    img_w, img_h = image.size
+    if img_w <= 0 or img_h <= 0:
+        return
+    cover = max(slot_width_px / img_w, slot_height_px / img_h) * max(0.05, float(scale))
+    target_w = max(1, round(img_w * cover))
+    target_h = max(1, round(img_h * cover))
+    # Upscale the source first when cover demands more pixels than it has.
+    image = _prepare_artwork(image, max(target_w, target_h))
+    source = image.resize((target_w, target_h), Image.Resampling.LANCZOS)
+    angle_degrees = -rotation_rad * 180 / 3.141592653589793
+    if abs(angle_degrees) > 0.001:
+        source = source.rotate(angle_degrees, expand=True, resample=Image.Resampling.BICUBIC)
+    left = int(round(slot_width_px / 2 - source.width / 2 + pan_x_px))
+    top = int(round(slot_height_px / 2 - source.height / 2 + pan_y_px))
+    _alpha_composite_clipped(canvas, source, left, top)
+
+
 def _alpha_composite_clipped(canvas: Image.Image, source: Image.Image, left: int, top: int) -> None:
     src_left = max(0, -left)
     src_top = max(0, -top)
@@ -396,7 +435,10 @@ def _clip_to_sticker_shape(layer: Image.Image, shape: str, width_px: int, height
     mask = Image.new("L", layer.size, 0)
     draw = ImageDraw.Draw(mask)
     if _sticker_is_square(shape):
-        draw.rounded_rectangle([0, 0, width_px - 1, height_px - 1], radius=max(4, width_px // 16), fill=255)
+        # Match the die-cut corner radius shown in the 3D editor (a generously
+        # rounded square), not a near-sharp corner.
+        radius = max(4, round(min(width_px, height_px) * _STICKER_SQUARE_CORNER_RATIO))
+        draw.rounded_rectangle([0, 0, width_px - 1, height_px - 1], radius=radius, fill=255)
     else:
         side = min(width_px, height_px)
         left = (width_px - side) // 2
@@ -600,30 +642,34 @@ def _build_sticker_print_files(payload: GuestApprovalRequest, guest_order_id: st
             continue
         shape = "square" if _sticker_is_square(item.get("shape")) else "circle"
         pos_x, pos_y = _list2(item.get("position"))
-        local_x_px = round(pos_x * px_per_scene_x)
-        local_y_px = round(-pos_y * px_per_scene_y)
-        max_side_units = _STICKER_LOGO_MAX_SIDE_UNITS.get(shape, 0.74) * max(0.1, _float(item.get("scale"), 0.72))
-        max_side_px = max(1, round(max_side_units * min(px_per_scene_x, px_per_scene_y)))
-        image = _prepare_artwork(image, max_side_px)
-        layer = Image.new("RGBA", (int(slot["width_px"]), int(slot["height_px"])), (0, 0, 0, 0))
-        _paste_transformed(
+        slot_w = int(slot["width_px"])
+        slot_h = int(slot["height_px"])
+        scale = max(0.05, _float(item.get("scale"), 1.0))
+        # Pan in the same per-unit scale the slot is sized at, so the crop
+        # matches the editor's WYSIWYG placement.
+        pan_x_px = pos_x * px_per_scene_x
+        pan_y_px = -pos_y * px_per_scene_y
+        layer = Image.new("RGBA", (slot_w, slot_h), (0, 0, 0, 0))
+        _paste_cover(
             layer,
             image,
-            center_x_px=int(slot["width_px"] / 2 + local_x_px),
-            center_y_px=int(slot["height_px"] / 2 + local_y_px),
-            max_side_px=max_side_px,
+            slot_width_px=slot_w,
+            slot_height_px=slot_h,
+            scale=scale,
+            pan_x_px=pan_x_px,
+            pan_y_px=pan_y_px,
             rotation_rad=_float(item.get("rotation"), 0.0),
         )
-        layer = _clip_to_sticker_shape(layer, shape, int(slot["width_px"]), int(slot["height_px"]))
-        left = int(round(slot["center_x_px"] - slot["width_px"] / 2))
-        top = int(round(slot["center_y_px"] - slot["height_px"] / 2))
+        layer = _clip_to_sticker_shape(layer, shape, slot_w, slot_h)
+        left = int(round(slot["center_x_px"] - slot_w / 2))
+        top = int(round(slot["center_y_px"] - slot_h / 2))
         _alpha_composite_clipped(base, layer, left, top)
         slot["artwork"] = {
             "filename": item.get("filename") or "",
             "local_x_units": pos_x,
             "local_y_units": pos_y,
             "rotation_rad": _float(item.get("rotation"), 0.0),
-            "scale": _float(item.get("scale"), 0.72),
+            "scale": scale,
         }
 
     spec = {
