@@ -152,7 +152,7 @@ const SelectedStickerImageControls = ({
         )}
         <TransformPad label={t(language, 'position')} value={selected.position} onChange={setStickerImagePosition} onReset={resetStickerImageTransform} aspect="aspect-square" xRange={0.92} yRange={0.92} />
         <RotationScrub label={t(language, 'rotation')} value={selected.rotation ?? 0} onChange={setStickerImageRotation} />
-        <SizeSlider label={t(language, 'size')} value={selected.scale ?? 0.72} min={0.22} max={3} step={0.03} onChange={setStickerImageScale} />
+        <SizeSlider label={t(language, 'size')} value={selected.scale ?? 1} min={0.22} max={3} step={0.03} onChange={setStickerImageScale} />
     </div>
 );
 
@@ -198,7 +198,7 @@ const buildStickerPrintPayload = ({
             : getStickerSlotShape(stickerSheetMode, Number.isInteger(image.slot) ? image.slot : index),
         position: image.position || [0, 0],
         rotation: image.rotation || 0,
-        scale: image.scale || 0.72,
+        scale: image.scale || 1,
     })),
 });
 

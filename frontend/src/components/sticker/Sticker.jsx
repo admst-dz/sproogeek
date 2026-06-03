@@ -7,7 +7,7 @@ import {
     STICKER_SLOT_COUNT,
     useConfigurator,
 } from '../../store';
-import { logoSizeFromTexture, useLogoTexture } from '../../utils/threeTextures';
+import { logoCoverSizeFromTexture, logoSizeFromTexture, useLogoTexture } from '../../utils/threeTextures';
 import { hexToCmykPreviewHex } from '../../utils/cmyk';
 import squareStickerModelUrl from '../../assets/kvadrat_for_list.glb?url';
 import circleStickerModelUrl from '../../assets/crug_for_list.glb?url';
@@ -280,9 +280,11 @@ function StickerGlassStencilMask({ sourceScene, stencilRef }) {
 function StickerLogo({ image, shape, stencilRef }) {
     const map = useLogoTexture(image.texture);
     const rotation = image.rotation ?? 0;
-    const scale = THREE.MathUtils.clamp(Number(image.scale) || 0.72, 0.18, 3);
+    const scale = THREE.MathUtils.clamp(Number(image.scale) || 1, 0.18, 3);
     const maxLogoSide = shape === 'square' ? 0.78 : 0.74;
-    const size = logoSizeFromTexture(map, maxLogoSide * scale);
+    // Cover the slot (scale = 1 → exact fill); the glass stencil clips overflow
+    // to the die-cut shape, so the sticker is always filled edge-to-edge.
+    const size = logoCoverSizeFromTexture(map, maxLogoSide * scale);
     const x = Number(image.position?.[0]) || 0;
     const y = Number(image.position?.[1]) || 0;
 

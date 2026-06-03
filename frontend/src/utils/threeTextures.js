@@ -67,3 +67,18 @@ export function logoSizeFromTexture(map, scale) {
     }
     return { width: scale * aspect, height: scale };
 }
+
+// COVER fit: side задаёт МЕНЬШУЮ сторону логотипа, бОльшая выходит за пределы
+// и обрезается стенсилом слота — так фото-стикер заполняет слот целиком (как
+// в печати), без полей цвета листа.
+export function logoCoverSizeFromTexture(map, side) {
+    const imageWidth = map?.image?.width ?? map?.image?.naturalWidth ?? 1;
+    const imageHeight = map?.image?.height ?? map?.image?.naturalHeight ?? 1;
+    if (!imageWidth || !imageHeight) {
+        return { width: side, height: side };
+    }
+    const aspect = imageWidth / imageHeight;
+    return aspect >= 1
+        ? { width: side * aspect, height: side }
+        : { width: side, height: side / aspect };
+}

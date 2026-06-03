@@ -790,7 +790,7 @@ export const useConfigurator = create(temporal((set, get) => ({
                                     shape: getStickerSlotShape(state.stickerSheetMode, slot),
                                     position: [0, 0],
                                     rotation: 0,
-                                    scale: 0.72,
+                                    scale: 1,
                                 },
                             ],
                             selectedStickerImageId: id,
@@ -798,14 +798,15 @@ export const useConfigurator = create(temporal((set, get) => ({
                         };
                     })(),
                 }));
-                // Computer-vision auto-fit: detect the subject and scale it into the
-                // slot. Best-effort — the manual size slider keeps working regardless.
+                // Computer-vision auto-fit: detect the subject and zoom it into the
+                // slot. Slots cover-fill at scale 1, so the suggestion only ever
+                // zooms IN (never below full cover). The manual size slider still works.
                 if (added) {
                     try {
                         const { data } = await mediaApi.stickerFit(file);
                         const suggested = Number(data?.suggested_scale);
                         if (Number.isFinite(suggested)) {
-                            const scale = Math.min(STICKER_SCALE_MAX, Math.max(STICKER_SCALE_MIN, suggested));
+                            const scale = Math.min(STICKER_SCALE_MAX, Math.max(1, suggested));
                             set((state) => ({
                                 stickerImages: state.stickerImages.map((l) => (
                                     l.id === id ? { ...l, scale } : l
@@ -847,7 +848,7 @@ export const useConfigurator = create(temporal((set, get) => ({
         stickerImages: state.stickerImages.map(l => l.id === state.selectedStickerImageId ? { ...l, shape: normalizeStickerShape(shape) } : l)
     })),
     resetStickerImageTransform: () => set((state) => ({
-        stickerImages: state.stickerImages.map(l => l.id === state.selectedStickerImageId ? { ...l, position: [0, 0], rotation: 0, scale: 0.72 } : l)
+        stickerImages: state.stickerImages.map(l => l.id === state.selectedStickerImageId ? { ...l, position: [0, 0], rotation: 0, scale: 1 } : l)
     })),
     removeStickerImage: (id) => set((state) => {
         const remaining = state.stickerImages.filter(l => l.id !== id);
