@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     max_upload_bytes: int = Field(25_000_000, alias="MAX_UPLOAD_BYTES")
     max_logo_bytes: int = Field(25_000_000, alias="MAX_LOGO_BYTES")
     background_removal_max_edge: int = Field(2400, alias="BACKGROUND_REMOVAL_MAX_EDGE")
+    # Eagerly load the rembg ONNX model on startup (in a background thread) so the
+    # first background removal / sticker auto-fit doesn't pay the ~seconds-long
+    # model load. Disable to save memory on instances that never do CV work.
+    warm_models_on_startup: bool = Field(True, alias="WARM_MODELS_ON_STARTUP")
     # Print export is delivered in CMYK. Conversion runs on the backend; an
     # optional ICC profile gives color-accurate output, otherwise Pillow's
     # built-in transform is used. Sheets above the pixel cap stay RGB to avoid OOM.

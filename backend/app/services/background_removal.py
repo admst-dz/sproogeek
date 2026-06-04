@@ -57,6 +57,28 @@ def _get_session():
     return _session
 
 
+def warm_up() -> bool:
+    """Eagerly load (and prime) the rembg model so the first real request is fast.
+
+    Loading the ONNX model takes a few seconds; doing it lazily means the first
+    background removal / sticker auto-fit pays that cost. Calling this at startup
+    (in a background thread) shifts it off the hot path. Returns True if the
+    model session is ready. Safe to call repeatedly — the session is cached.
+    """
+    session = _get_session()
+    if session is None:
+        return False
+    try:
+        # A 1×1 inference forces onnxruntime to allocate and JIT its kernels, so
+        # the first user request hits a fully primed model.
+        from rembg import remove
+
+        remove(Image.new("RGBA", (1, 1), (0, 0, 0, 0)), session=session, post_process_mask=True)
+    except Exception:  # pragma: no cover - priming is best-effort
+        logger.debug("rembg warm-up inference skipped", exc_info=True)
+    return True
+
+
 def remove_logo_background(
     content: bytes,
     *,

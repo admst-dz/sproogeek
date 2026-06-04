@@ -1,4 +1,12 @@
 const MAX_TEXTURE_SIZE = 4096;
+// Sticker slots print at ~35 mm (≈413 px @ 300 DPI), so a 4096 px texture is
+// wildly oversized — it bloats the data URL, the GPU upload and the auto-fit
+// request, which is what makes uploads feel slow. 2048 px keeps headroom for
+// zoom/crop and 300 DPI print while being ~4× lighter to process.
+export const STICKER_TEXTURE_SIZE = 2048;
+// Tiny copy sent to the CV auto-fit endpoint: it only needs to locate the
+// subject's bounding box, so a small image keeps the upload + inference fast.
+export const STICKER_FIT_SIZE = 640;
 const TEXTURE_EXPORT_QUALITY = 0.95;
 const DEFAULT_RENDER_MAX_DIMENSION = 1600;
 const DEFAULT_RENDER_MIME_TYPE = 'image/jpeg';
@@ -53,6 +61,30 @@ export async function normalizeImageFile(file, maxSize = MAX_TEXTURE_SIZE) {
         return canvas.toDataURL('image/webp', TEXTURE_EXPORT_QUALITY);
     }
     return canvas.toDataURL('image/png');
+}
+
+// Build a small JPEG Blob from an existing data URL, for the CV auto-fit upload.
+// Reuses the already-downscaled texture (cheap decode) instead of re-reading the
+// original multi-megabyte file.
+export async function makeFitBlob(dataUrl, maxSize = STICKER_FIT_SIZE) {
+    try {
+        const image = await loadImage(dataUrl);
+        const width = image.naturalWidth || image.width;
+        const height = image.naturalHeight || image.height;
+        if (!width || !height) return null;
+        const scale = Math.min(1, maxSize / Math.max(width, height));
+        const targetWidth = Math.max(1, Math.round(width * scale));
+        const targetHeight = Math.max(1, Math.round(height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d', { alpha: true });
+        ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.86));
+        return blob;
+    } catch {
+        return null;
+    }
 }
 
 export function canvasToDataURL(canvas, {
