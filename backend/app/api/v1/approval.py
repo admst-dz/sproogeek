@@ -76,8 +76,14 @@ _STICKER_DEFAULT_SHEET_HEIGHT_MM = 148.0
 _STICKER_DEFAULT_SCENE_WIDTH_UNITS = 4.2
 _STICKER_DEFAULT_SCENE_HEIGHT_UNITS = 5.92
 _STICKER_DEFAULT_DPI = 300
-_STICKER_SLOT_WIDTH_MM = 40.0
-_STICKER_SLOT_HEIGHT_MM = 45.0
+# Die-cut footprint of one sticker slot, measured from the 3D GLB models in
+# scene units (the white rounded-square shell — the sticker outline the user
+# sees in the editor). Both the square and the circle slots are square in world
+# space. The print slot size is derived from these so the sheet reproduces the
+# 3D layout 1:1 (slot size AND margins), instead of the legacy hard-coded
+# 40x45 mm which was too large and the wrong aspect. Converted to millimetres at
+# runtime via the sheet's units->mm scale (e.g. 105 mm / 4.2 units = 25 mm/unit).
+_STICKER_SLOT_FOOTPRINT_UNITS = {"square": 1.396, "circle": 1.392}
 _STICKER_BACKGROUND_MAX_SIDE_UNITS = 3.2
 _STICKER_LOGO_MAX_SIDE_UNITS = {"circle": 0.74, "square": 0.78}
 # Die-cut square corner radius as a fraction of the slot's shorter side
@@ -606,6 +612,10 @@ def _build_sticker_print_files(payload: GuestApprovalRequest, guest_order_id: st
                 meta,
             )
         shape = slot_shapes.get(index, "square" if index in {1, 3, 4} else "circle")
+        # Slot size matches the 3D model's die-cut footprint: GLB units scaled by
+        # the sheet's units->mm factor (e.g. 105 mm / 4.2 units = 25 mm/unit on A6).
+        unit_to_mm = float(meta["width_mm"]) / float(meta["scene_width"])
+        slot_mm = _STICKER_SLOT_FOOTPRINT_UNITS.get(shape, 1.396) * unit_to_mm
         slot_meta.append({
             "index": index,
             "shape": shape,
@@ -613,10 +623,10 @@ def _build_sticker_print_files(payload: GuestApprovalRequest, guest_order_id: st
             "center_y_mm": center_y_mm,
             "center_x_px": round(center_x_mm * px_per_mm),
             "center_y_px": round(center_y_mm * px_per_mm),
-            "width_mm": _STICKER_SLOT_WIDTH_MM,
-            "height_mm": _STICKER_SLOT_HEIGHT_MM,
-            "width_px": _mm_to_px(_STICKER_SLOT_WIDTH_MM, dpi),
-            "height_px": _mm_to_px(_STICKER_SLOT_HEIGHT_MM, dpi),
+            "width_mm": slot_mm,
+            "height_mm": slot_mm,
+            "width_px": _mm_to_px(slot_mm, dpi),
+            "height_px": _mm_to_px(slot_mm, dpi),
         })
 
     # Fade the sheet background to white over the outer A6 band so there is no
