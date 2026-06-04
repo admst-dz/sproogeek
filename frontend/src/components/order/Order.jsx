@@ -191,7 +191,13 @@ export const Order = ({ onBack, onSuccess }) => {
     };
 
     const handleSubmit = async () => {
-        if (!formData.name || !formData.phone) {
+        const contact = {
+            ...formData,
+            name: formData.name.trim(),
+            phone: formData.phone.trim(),
+        };
+
+        if (!contact.name || !contact.phone) {
             alert(t(language, 'orderValidation'));
             return;
         }
@@ -204,7 +210,7 @@ export const Order = ({ onBack, onSuccess }) => {
                 product_name: getProductName(),
                 configuration: {
                     clientType,
-                    contact: { ...formData },
+                    contact,
                     isSample,
                     productConfig,
                 },
@@ -372,17 +378,17 @@ export const Order = ({ onBack, onSuccess }) => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {clientType === 'phys' ? (
                                 <>
-                                    <InputGroup name="name" label={t(language, 'orderFullName')} placeholder={t(language, 'placeholderFullName')} value={formData.name} onChange={handleInputChange} />
-                                    <InputGroup name="phone" label={t(language, 'orderPhone')} placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} />
+                                    <InputGroup name="name" label={`${t(language, 'orderFullName')} *`} placeholder={t(language, 'placeholderFullName')} value={formData.name} onChange={handleInputChange} required />
+                                    <InputGroup name="phone" label={`${t(language, 'orderPhone')} *`} placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} required />
                                     <InputGroup name="email" label="Email" placeholder="mail@..." type="email" value={formData.email} onChange={handleInputChange} />
                                     <InputGroup name="address" label={t(language, 'orderAddress')} placeholder={t(language, 'placeholderCityStreet')} value={formData.address} onChange={handleInputChange} />
                                 </>
                             ) : (
                                 <>
-                                    <InputGroup name="name" label={t(language, 'orderCompanyName')} placeholder={t(language, 'placeholderCompany')} value={formData.name} onChange={handleInputChange} />
+                                    <InputGroup name="name" label={`${t(language, 'orderCompanyName')} *`} placeholder={t(language, 'placeholderCompany')} value={formData.name} onChange={handleInputChange} required />
                                     <InputGroup name="inn" label={t(language, 'orderInn')} placeholder="12345..." value={formData.inn} onChange={handleInputChange} />
                                     <InputGroup name="contactPerson" label={t(language, 'orderContactPerson')} placeholder={t(language, 'orderFullName')} value={formData.contactPerson} onChange={handleInputChange} />
-                                    <InputGroup name="phone" label={t(language, 'orderPhone')} placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} />
+                                    <InputGroup name="phone" label={`${t(language, 'orderPhone')} *`} placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} required />
                                 </>
                             )}
                             <div className="md:col-span-2">
@@ -449,17 +455,17 @@ const ColorDot = ({ color }) => (
     </div>
 )
 
-const InputGroup = ({ label, placeholder, type = "text", isTextarea = false, value, onChange, name }) => (
+const InputGroup = ({ label, placeholder, type = "text", isTextarea = false, value, onChange, name, required = false }) => (
     <div className="flex flex-col gap-2">
         <label className="text-[10px] font-bold uppercase text-gray-400 dark:text-white/40 ml-1 tracking-widest">{label}</label>
         {isTextarea ? (
             <textarea
-                name={name} value={value} onChange={onChange} placeholder={placeholder}
+                name={name} value={value} onChange={onChange} placeholder={placeholder} required={required}
                 className="w-full p-4 bg-[#F9F9F9] dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-[14px] text-[#1a1a1a] dark:text-white font-bold placeholder:text-gray-300 dark:placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-black/10 dark:focus:ring-white/10 resize-none h-32 transition-colors"
             />
         ) : (
             <input
-                name={name} value={value} onChange={onChange} type={type} placeholder={placeholder}
+                name={name} value={value} onChange={onChange} type={type} placeholder={placeholder} required={required}
                 className="w-full p-4 bg-[#F9F9F9] dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-[14px] text-[#1a1a1a] dark:text-white font-bold placeholder:text-gray-300 dark:placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-black/10 dark:focus:ring-white/10 transition-colors"
             />
         )}

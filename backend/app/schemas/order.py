@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing import Optional, Dict, Any, List, Literal
 from uuid import UUID
 from datetime import datetime
@@ -18,6 +18,21 @@ class OrderCreate(BaseModel):
     total_price: Optional[float] = Field(None, ge=0, le=1_000_000_000)
     currency: Optional[str] = Field("BYN", min_length=3, max_length=3, pattern="^[A-Z]{3}$")
     is_guest: Optional[bool] = False
+
+    @model_validator(mode="after")
+    def require_contact_name_and_phone(self):
+        contact = self.configuration.get("contact") if isinstance(self.configuration, dict) else None
+        if not isinstance(contact, dict):
+            raise ValueError("Contact name and phone are required")
+
+        name = str(contact.get("name") or "").strip()
+        phone = str(contact.get("phone") or "").strip()
+        if not name or not phone:
+            raise ValueError("Contact name and phone are required")
+
+        contact["name"] = name
+        contact["phone"] = phone
+        return self
 
 
 class OrderStatusUpdate(BaseModel):
