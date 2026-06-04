@@ -1,3 +1,4 @@
+import asyncio
 import os
 from contextlib import asynccontextmanager
 
@@ -37,6 +38,21 @@ async def lifespan(app: FastAPI):
     os.makedirs(UPLOAD_ROOT, exist_ok=True)
     event_logger.log("APP_STARTUP", "Backend application startup")
     await kafka_producer.start()
+
+    # Warm the rembg ONNX model off the hot path so the first sticker auto-fit /
+    # background removal is fast. Fire-and-forget in a worker thread; never blocks
+    # startup or fails it.
+    if settings.warm_models_on_startup:
+        def _warm_models() -> None:
+            try:
+                from app.services.background_removal import warm_up
+
+                if warm_up():
+                    event_logger.log("MODELS_WARMED", "rembg model warmed up on startup")
+            except Exception:  # noqa: BLE001 - warm-up must never break startup
+                event_logger.log("MODELS_WARM_FAILED", "rembg warm-up failed")
+
+        asyncio.get_running_loop().run_in_executor(None, _warm_models)
 
     app.state.bitrix_client = None
     app.state.bitrix_sync = None

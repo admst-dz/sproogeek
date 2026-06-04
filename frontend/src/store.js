@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { temporal } from 'zundo'
 import { getCookie, setCookie, deleteCookie, hasCookieConsent } from './utils/cookies'
-import { canvasToDataURL, normalizeImageFile } from './utils/images'
+import { canvasToDataURL, makeFitBlob, normalizeImageFile, STICKER_TEXTURE_SIZE } from './utils/images'
 import { imageDataUrlToCmykPreviewDataUrl } from './utils/cmyk'
 import { mediaApi } from './api'
 
@@ -713,7 +713,7 @@ export const useConfigurator = create(temporal((set, get) => ({
         if (file instanceof File) {
             const id = makeLogoId();
             try {
-                const texture = await imageDataUrlToCmykPreviewDataUrl(await normalizeImageFile(file));
+                const texture = await imageDataUrlToCmykPreviewDataUrl(await normalizeImageFile(file, STICKER_TEXTURE_SIZE));
                 set((state) => ({
                     stickerBackgroundImages: [
                         ...state.stickerBackgroundImages,
@@ -737,7 +737,7 @@ export const useConfigurator = create(temporal((set, get) => ({
     replaceStickerBackgroundImageFile: async (id, file) => {
         if (!id || !(file instanceof File)) return;
         try {
-            const texture = await imageDataUrlToCmykPreviewDataUrl(await normalizeImageFile(file));
+            const texture = await imageDataUrlToCmykPreviewDataUrl(await normalizeImageFile(file, STICKER_TEXTURE_SIZE));
             set((state) => ({
                 stickerBackgroundImages: state.stickerBackgroundImages.map(l => l.id === id ? { ...l, texture, filename: file.name || l.filename } : l)
             }));
@@ -772,7 +772,7 @@ export const useConfigurator = create(temporal((set, get) => ({
         if (file instanceof File) {
             const id = makeLogoId();
             try {
-                const texture = await normalizeImageFile(file);
+                const texture = await normalizeImageFile(file, STICKER_TEXTURE_SIZE);
                 let added = false;
                 set((state) => ({
                     ...(() => {
@@ -801,9 +801,12 @@ export const useConfigurator = create(temporal((set, get) => ({
                 // Computer-vision auto-fit: detect the subject and zoom it into the
                 // slot. Slots cover-fill at scale 1, so the suggestion only ever
                 // zooms IN (never below full cover). The manual size slider still works.
+                // Send a small downscaled copy (not the raw multi-MB file) so the
+                // upload + inference stay fast.
                 if (added) {
                     try {
-                        const { data } = await mediaApi.stickerFit(file);
+                        const fitBlob = await makeFitBlob(texture);
+                        const { data } = await mediaApi.stickerFit(fitBlob || file);
                         const suggested = Number(data?.suggested_scale);
                         if (Number.isFinite(suggested)) {
                             const scale = Math.min(STICKER_SCALE_MAX, Math.max(1, suggested));
@@ -825,7 +828,7 @@ export const useConfigurator = create(temporal((set, get) => ({
     replaceStickerImageFile: async (id, file) => {
         if (!id || !(file instanceof File)) return;
         try {
-            const texture = await normalizeImageFile(file);
+            const texture = await normalizeImageFile(file, STICKER_TEXTURE_SIZE);
             set((state) => ({
                 stickerImages: state.stickerImages.map(l => l.id === id ? { ...l, texture, filename: file.name || l.filename } : l)
             }));

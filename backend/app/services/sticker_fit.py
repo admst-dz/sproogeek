@@ -24,7 +24,8 @@ from app.services.background_removal import _get_session  # reuse cached rembg s
 
 logger = logging.getLogger(__name__)
 
-MAX_EDGE = 1024  # matte detection resolution; the slot is small, so this is plenty
+MAX_EDGE = 512  # matte detection resolution; we only need a bounding box, so a
+                # small image keeps rembg inference fast (the slot is tiny anyway)
 # Leave a little breathing room inside the slot rather than touching the edges.
 TARGET_FILL = 0.9
 SCALE_MIN = 0.22

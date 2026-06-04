@@ -208,7 +208,7 @@ export const mediaApi = {
     },
     stickerFit: (file) => {
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('file', file, file?.name || 'sticker-fit.jpg');
         return apiClient.post('/files/sticker-fit', formData);
     },
 };
