@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { useConfigurator } from '../../store';
@@ -14,10 +14,11 @@ const TSHIRT_LOGO_MAX_SCALE = 1;
 const TSHIRT_PRINT_AREA_CENTER_Y_RATIO = 0.48;
 const TSHIRT_PRINT_AREA_WIDTH_RATIO = 0.68;
 const TSHIRT_PRINT_AREA_HEIGHT_RATIO = 0.52;
-const LOGO_GRID_MIN_X = 28;
-const LOGO_GRID_MAX_X = 96;
-const LOGO_GRID_MIN_Y = 10;
-const LOGO_GRID_MAX_Y = 44;
+const LOGO_GRID_BASE_SEGMENTS = 34;
+const LOGO_GRID_MIN_X = 18;
+const LOGO_GRID_MAX_X = 72;
+const LOGO_GRID_MIN_Y = 8;
+const LOGO_GRID_MAX_Y = 32;
 
 function containedLogoSize(map, areaWidth, areaHeight, scale = 0.6) {
     const imageWidth = map?.image?.width ?? map?.image?.naturalWidth ?? 1;
@@ -37,16 +38,23 @@ function containedLogoSize(map, areaWidth, areaHeight, scale = 0.6) {
 
 function getProjectedLogoSegments(width, height) {
     const aspect = Math.max(width / Math.max(height, 0.001), 0.001);
+    const aspectCurveBias = Math.sqrt(aspect);
     const segmentsX = THREE.MathUtils.clamp(
-        Math.round(42 * Math.max(1, aspect)),
+        Math.round(LOGO_GRID_BASE_SEGMENTS * aspectCurveBias),
         LOGO_GRID_MIN_X,
         LOGO_GRID_MAX_X
     );
-    const segmentsY = THREE.MathUtils.clamp(
-        Math.round(segmentsX / aspect),
-        LOGO_GRID_MIN_Y,
-        LOGO_GRID_MAX_Y
-    );
+    const segmentsY = aspect >= 1
+        ? THREE.MathUtils.clamp(
+            Math.round(segmentsX / aspect),
+            LOGO_GRID_MIN_Y,
+            LOGO_GRID_MAX_Y
+        )
+        : THREE.MathUtils.clamp(
+            Math.round(LOGO_GRID_BASE_SEGMENTS / aspectCurveBias),
+            LOGO_GRID_MIN_Y,
+            LOGO_GRID_MAX_Y
+        );
     return { segmentsX, segmentsY };
 }
 
@@ -73,34 +81,51 @@ function createProjectedLogoGeometry({
 
     const cos = Math.cos(rotation);
     const sin = Math.sin(rotation);
-    const positions = [];
-    const uvs = [];
-    const valid = [];
+    const stride = segmentsX + 1;
+    const vertexCount = stride * (segmentsY + 1);
+    const positions = new Float32Array(vertexCount * 3);
+    const normals = new Float32Array(vertexCount * 3);
+    const uvs = new Float32Array(vertexCount * 2);
+    const valid = new Uint8Array(vertexCount);
+    const rayOrigin = new THREE.Vector3();
+    const normal = new THREE.Vector3();
+    const fallbackNormal = new THREE.Vector3(0, 0, isBack ? -1 : 1);
 
     for (let row = 0; row <= segmentsY; row += 1) {
         const v = row / segmentsY;
         for (let col = 0; col <= segmentsX; col += 1) {
+            const vertexIndex = row * stride + col;
+            const positionIndex = vertexIndex * 3;
+            const uvIndex = vertexIndex * 2;
             const u = col / segmentsX;
             const localX = (u - 0.5) * width;
             const localY = (v - 0.5) * height;
             const sampleX = centerX + localX * cos - localY * sin;
             const sampleY = centerY + localX * sin + localY * cos;
 
-            raycaster.set(new THREE.Vector3(sampleX, sampleY, rayZ), direction);
+            rayOrigin.set(sampleX, sampleY, rayZ);
+            raycaster.set(rayOrigin, direction);
             const hit = raycaster.intersectObjects(surfaceObjects, false)[0];
 
             if (hit) {
-                const normal = hit.face?.normal?.clone() ?? new THREE.Vector3(0, 0, isBack ? -1 : 1);
+                normal.copy(hit.face?.normal ?? fallbackNormal);
                 normal.normalize();
                 if (normal.dot(direction) > 0) normal.negate();
-                const point = hit.point.clone().addScaledVector(normal, LOGO_SURFACE_OFFSET);
-                positions.push(point.x, point.y, point.z);
-                valid.push(true);
+                positions[positionIndex] = hit.point.x + normal.x * LOGO_SURFACE_OFFSET;
+                positions[positionIndex + 1] = hit.point.y + normal.y * LOGO_SURFACE_OFFSET;
+                positions[positionIndex + 2] = hit.point.z + normal.z * LOGO_SURFACE_OFFSET;
+                valid[vertexIndex] = 1;
             } else {
-                positions.push(sampleX, sampleY, fallbackZ);
-                valid.push(false);
+                normal.copy(fallbackNormal);
+                positions[positionIndex] = sampleX;
+                positions[positionIndex + 1] = sampleY;
+                positions[positionIndex + 2] = fallbackZ;
             }
-            uvs.push(u, v);
+            normals[positionIndex] = normal.x;
+            normals[positionIndex + 1] = normal.y;
+            normals[positionIndex + 2] = normal.z;
+            uvs[uvIndex] = u;
+            uvs[uvIndex + 1] = v;
         }
     }
 
@@ -119,10 +144,10 @@ function createProjectedLogoGeometry({
     if (indices.length === 0) return null;
 
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+    geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
     geometry.setIndex(indices);
-    geometry.computeVertexNormals();
     geometry.computeBoundingSphere();
     return geometry;
 }
@@ -133,7 +158,8 @@ function TshirtLogoSurface({
     surfaceObjects,
     areaWidth,
     areaHeight,
-    center = [0, 0],
+    centerX = 0,
+    centerY = 0,
     isBack = false,
     scaleBase = 0.9,
 }) {
@@ -149,13 +175,15 @@ function TshirtLogoSurface({
     const geometry = useMemo(() => createProjectedLogoGeometry({
         surfaceObjects,
         bbox,
-        centerX: center[0] + x,
-        centerY: center[1] + y,
+        centerX: centerX + x,
+        centerY: centerY + y,
         width: size.width,
         height: size.height,
         rotation,
         isBack,
-    }), [bbox, center, isBack, rotation, size.height, size.width, surfaceObjects, x, y]);
+    }), [bbox, centerX, centerY, isBack, rotation, size.height, size.width, surfaceObjects, x, y]);
+
+    useEffect(() => () => geometry?.dispose(), [geometry]);
 
     if (!geometry) return null;
 
@@ -240,7 +268,8 @@ export function Tshirt({ config = null, preview = false, position = [0, 0, 0] })
                         surfaceObjects={surfaceObjects}
                         areaWidth={printAreaWidth}
                         areaHeight={printAreaHeight}
-                        center={[logoX, logoY]}
+                        centerX={logoX}
+                        centerY={logoY}
                         isBack={isBack}
                         scaleBase={1}
                     />
@@ -249,5 +278,3 @@ export function Tshirt({ config = null, preview = false, position = [0, 0, 0] })
         </group>
     );
 }
-
-useGLTF.preload(tshirtModelUrl);
