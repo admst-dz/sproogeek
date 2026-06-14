@@ -245,7 +245,13 @@ export const ClientDashboard = ({
             setFormError(t(language, 'cartEmpty'));
             return;
         }
-        if (!formData.name || !formData.phone) {
+        const contact = {
+            ...formData,
+            name: formData.name.trim(),
+            phone: formData.phone.trim(),
+        };
+
+        if (!contact.name || !contact.phone) {
             setFormError(t(language, 'fillNamePhone'));
             return;
         }
@@ -275,7 +281,7 @@ export const ClientDashboard = ({
                     productConfig: headItem,
                     cart: cartPayload,
                     clientType,
-                    contact: { ...formData },
+                    contact,
                     isSample,
                 },
                 quantity: totalQuantity,
@@ -301,7 +307,7 @@ export const ClientDashboard = ({
                     productConfig: headItem,
                     cart: cartPayload,
                     clientType,
-                    contact: { ...formData },
+                    contact,
                     isSample,
                 },
             };
@@ -450,17 +456,17 @@ export const ClientDashboard = ({
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {clientType === 'phys' ? (<>
-                                                <CartInput name="name" label={t(language, 'fullNameRequired')} placeholder={t(language, 'placeholderFullName')} value={formData.name} onChange={handleInputChange} />
-                                                <CartInput name="phone" label={t(language, 'phoneRequired')} placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} />
+                                                <CartInput name="name" label={t(language, 'fullNameRequired')} placeholder={t(language, 'placeholderFullName')} value={formData.name} onChange={handleInputChange} required />
+                                                <CartInput name="phone" label={t(language, 'phoneRequired')} placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} required />
                                                 <CartInput name="email" label={t(language, 'emailLabel')} placeholder="mail@..." type="email" value={formData.email} onChange={handleInputChange} />
                                                 <div className="md:col-span-2">
                                                     <CartInput name="address" label={t(language, 'orderAddress')} placeholder={t(language, 'placeholderCityStreet')} value={formData.address} onChange={handleInputChange} />
                                                 </div>
                                             </>) : (<>
-                                                <CartInput name="name" label={t(language, 'companyRequired')} placeholder={t(language, 'placeholderCompany')} value={formData.name} onChange={handleInputChange} />
+                                                <CartInput name="name" label={t(language, 'companyRequired')} placeholder={t(language, 'placeholderCompany')} value={formData.name} onChange={handleInputChange} required />
                                                 <CartInput name="inn" label={t(language, 'unpInn')} placeholder="123456789" value={formData.inn} onChange={handleInputChange} />
                                                 <CartInput name="contactPerson" label={t(language, 'contactPersonRequired')} placeholder={t(language, 'placeholderFio')} value={formData.contactPerson} onChange={handleInputChange} />
-                                                <CartInput name="phone" label={t(language, 'phoneRequired')} placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} />
+                                                <CartInput name="phone" label={t(language, 'phoneRequired')} placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} required />
                                             </>)}
                                             <div className="md:col-span-2">
                                                 <CartInput name="comment" label={t(language, 'orderComment')} placeholder={t(language, 'commentsPlaceholder')} value={formData.comment} onChange={handleInputChange} isTextarea />
@@ -786,17 +792,17 @@ const ColorDot = ({ color }) => (
     </div>
 );
 
-const CartInput = ({ label, name, placeholder, type = 'text', value, onChange, isTextarea = false }) => (
+const CartInput = ({ label, name, placeholder, type = 'text', value, onChange, isTextarea = false, required = false }) => (
     <div className="flex flex-col gap-1.5">
         <label className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">{label}</label>
         {isTextarea ? (
             <textarea
-                name={name} value={value} onChange={onChange} placeholder={placeholder}
+                name={name} value={value} onChange={onChange} placeholder={placeholder} required={required}
                 className="w-full p-3 bg-white/5 border border-white/10 rounded-[12px] text-white font-bold placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-white/20 resize-none h-24 text-sm transition-colors"
             />
         ) : (
             <input
-                name={name} value={value} onChange={onChange} type={type} placeholder={placeholder}
+                name={name} value={value} onChange={onChange} type={type} placeholder={placeholder} required={required}
                 className="w-full p-3 bg-white/5 border border-white/10 rounded-[12px] text-white font-bold placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-white/20 text-sm transition-colors"
             />
         )}

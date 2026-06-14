@@ -1,13 +1,13 @@
 import { useMemo } from 'react';
-import { Decal, useGLTF } from '@react-three/drei';
+import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { useConfigurator } from '../../store';
 import tshirtModelUrl from '../../assets/tshirt_test.glb?url';
 import { useLogoTexture } from '../../utils/threeTextures';
 
 const MODEL_SCALE = 1.18;
-const DECAL_DEPTH = 0.34;
-const DECAL_SURFACE_OFFSET = 0.08;
+const LOGO_SURFACE_OFFSET = 0.08;
+const LOGO_POLYGON_OFFSET = -24;
 const TSHIRT_LOGO_MIN_SCALE = 0.08;
 const TSHIRT_LOGO_MAX_SCALE = 1;
 const TSHIRT_PRINT_AREA_CENTER_Y_RATIO = 0.48;
@@ -30,14 +30,13 @@ function containedLogoSize(map, areaWidth, areaHeight, scale = 0.6) {
     return { width: height * aspect, height };
 }
 
-function TshirtLogoDecal({
+function TshirtLogoPlane({
     image,
     areaWidth,
     areaHeight,
     offset = [0, 0, 0],
     rotationFix = [0, 0, 0],
     scaleBase = 0.9,
-    depth = DECAL_DEPTH,
 }) {
     const map = useLogoTexture(image.texture);
     const size = containedLogoSize(map, areaWidth * scaleBase, areaHeight, image.scale ?? 0.6);
@@ -49,27 +48,31 @@ function TshirtLogoDecal({
     const y = THREE.MathUtils.clamp(py * maxY, -maxY, maxY);
 
     return (
-        <Decal
+        <mesh
             position={[offset[0] + x, offset[1] + y, offset[2]]}
             rotation={[
                 rotationFix[0],
                 rotationFix[1],
                 (image.rotation ?? 0) + rotationFix[2],
             ]}
-            scale={[size.width, size.height, depth]}
-            renderOrder={8}
+            renderOrder={40}
         >
+            <planeGeometry args={[size.width, size.height]} />
             <meshStandardMaterial
                 map={map}
                 transparent
-                roughness={0.58}
-                metalness={0.01}
-                polygonOffset
-                polygonOffsetFactor={-8}
-                polygonOffsetUnits={-8}
+                alphaTest={0.08}
+                alphaToCoverage
+                depthTest
                 depthWrite={false}
+                polygonOffset
+                polygonOffsetFactor={LOGO_POLYGON_OFFSET}
+                polygonOffsetUnits={LOGO_POLYGON_OFFSET}
+                side={THREE.FrontSide}
+                roughness={0.55}
+                metalness={0.02}
             />
-        </Decal>
+        </mesh>
     );
 }
 
@@ -105,7 +108,7 @@ export function Tshirt({ config = null, preview = false, position = [0, 0, 0] })
     const isBack = printSide === 'back';
     const logoX = 0;
     const logoY = bbox.min.y + size.y * TSHIRT_PRINT_AREA_CENTER_Y_RATIO;
-    const logoZ = isBack ? bbox.min.z - DECAL_SURFACE_OFFSET : bbox.max.z + DECAL_SURFACE_OFFSET;
+    const logoZ = isBack ? bbox.min.z - LOGO_SURFACE_OFFSET : bbox.max.z + LOGO_SURFACE_OFFSET;
     const logoYaw = isBack ? Math.PI : 0;
     const printAreaWidth = size.x * TSHIRT_PRINT_AREA_WIDTH_RATIO;
     const printAreaHeight = size.y * TSHIRT_PRINT_AREA_HEIGHT_RATIO;
@@ -122,19 +125,18 @@ export function Tshirt({ config = null, preview = false, position = [0, 0, 0] })
                             metalness={0.02}
                             side={THREE.DoubleSide}
                         />
-                        {logos.map((image) => (
-                            <TshirtLogoDecal
-                                key={image.id}
-                                image={image}
-                                areaWidth={printAreaWidth}
-                                areaHeight={printAreaHeight}
-                                offset={[logoX, logoY, logoZ]}
-                                rotationFix={[0, logoYaw, 0]}
-                                scaleBase={1}
-                                depth={DECAL_DEPTH}
-                            />
-                        ))}
                     </mesh>
+                ))}
+                {logos.map((image) => (
+                    <TshirtLogoPlane
+                        key={image.id}
+                        image={image}
+                        areaWidth={printAreaWidth}
+                        areaHeight={printAreaHeight}
+                        offset={[logoX, logoY, logoZ]}
+                        rotationFix={[0, logoYaw, 0]}
+                        scaleBase={1}
+                    />
                 ))}
             </group>
         </group>
