@@ -82,6 +82,11 @@ services:
     # container_name снят: позволяет запускать через `--scale backend=2|3`.
     restart: unless-stopped
     deploy:
+      resources:
+        limits:
+           memory: 3G
+      reservations:
+        memory: 256M
       replicas: 2  # подсказка для swarm; в обычном compose используется --scale backend=2
     environment:
       # Бэкенд собирает SQLAlchemy URL сам, чтобы пароли со спецсимволами
