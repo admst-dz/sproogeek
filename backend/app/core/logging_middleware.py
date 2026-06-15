@@ -9,7 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.event_logger import event_logger
 from app.core.security import decode_token
 
-from loguru import logger
+import sys
 
 
 SENSITIVE_QUERY_KEYS = {
@@ -93,9 +93,10 @@ class EventLoggingMiddleware(BaseHTTPMiddleware):
                 },
             )
 
+logger.remove() # Удаляем стандартный обработчик, чтобы не двоились логи
+logger.add(sys.stderr, level="INFO", colorize=True)
 logger.add(
     "logs/app_{time:YYYY-MM-DD}.log",
-    format=custom_formatter,
     level="INFO",
     rotation="00:00",
     retention="30 days",
