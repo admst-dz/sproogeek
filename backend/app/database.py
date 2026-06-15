@@ -1,30 +1,38 @@
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import declarative_base
+import os
+from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
 
-from app.core.config import get_settings
+load_dotenv()
 
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-settings = get_settings()
+# Собираем URL из переменных твоего docker-compose.yml
+if not DATABASE_URL:
+    db_user = os.getenv("DATABASE_USER", "postgres")
+    db_password = os.getenv("DATABASE_PASSWORD", "rootpassword")
+    db_host = os.getenv("DATABASE_HOST", "pgbouncer")  # Стучимся через pgbouncer
+    db_port = os.getenv("DATABASE_PORT", "5432")
+    db_name = os.getenv("DATABASE_NAME", "spruzhuk")
 
-# При работе через PgBouncer в transaction pool mode серверные prepared
-# statements asyncpg конфликтуют с пулом (statement готовится на одном
-# backend-коннекте, а исполняется на другом). Отключаем кеш PS.
+    DATABASE_URL = f"postgresql+asyncpg://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+
+if not DATABASE_URL or "None" in DATABASE_URL:
+    raise ValueError("CRITICAL ERROR: Failed to construct DATABASE_URL.")
+
 engine = create_async_engine(
-    settings.sqlalchemy_database_url,
+    DATABASE_URL,
     echo=False,
     pool_size=10,
     max_overflow=20,
     pool_recycle=1800,
-    pool_pre_ping=True,
-    connect_args={
-        "statement_cache_size": 0,
-        "prepared_statement_cache_size": 0,
-    },
+    pool_pre_ping=True
 )
 
-AsyncSessionLocal = async_sessionmaker(
+AsyncSessionLocal = sessionmaker(
     bind=engine,
-    expire_on_commit=False,
+    class_=AsyncSession,
+    expire_on_commit=False
 )
 
 Base = declarative_base()
@@ -32,4 +40,7 @@ Base = declarative_base()
 
 async def get_db():
     async with AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+        finally:
+            await session.close()
