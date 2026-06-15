@@ -11,6 +11,8 @@ const BAG_DEPTH = 0.18;
 const HANDLE_RADIUS = 0.72;
 const HANDLE_TUBE = 0.045;
 
+const normalizeShopperPrintSide = (side) => (side === 'back' ? 'back' : 'front');
+
 function ShopperHandles({ color, handleType }) {
     const handleY = BAG_HEIGHT / 2 + HANDLE_RADIUS * 0.62;
     const handleScale = handleType === 'short' ? 0.62 : 1;
@@ -46,9 +48,6 @@ export function Shopper({ config = null, preview = false, position = [0, 0, 0] }
 
     const printAreaWidth = BAG_WIDTH * 0.62;
     const printAreaHeight = BAG_HEIGHT * 0.5;
-    const isFront = printSide === 'front';
-    const logoZ = isFront ? BAG_DEPTH / 2 + 0.01 : -BAG_DEPTH / 2 - 0.01;
-    const logoYaw = isFront ? 0 : Math.PI;
 
     const bagGeometry = useMemo(() => new THREE.BoxGeometry(BAG_WIDTH, BAG_HEIGHT, BAG_DEPTH), []);
 
@@ -59,16 +58,20 @@ export function Shopper({ config = null, preview = false, position = [0, 0, 0] }
             </mesh>
             <ShopperHandles color={color} handleType={handleType} />
 
-            {logos.map((image) => (
-                <MerchLogoPlane
-                    key={image.id}
-                    image={image}
-                    areaWidth={printAreaWidth}
-                    areaHeight={printAreaHeight}
-                    offset={[0, 0, logoZ]}
-                    rotationFix={[0, logoYaw, 0]}
-                />
-            ))}
+            {logos.map((image) => {
+                const logoSide = normalizeShopperPrintSide(image.side ?? printSide);
+                const isFront = logoSide === 'front';
+                return (
+                    <MerchLogoPlane
+                        key={image.id}
+                        image={image}
+                        areaWidth={printAreaWidth}
+                        areaHeight={printAreaHeight}
+                        offset={[0, 0, isFront ? BAG_DEPTH / 2 + 0.01 : -BAG_DEPTH / 2 - 0.01]}
+                        rotationFix={[0, isFront ? 0 : Math.PI, 0]}
+                    />
+                );
+            })}
         </group>
     );
 }

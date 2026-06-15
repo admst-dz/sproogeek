@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { useConfigurator } from '../../store';
@@ -14,11 +14,24 @@ const TSHIRT_LOGO_MAX_SCALE = 1;
 const TSHIRT_PRINT_AREA_CENTER_Y_RATIO = 0.48;
 const TSHIRT_PRINT_AREA_WIDTH_RATIO = 0.68;
 const TSHIRT_PRINT_AREA_HEIGHT_RATIO = 0.52;
-const LOGO_GRID_BASE_SEGMENTS = 34;
-const LOGO_GRID_MIN_X = 18;
-const LOGO_GRID_MAX_X = 72;
-const LOGO_GRID_MIN_Y = 8;
-const LOGO_GRID_MAX_Y = 32;
+const TSHIRT_SLEEVE_AREA_CENTER_Y_RATIO = 0.64;
+const TSHIRT_SLEEVE_AREA_WIDTH_RATIO = 0.56;
+const TSHIRT_SLEEVE_AREA_HEIGHT_RATIO = 0.24;
+const LOGO_GRID_BASE_SEGMENTS = 26;
+const LOGO_GRID_MIN_X = 14;
+const LOGO_GRID_MAX_X = 52;
+const LOGO_GRID_MIN_Y = 6;
+const LOGO_GRID_MAX_Y = 24;
+const LOGO_SIDE_NORMAL_WEIGHT = 0.08;
+const LOGO_PROJECTION_IDLE_DELAY_MS = 90;
+const LOGO_PROJECTION_THROTTLE_MS = 140;
+const LOGO_PROJECTION_MAX_OFFSET_RATIO = 0.28;
+const AXIS_INDEX = { x: 0, y: 1, z: 2 };
+const TSHIRT_PRINT_SIDES = ['front', 'back', 'leftSleeve', 'rightSleeve'];
+
+const normalizeTshirtPrintSide = (side) => (
+    TSHIRT_PRINT_SIDES.includes(side) ? side : 'front'
+);
 
 function containedLogoSize(map, areaWidth, areaHeight, scale = 0.6) {
     const imageWidth = map?.image?.width ?? map?.image?.naturalWidth ?? 1;
@@ -61,20 +74,30 @@ function getProjectedLogoSegments(width, height) {
 function createProjectedLogoGeometry({
     surfaceObjects,
     bbox,
-    centerX,
-    centerY,
+    projection,
     width,
     height,
     rotation = 0,
-    isBack = false,
 }) {
-    if (!surfaceObjects?.length || !bbox || !width || !height) return null;
+    if (!surfaceObjects?.length || !bbox || !projection || !width || !height) return null;
 
     const { segmentsX, segmentsY } = getProjectedLogoSegments(width, height);
-    const direction = new THREE.Vector3(0, 0, isBack ? 1 : -1);
-    const rayZ = isBack ? bbox.min.z - LOGO_RAY_PADDING : bbox.max.z + LOGO_RAY_PADDING;
-    const fallbackZ = isBack ? bbox.min.z - LOGO_SURFACE_OFFSET : bbox.max.z + LOGO_SURFACE_OFFSET;
-    const rayDepth = Math.max(0.001, bbox.max.z - bbox.min.z) + LOGO_RAY_PADDING * 2;
+    const {
+        rayAxis,
+        rayStart,
+        rayDirection,
+        fallbackOrigin,
+        fallbackNormal: fallbackNormalArray,
+        targetSurface,
+        outwardSign,
+        planeHorizontalAxis,
+        planeVerticalAxis,
+        centerHorizontal,
+        centerVertical,
+    } = projection;
+    const direction = new THREE.Vector3();
+    direction[rayAxis] = rayDirection;
+    const rayDepth = Math.max(0.001, bbox.max[rayAxis] - bbox.min[rayAxis]) + LOGO_RAY_PADDING * 2;
     const raycaster = new THREE.Raycaster();
     raycaster.near = 0;
     raycaster.far = rayDepth;
@@ -89,7 +112,8 @@ function createProjectedLogoGeometry({
     const valid = new Uint8Array(vertexCount);
     const rayOrigin = new THREE.Vector3();
     const normal = new THREE.Vector3();
-    const fallbackNormal = new THREE.Vector3(0, 0, isBack ? -1 : 1);
+    const bestNormal = new THREE.Vector3();
+    const fallbackNormal = new THREE.Vector3(...fallbackNormalArray);
 
     for (let row = 0; row <= segmentsY; row += 1) {
         const v = row / segmentsY;
@@ -100,26 +124,48 @@ function createProjectedLogoGeometry({
             const u = col / segmentsX;
             const localX = (u - 0.5) * width;
             const localY = (v - 0.5) * height;
-            const sampleX = centerX + localX * cos - localY * sin;
-            const sampleY = centerY + localX * sin + localY * cos;
+            const sampleHorizontal = centerHorizontal + localX * cos - localY * sin;
+            const sampleVertical = centerVertical + localX * sin + localY * cos;
 
-            rayOrigin.set(sampleX, sampleY, rayZ);
+            rayOrigin.set(0, 0, 0);
+            rayOrigin[planeHorizontalAxis] = sampleHorizontal;
+            rayOrigin[planeVerticalAxis] = sampleVertical;
+            rayOrigin[rayAxis] = rayStart;
             raycaster.set(rayOrigin, direction);
-            const hit = raycaster.intersectObjects(surfaceObjects, false)[0];
+            const hits = raycaster.intersectObjects(surfaceObjects, false);
+            let hit = null;
+            let bestScore = -Infinity;
 
-            if (hit) {
-                normal.copy(hit.face?.normal ?? fallbackNormal);
+            for (const candidate of hits) {
+                normal.copy(candidate.face?.normal ?? fallbackNormal);
                 normal.normalize();
                 if (normal.dot(direction) > 0) normal.negate();
+
+                const depthScore = -Math.abs(candidate.point[rayAxis] - targetSurface);
+                const normalScore = normal[rayAxis] * outwardSign * LOGO_SIDE_NORMAL_WEIGHT;
+                const score = depthScore + normalScore;
+
+                if (score > bestScore) {
+                    hit = candidate;
+                    bestScore = score;
+                    bestNormal.copy(normal);
+                }
+            }
+
+            if (hit) {
+                normal.copy(bestNormal);
                 positions[positionIndex] = hit.point.x + normal.x * LOGO_SURFACE_OFFSET;
                 positions[positionIndex + 1] = hit.point.y + normal.y * LOGO_SURFACE_OFFSET;
                 positions[positionIndex + 2] = hit.point.z + normal.z * LOGO_SURFACE_OFFSET;
                 valid[vertexIndex] = 1;
             } else {
                 normal.copy(fallbackNormal);
-                positions[positionIndex] = sampleX;
-                positions[positionIndex + 1] = sampleY;
-                positions[positionIndex + 2] = fallbackZ;
+                positions[positionIndex] = 0;
+                positions[positionIndex + 1] = 0;
+                positions[positionIndex + 2] = 0;
+                positions[positionIndex + AXIS_INDEX[planeHorizontalAxis]] = sampleHorizontal;
+                positions[positionIndex + AXIS_INDEX[planeVerticalAxis]] = sampleVertical;
+                positions[positionIndex + AXIS_INDEX[rayAxis]] = fallbackOrigin;
             }
             normals[positionIndex] = normal.x;
             normals[positionIndex + 1] = normal.y;
@@ -152,17 +198,84 @@ function createProjectedLogoGeometry({
     return geometry;
 }
 
+function getTshirtPrintArea(side, bbox, size) {
+    const normalizedSide = normalizeTshirtPrintSide(side);
+    const bodyCenterY = bbox.min.y + size.y * TSHIRT_PRINT_AREA_CENTER_Y_RATIO;
+
+    if (normalizedSide === 'leftSleeve' || normalizedSide === 'rightSleeve') {
+        const isLeftSleeve = normalizedSide === 'leftSleeve';
+        const outwardSign = isLeftSleeve ? 1 : -1;
+
+        return {
+            areaWidth: size.z * TSHIRT_SLEEVE_AREA_WIDTH_RATIO,
+            areaHeight: size.y * TSHIRT_SLEEVE_AREA_HEIGHT_RATIO,
+            scaleBase: 1,
+            projection: {
+                rayAxis: 'x',
+                rayStart: isLeftSleeve ? bbox.max.x + LOGO_RAY_PADDING : bbox.min.x - LOGO_RAY_PADDING,
+                rayDirection: isLeftSleeve ? -1 : 1,
+                fallbackOrigin: isLeftSleeve ? bbox.max.x + LOGO_SURFACE_OFFSET : bbox.min.x - LOGO_SURFACE_OFFSET,
+                fallbackNormal: [outwardSign, 0, 0],
+                targetSurface: isLeftSleeve ? bbox.max.x : bbox.min.x,
+                outwardSign,
+                planeHorizontalAxis: 'z',
+                planeVerticalAxis: 'y',
+                centerHorizontal: bbox.min.z + size.z * 0.5,
+                centerVertical: bbox.min.y + size.y * TSHIRT_SLEEVE_AREA_CENTER_Y_RATIO,
+            },
+        };
+    }
+
+    const isBack = normalizedSide === 'back';
+    const outwardSign = isBack ? -1 : 1;
+
+    return {
+        areaWidth: size.x * TSHIRT_PRINT_AREA_WIDTH_RATIO,
+        areaHeight: size.y * TSHIRT_PRINT_AREA_HEIGHT_RATIO,
+        scaleBase: 1,
+        projection: {
+            rayAxis: 'z',
+            rayStart: isBack ? bbox.min.z - LOGO_RAY_PADDING : bbox.max.z + LOGO_RAY_PADDING,
+            rayDirection: isBack ? 1 : -1,
+            fallbackOrigin: isBack ? bbox.min.z - LOGO_SURFACE_OFFSET : bbox.max.z + LOGO_SURFACE_OFFSET,
+            fallbackNormal: [0, 0, outwardSign],
+            targetSurface: isBack ? bbox.min.z : bbox.max.z,
+            outwardSign,
+            planeHorizontalAxis: 'x',
+            planeVerticalAxis: 'y',
+            centerHorizontal: 0,
+            centerVertical: bodyCenterY,
+        },
+    };
+}
+
+const nowMs = () => (
+    typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now()
+);
+
 function TshirtLogoSurface({
     image,
     bbox,
     surfaceObjects,
-    areaWidth,
-    areaHeight,
-    centerX = 0,
-    centerY = 0,
-    isBack = false,
-    scaleBase = 0.9,
+    printArea,
 }) {
+    const { areaWidth, areaHeight, projection, scaleBase = 1 } = printArea;
+    const {
+        rayAxis,
+        rayStart,
+        rayDirection,
+        fallbackOrigin,
+        fallbackNormal = [0, 0, 1],
+        targetSurface,
+        outwardSign,
+        planeHorizontalAxis,
+        planeVerticalAxis,
+        centerHorizontal,
+        centerVertical,
+    } = projection;
+    const [fallbackNormalX = 0, fallbackNormalY = 0, fallbackNormalZ = 1] = fallbackNormal;
     const map = useLogoTexture(image.texture);
     const size = containedLogoSize(map, areaWidth * scaleBase, areaHeight, image.scale ?? 0.6);
 
@@ -172,24 +285,115 @@ function TshirtLogoSurface({
     const x = THREE.MathUtils.clamp(px * maxX, -maxX, maxX);
     const y = THREE.MathUtils.clamp(py * maxY, -maxY, maxY);
     const rotation = image.rotation ?? 0;
+    const targetCenterHorizontal = centerHorizontal + x;
+    const targetCenterVertical = centerVertical + y;
+    const [projectionCenter, setProjectionCenter] = useState(() => ({
+        horizontal: targetCenterHorizontal,
+        vertical: targetCenterVertical,
+    }));
+    const projectionCenterRef = useRef(projectionCenter);
+    const lastProjectedAtRef = useRef(nowMs());
+
+    useEffect(() => {
+        projectionCenterRef.current = projectionCenter;
+    }, [projectionCenter]);
+
+    useEffect(() => {
+        const current = projectionCenterRef.current;
+        const offsetDistance = Math.hypot(
+            targetCenterHorizontal - current.horizontal,
+            targetCenterVertical - current.vertical
+        );
+        if (offsetDistance < 0.0005) return undefined;
+
+        let frameId = null;
+        let timeoutId = null;
+        const commitProjection = () => {
+            lastProjectedAtRef.current = nowMs();
+            setProjectionCenter((previous) => {
+                if (
+                    Math.abs(previous.horizontal - targetCenterHorizontal) < 0.0005
+                    && Math.abs(previous.vertical - targetCenterVertical) < 0.0005
+                ) {
+                    return previous;
+                }
+                return {
+                    horizontal: targetCenterHorizontal,
+                    vertical: targetCenterVertical,
+                };
+            });
+        };
+
+        const maxLiveOffset = Math.max(size.width, size.height) * LOGO_PROJECTION_MAX_OFFSET_RATIO;
+        const shouldRefreshWhileDragging = (
+            offsetDistance > maxLiveOffset
+            && nowMs() - lastProjectedAtRef.current > LOGO_PROJECTION_THROTTLE_MS
+        );
+
+        if (shouldRefreshWhileDragging) {
+            frameId = requestAnimationFrame(commitProjection);
+        } else {
+            timeoutId = setTimeout(commitProjection, LOGO_PROJECTION_IDLE_DELAY_MS);
+        }
+
+        return () => {
+            if (frameId !== null) cancelAnimationFrame(frameId);
+            if (timeoutId !== null) clearTimeout(timeoutId);
+        };
+    }, [size.height, size.width, targetCenterHorizontal, targetCenterVertical]);
+
     const geometry = useMemo(() => createProjectedLogoGeometry({
         surfaceObjects,
         bbox,
-        centerX: centerX + x,
-        centerY: centerY + y,
+        projection: {
+            rayAxis,
+            rayStart,
+            rayDirection,
+            fallbackOrigin,
+            fallbackNormal: [fallbackNormalX, fallbackNormalY, fallbackNormalZ],
+            targetSurface,
+            outwardSign,
+            planeHorizontalAxis,
+            planeVerticalAxis,
+            centerHorizontal: projectionCenter.horizontal,
+            centerVertical: projectionCenter.vertical,
+        },
         width: size.width,
         height: size.height,
         rotation,
-        isBack,
-    }), [bbox, centerX, centerY, isBack, rotation, size.height, size.width, surfaceObjects, x, y]);
+    }), [
+        bbox,
+        fallbackNormalX,
+        fallbackNormalY,
+        fallbackNormalZ,
+        fallbackOrigin,
+        outwardSign,
+        planeHorizontalAxis,
+        planeVerticalAxis,
+        projectionCenter.horizontal,
+        projectionCenter.vertical,
+        rayAxis,
+        rayDirection,
+        rayStart,
+        rotation,
+        size.height,
+        size.width,
+        surfaceObjects,
+        targetSurface,
+    ]);
 
     useEffect(() => () => geometry?.dispose(), [geometry]);
 
     if (!geometry) return null;
 
+    const liveOffset = [0, 0, 0];
+    liveOffset[AXIS_INDEX[planeHorizontalAxis]] = targetCenterHorizontal - projectionCenter.horizontal;
+    liveOffset[AXIS_INDEX[planeVerticalAxis]] = targetCenterVertical - projectionCenter.vertical;
+
     return (
         <mesh
             geometry={geometry}
+            position={liveOffset}
             renderOrder={40}
         >
             <meshStandardMaterial
@@ -214,7 +418,7 @@ export function Tshirt({ config = null, preview = false, position = [0, 0, 0] })
     const state = useConfigurator();
     const color = config?.tshirtColor ?? state.tshirtColor;
     const rawPrintSide = config?.tshirtPrintSide ?? state.tshirtPrintSide;
-    const printSide = rawPrintSide === 'back' ? 'back' : 'front';
+    const printSide = normalizeTshirtPrintSide(rawPrintSide);
     const logos = config?.tshirtLogos ?? state.tshirtLogos;
     const { scene: sourceScene } = useGLTF(tshirtModelUrl);
 
@@ -236,15 +440,10 @@ export function Tshirt({ config = null, preview = false, position = [0, 0, 0] })
         const modelCenter = new THREE.Vector3();
         box.getSize(modelSize);
         box.getCenter(modelCenter);
-        const raycastObjects = entries.map(({ geometry }) => new THREE.Mesh(geometry));
+        const raycastMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+        const raycastObjects = entries.map(({ geometry }) => new THREE.Mesh(geometry, raycastMaterial));
         return { geometries: entries, bbox: box, size: modelSize, center: modelCenter, surfaceObjects: raycastObjects };
     }, [sourceScene]);
-
-    const isBack = printSide === 'back';
-    const logoX = 0;
-    const logoY = bbox.min.y + size.y * TSHIRT_PRINT_AREA_CENTER_Y_RATIO;
-    const printAreaWidth = size.x * TSHIRT_PRINT_AREA_WIDTH_RATIO;
-    const printAreaHeight = size.y * TSHIRT_PRINT_AREA_HEIGHT_RATIO;
 
     return (
         <group position={position} rotation={preview ? [0.16, -0.38, 0] : [0.04, -0.16, 0]}>
@@ -260,20 +459,19 @@ export function Tshirt({ config = null, preview = false, position = [0, 0, 0] })
                         />
                     </mesh>
                 ))}
-                {logos.map((image) => (
-                    <TshirtLogoSurface
-                        key={image.id}
-                        image={image}
-                        bbox={bbox}
-                        surfaceObjects={surfaceObjects}
-                        areaWidth={printAreaWidth}
-                        areaHeight={printAreaHeight}
-                        centerX={logoX}
-                        centerY={logoY}
-                        isBack={isBack}
-                        scaleBase={1}
-                    />
-                ))}
+                {logos.map((image) => {
+                    const logoSide = normalizeTshirtPrintSide(image.side ?? printSide);
+                    const printArea = getTshirtPrintArea(logoSide, bbox, size);
+                    return (
+                        <TshirtLogoSurface
+                            key={`${image.id}-${logoSide}`}
+                            image={image}
+                            bbox={bbox}
+                            surfaceObjects={surfaceObjects}
+                            printArea={printArea}
+                        />
+                    );
+                })}
             </group>
         </group>
     );

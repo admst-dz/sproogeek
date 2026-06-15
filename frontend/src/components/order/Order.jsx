@@ -16,6 +16,15 @@ import { SceneLoadingOverlay } from '../shared/VibeLoader';
 import { SiteFooter } from '../shared/SiteFooter';
 
 const MERCH_PRODUCTS = new Set(['shopper', 'tshirt', 'hoodie', 'lanyard']);
+const PRINT_SIDE_LABELS = {
+    front: 'Перёд',
+    back: 'Спина',
+    chest: 'Грудь',
+    leftSleeve: 'Левый рукав',
+    rightSleeve: 'Правый рукав',
+};
+
+const printSideLabel = (side) => PRINT_SIDE_LABELS[side] || side;
 
 export const Order = ({ onBack, onSuccess }) => {
     const {
@@ -313,21 +322,21 @@ export const Order = ({ onBack, onSuccess }) => {
                                     <Row label={t(language, 'merchColor')} value={<ColorDot color={shopperColor} />} />
                                     <Row label={t(language, 'merchMaterial')} value={shopperMaterial} />
                                     <Row label={t(language, 'merchHandleType')} value={shopperHandleType} />
-                                    <Row label={t(language, 'merchPrintSide')} value={shopperPrintSide} />
+                                    <Row label={t(language, 'merchPrintSide')} value={printSideLabel(shopperPrintSide)} />
                                 </>
                             ) : activeProduct === 'tshirt' ? (
                                 <>
                                     <Row label={t(language, 'merchColor')} value={<ColorDot color={tshirtColor} />} />
                                     <Row label={t(language, 'merchMaterial')} value={tshirtMaterial} />
                                     <Row label={t(language, 'merchSize')} value={tshirtSize} />
-                                    <Row label={t(language, 'merchPrintSide')} value={tshirtPrintSide} />
+                                    <Row label={t(language, 'merchPrintSide')} value={printSideLabel(tshirtPrintSide)} />
                                 </>
                             ) : activeProduct === 'hoodie' ? (
                                 <>
                                     <Row label={t(language, 'merchColor')} value={<ColorDot color={hoodieColor} />} />
                                     <Row label={t(language, 'merchMaterial')} value={hoodieMaterial} />
                                     <Row label={t(language, 'merchSize')} value={hoodieSize} />
-                                    <Row label={t(language, 'merchPrintSide')} value={hoodiePrintSide} />
+                                    <Row label={t(language, 'merchPrintSide')} value={printSideLabel(hoodiePrintSide)} />
                                 </>
                             ) : activeProduct === 'lanyard' ? (
                                 <>

@@ -32,8 +32,8 @@ import {
 // одновременно (поэтому селектор не показываем).
 const PRINT_SIDES = {
     shopper: ['front', 'back'],
-    tshirt: ['front', 'back'],
-    hoodie: ['front', 'back', 'chest'],
+    tshirt: ['front', 'back', 'leftSleeve', 'rightSleeve'],
+    hoodie: ['front', 'back', 'chest', 'leftSleeve', 'rightSleeve'],
 };
 
 const MATERIAL_LABELS = {
@@ -58,6 +58,8 @@ const CARABINER_LABELS = { hook: 'Крючок', carabiner: 'Карабин', sw
 const PRINT_SIDE_LABELS = {
     front: 'Перёд', back: 'Спина', leftSleeve: 'Левый рукав', rightSleeve: 'Правый рукав', chest: 'Грудь',
 };
+
+const isSleevePrintSide = (side) => side === 'leftSleeve' || side === 'rightSleeve';
 
 const PRODUCT_CONFIG = {
     shopper: {
@@ -171,12 +173,16 @@ export const MerchInterface = ({ onFinish }) => {
 
     if (!config) return null;
 
-    const color = state[config.colorKey];
-    const material = state[config.materialKey];
-    const rawPrintSide = config.printSideKey ? state[config.printSideKey] : null;
-    const printSide = activeProduct === 'tshirt' && rawPrintSide !== 'back' ? 'front' : rawPrintSide;
     const logos = state[config.logosKey] || [];
     const selectedLogoId = state[config.selectedLogoKey];
+    const selectedLogo = logos.find(l => l.id === selectedLogoId) || null;
+    const color = state[config.colorKey];
+    const material = state[config.materialKey];
+    const allowedPrintSides = PRINT_SIDES[activeProduct] || [];
+    const rawPrintSide = config.printSideKey ? (selectedLogo?.side ?? state[config.printSideKey]) : null;
+    const printSide = config.printSideKey
+        ? (allowedPrintSides.includes(rawPrintSide) ? rawPrintSide : 'front')
+        : null;
 
     const setColor = state[config.setColorAction];
     const setMaterial = state[config.setMaterialAction];
@@ -184,11 +190,17 @@ export const MerchInterface = ({ onFinish }) => {
     const addLogo = state[config.addLogoAction];
     const selectLogo = state[config.selectLogoAction];
     const removeLogo = state[config.removeLogoAction];
-    const selectedLogo = logos.find(l => l.id === selectedLogoId) || null;
     const setLogoPosition = state[config.setLogoPositionAction];
     const setLogoRotation = state[config.setLogoRotationAction];
     const setLogoScale = state[config.setLogoScaleAction];
     const resetLogoTransform = state[config.resetLogoTransformAction];
+    const selectedPrintSide = selectedLogo?.side ?? printSide;
+    const sleeveSelected = isSleevePrintSide(selectedPrintSide);
+    const logoScaleMin = activeProduct === 'tshirt' ? 0.08 : activeProduct === 'lanyard' ? 0.28 : sleeveSelected ? 0.12 : 0.2;
+    const logoScaleMax = activeProduct === 'tshirt' ? 1 : activeProduct === 'lanyard' ? 1.8 : sleeveSelected ? 1.2 : 4;
+    const logoScaleValue = selectedLogo
+        ? Math.min(Math.max(selectedLogo.scale ?? 0.6, logoScaleMin), logoScaleMax)
+        : 0.6;
 
     const buildCartItem = (snapshot) => {
         const item = {
@@ -245,7 +257,7 @@ export const MerchInterface = ({ onFinish }) => {
     };
 
     const printSideOptions = config.printSideKey
-        ? (PRINT_SIDES[activeProduct] || []).map((id) => ({ value: id, label: PRINT_SIDE_LABELS[id] || id }))
+        ? allowedPrintSides.map((id) => ({ value: id, label: PRINT_SIDE_LABELS[id] || id }))
         : [];
 
     return (
@@ -364,13 +376,18 @@ export const MerchInterface = ({ onFinish }) => {
 
                 <SettingGroup title={t(language, 'addImage')}>
                     <SettingRow label={t(language, 'addImage')}>
-                        <FileUploadChip label={t(language, 'addImage')} onFile={addLogo} />
+                        <FileUploadChip label={t(language, 'addImage')} onFile={(file) => addLogo(file, printSide || 'front')} />
                     </SettingRow>
                     <LogoList
                         logos={logos}
                         selectedLogoId={selectedLogoId}
                         selectLogo={selectLogo}
                         removeLogo={removeLogo}
+                        metaForLogo={
+                            config.printSideKey
+                                ? (logo) => PRINT_SIDE_LABELS[logo.side ?? printSide] || logo.side || printSide
+                                : undefined
+                        }
                     />
                     {selectedLogo && (
                         <div className="mt-3 grid gap-3 border-t border-white/10 pt-3">
@@ -390,9 +407,9 @@ export const MerchInterface = ({ onFinish }) => {
                             />
                             <SizeSlider
                                 label={t(language, 'size')}
-                                value={selectedLogo.scale ?? 0.6}
-                                min={activeProduct === 'tshirt' ? 0.08 : activeProduct === 'lanyard' ? 0.28 : 0.2}
-                                max={activeProduct === 'tshirt' ? 1 : activeProduct === 'lanyard' ? 1.8 : 4}
+                                value={logoScaleValue}
+                                min={logoScaleMin}
+                                max={logoScaleMax}
                                 step={0.05}
                                 onChange={setLogoScale}
                             />

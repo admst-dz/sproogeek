@@ -282,11 +282,26 @@ const getLanyardWidthFromMaterial = (material, fallback = 15) => (
     LANYARD_MATERIAL_WIDTH_MM[material] ?? fallback
 );
 
-const normalizeTshirtPrintSide = (side) => (side === 'back' ? 'back' : 'front');
+const normalizeMerchPrintSide = (side, allowed, fallback = 'front') => (
+    allowed.includes(side) ? side : fallback
+);
+const normalizeShopperPrintSide = (side) => normalizeMerchPrintSide(side, ['front', 'back']);
+const normalizeTshirtPrintSide = (side) => normalizeMerchPrintSide(side, ['front', 'back', 'leftSleeve', 'rightSleeve']);
+const normalizeHoodiePrintSide = (side) => normalizeMerchPrintSide(side, ['front', 'back', 'chest', 'leftSleeve', 'rightSleeve']);
 const clampTshirtLogoPosition = (x, y) => [
     Math.max(-0.86, Math.min(0.86, Number(x) || 0)),
     Math.max(-0.92, Math.min(0.92, Number(y) || 0)),
 ];
+
+const moveSelectedMerchLogoToSide = (logos = [], selectedId, side) => (
+    selectedId
+        ? logos.map(l => l.id === selectedId ? { ...l, side, position: [0, 0] } : l)
+        : logos
+);
+
+const getMerchLogoSide = (logos = [], id, fallback = 'front') => (
+    logos.find(l => l.id === id)?.side ?? fallback
+);
 
 const getNextStickerSlot = (images = []) => {
     const occupied = new Set(images.map((image, index) => {
@@ -882,9 +897,21 @@ export const useConfigurator = create(temporal((set, get) => ({
             console.error(`Failed to prepare ${collectionKey} image`, error);
         }
     },
-    _setMerchLogoPosition: (collectionKey, selectedKey, x, y) => set((state) => ({
-        [collectionKey]: (state[collectionKey] || []).map(l => l.id === state[selectedKey] ? { ...l, position: [x, y] } : l),
-    })),
+    _setMerchLogoPosition: (collectionKey, selectedKey, x, y) => set((state) => {
+        const selectedId = state[selectedKey];
+        if (!selectedId) return state;
+
+        let changed = false;
+        const nextLogos = (state[collectionKey] || []).map((logo) => {
+            if (logo.id !== selectedId) return logo;
+            const [currentX = 0, currentY = 0] = logo.position || [];
+            if (currentX === x && currentY === y) return logo;
+            changed = true;
+            return { ...logo, position: [x, y] };
+        });
+
+        return changed ? { [collectionKey]: nextLogos } : state;
+    }),
     _setMerchLogoRotation: (collectionKey, selectedKey, rotation) => set((state) => ({
         [collectionKey]: (state[collectionKey] || []).map(l => l.id === state[selectedKey] ? { ...l, rotation } : l),
     })),
@@ -902,8 +929,17 @@ export const useConfigurator = create(temporal((set, get) => ({
     setShopperColor: (color) => set({ shopperColor: color }),
     setShopperMaterial: (material) => set({ shopperMaterial: material }),
     setShopperHandleType: (handle) => set({ shopperHandleType: handle }),
-    setShopperPrintSide: (side) => set({ shopperPrintSide: side }),
-    selectShopperLogo: (id) => set({ selectedShopperLogoId: id }),
+    setShopperPrintSide: (side) => set((state) => {
+        const nextSide = normalizeShopperPrintSide(side);
+        return {
+            shopperPrintSide: nextSide,
+            shopperLogos: moveSelectedMerchLogoToSide(state.shopperLogos, state.selectedShopperLogoId, nextSide),
+        };
+    }),
+    selectShopperLogo: (id) => set((state) => ({
+        selectedShopperLogoId: id,
+        shopperPrintSide: normalizeShopperPrintSide(getMerchLogoSide(state.shopperLogos, id, state.shopperPrintSide)),
+    })),
     setShopperLogoPosition: (x, y) => get()._setMerchLogoPosition('shopperLogos', 'selectedShopperLogoId', x, y),
     setShopperLogoRotation: (rotation) => get()._setMerchLogoRotation('shopperLogos', 'selectedShopperLogoId', rotation),
     setShopperLogoScale: (scale) => get()._setMerchLogoScale('shopperLogos', 'selectedShopperLogoId', scale),
@@ -921,8 +957,17 @@ export const useConfigurator = create(temporal((set, get) => ({
     setTshirtColor: (color) => set({ tshirtColor: color }),
     setTshirtMaterial: (material) => set({ tshirtMaterial: material }),
     setTshirtSize: (size) => set({ tshirtSize: size }),
-    setTshirtPrintSide: (side) => set({ tshirtPrintSide: normalizeTshirtPrintSide(side) }),
-    selectTshirtLogo: (id) => set({ selectedTshirtLogoId: id }),
+    setTshirtPrintSide: (side) => set((state) => {
+        const nextSide = normalizeTshirtPrintSide(side);
+        return {
+            tshirtPrintSide: nextSide,
+            tshirtLogos: moveSelectedMerchLogoToSide(state.tshirtLogos, state.selectedTshirtLogoId, nextSide),
+        };
+    }),
+    selectTshirtLogo: (id) => set((state) => ({
+        selectedTshirtLogoId: id,
+        tshirtPrintSide: normalizeTshirtPrintSide(getMerchLogoSide(state.tshirtLogos, id, state.tshirtPrintSide)),
+    })),
     setTshirtLogoPosition: (x, y) => get()._setMerchLogoPosition('tshirtLogos', 'selectedTshirtLogoId', ...clampTshirtLogoPosition(x, y)),
     setTshirtLogoRotation: (rotation) => get()._setMerchLogoRotation('tshirtLogos', 'selectedTshirtLogoId', rotation),
     setTshirtLogoScale: (scale) => get()._setMerchLogoScale('tshirtLogos', 'selectedTshirtLogoId', scale),
@@ -940,8 +985,17 @@ export const useConfigurator = create(temporal((set, get) => ({
     setHoodieColor: (color) => set({ hoodieColor: color }),
     setHoodieMaterial: (material) => set({ hoodieMaterial: material }),
     setHoodieSize: (size) => set({ hoodieSize: size }),
-    setHoodiePrintSide: (side) => set({ hoodiePrintSide: side }),
-    selectHoodieLogo: (id) => set({ selectedHoodieLogoId: id }),
+    setHoodiePrintSide: (side) => set((state) => {
+        const nextSide = normalizeHoodiePrintSide(side);
+        return {
+            hoodiePrintSide: nextSide,
+            hoodieLogos: moveSelectedMerchLogoToSide(state.hoodieLogos, state.selectedHoodieLogoId, nextSide),
+        };
+    }),
+    selectHoodieLogo: (id) => set((state) => ({
+        selectedHoodieLogoId: id,
+        hoodiePrintSide: normalizeHoodiePrintSide(getMerchLogoSide(state.hoodieLogos, id, state.hoodiePrintSide)),
+    })),
     setHoodieLogoPosition: (x, y) => get()._setMerchLogoPosition('hoodieLogos', 'selectedHoodieLogoId', x, y),
     setHoodieLogoRotation: (rotation) => get()._setMerchLogoRotation('hoodieLogos', 'selectedHoodieLogoId', rotation),
     setHoodieLogoScale: (scale) => get()._setMerchLogoScale('hoodieLogos', 'selectedHoodieLogoId', scale),
