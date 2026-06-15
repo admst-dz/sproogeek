@@ -5,6 +5,7 @@ from urllib.parse import parse_qsl, urlencode
 from fastapi import Request
 from jose import JWTError
 from starlette.middleware.base import BaseHTTPMiddleware
+from loguru import logger
 
 from app.core.event_logger import event_logger
 from app.core.security import decode_token
