@@ -1,3 +1,4 @@
+import os
 import time
 import uuid
 from urllib.parse import parse_qsl, urlencode
@@ -23,6 +24,27 @@ SENSITIVE_QUERY_KEYS = {
     "secret",
     "token",
 }
+
+
+def _csv_env(name: str, default: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in os.getenv(name, default).split(",") if item.strip())
+
+
+HTTP_LOG_ENABLED = os.getenv("HTTP_LOG_ENABLED", "true").lower() not in {"0", "false", "no", "off"}
+HTTP_LOG_SKIP_METHODS = {item.upper() for item in _csv_env("HTTP_LOG_SKIP_METHODS", "OPTIONS")}
+HTTP_LOG_SKIP_PATHS = _csv_env("HTTP_LOG_SKIP_PATHS", "/api/health,/healthz")
+HTTP_LOG_SKIP_PATH_PREFIXES = _csv_env("HTTP_LOG_SKIP_PATH_PREFIXES", "/uploads/")
+
+
+def _should_log_request(request: Request) -> bool:
+    if not HTTP_LOG_ENABLED:
+        return False
+    if request.method.upper() in HTTP_LOG_SKIP_METHODS:
+        return False
+    path = request.url.path
+    if path in HTTP_LOG_SKIP_PATHS:
+        return False
+    return not any(path.startswith(prefix) for prefix in HTTP_LOG_SKIP_PATH_PREFIXES)
 
 
 def _sanitize_query(query: str) -> str:
@@ -59,10 +81,14 @@ class EventLoggingMiddleware(BaseHTTPMiddleware):
         req_id = request.headers.get("x-request-id") or str(uuid.uuid4())
         request.state.request_id = req_id
 
-        actor_type, actor_id, actor_email = _actor_from_request(request)
+        should_log = _should_log_request(request)
+        actor_type = actor_id = actor_email = ""
         client_host = request.client.host if request.client else ""
-        sanitized_query = _sanitize_query(request.url.query)
-        log_path = request.url.path if not sanitized_query else f"{request.url.path}?{sanitized_query}"
+        log_path = request.url.path
+        if should_log:
+            actor_type, actor_id, actor_email = _actor_from_request(request)
+            sanitized_query = _sanitize_query(request.url.query)
+            log_path = request.url.path if not sanitized_query else f"{request.url.path}?{sanitized_query}"
 
         response = None
         status_code = 500
@@ -72,27 +98,28 @@ class EventLoggingMiddleware(BaseHTTPMiddleware):
             response.headers["X-Request-ID"] = req_id
             return response
         finally:
-            latency_ms = round((time.perf_counter() - started) * 1000, 2)
-            event_logger.log(
-                "HTTP_REQUEST",
-                "User HTTP request handled by backend",
-                direction="user->backend",
-                actor_type=actor_type,
-                actor_id=actor_id,
-                actor_email=actor_email,
-                peer=client_host,
-                method=request.method,
-                path=log_path,
-                status_code=status_code,
-                latency_ms=latency_ms,
-                ip=client_host,
-                user_agent=request.headers.get("user-agent", ""),
-                request_id=req_id,
-                details={
-                    "content_length": request.headers.get("content-length"),
-                    "referer": request.headers.get("referer"),
-                },
-            )
+            if should_log:
+                latency_ms = round((time.perf_counter() - started) * 1000, 2)
+                event_logger.log(
+                    "HTTP_REQUEST",
+                    "User HTTP request handled by backend",
+                    direction="user->backend",
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    actor_email=actor_email,
+                    peer=client_host,
+                    method=request.method,
+                    path=log_path,
+                    status_code=status_code,
+                    latency_ms=latency_ms,
+                    ip=client_host,
+                    user_agent=request.headers.get("user-agent", ""),
+                    request_id=req_id,
+                    details={
+                        "content_length": request.headers.get("content-length"),
+                        "referer": request.headers.get("referer"),
+                    },
+                )
 
 logger.remove() # Удаляем стандартный обработчик, чтобы не двоились логи
 logger.add(sys.stderr, level="INFO", colorize=True)
