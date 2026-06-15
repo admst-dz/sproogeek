@@ -9,6 +9,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.event_logger import event_logger
 from app.core.security import decode_token
 
+from loguru import logger
+
 
 SENSITIVE_QUERY_KEYS = {
     "access_token",
