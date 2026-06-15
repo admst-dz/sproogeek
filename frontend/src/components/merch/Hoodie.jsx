@@ -9,6 +9,12 @@ const HOODIE_HALF_WIDTH = 1.85;
 const HOODIE_HEIGHT = 2.9;
 const HOODIE_DEPTH = 0.32;
 
+const HOODIE_PRINT_SIDES = ['front', 'back', 'chest', 'leftSleeve', 'rightSleeve'];
+
+const normalizeHoodiePrintSide = (side) => (
+    HOODIE_PRINT_SIDES.includes(side) ? side : 'front'
+);
+
 function buildHoodieShape() {
     const shape = new THREE.Shape();
     const halfBottom = HOODIE_HALF_WIDTH * 0.86;
@@ -71,10 +77,44 @@ function KangarooPocket({ color }) {
     );
 }
 
+function getHoodieLogoArea(side) {
+    const normalizedSide = normalizeHoodiePrintSide(side);
+    const frontZ = HOODIE_DEPTH + 0.08;
+
+    if (normalizedSide === 'leftSleeve' || normalizedSide === 'rightSleeve') {
+        const isLeftSleeve = normalizedSide === 'leftSleeve';
+        return {
+            areaWidth: HOODIE_HALF_WIDTH * 0.36,
+            areaHeight: HOODIE_HEIGHT * 0.22,
+            offset: [
+                isLeftSleeve ? HOODIE_HALF_WIDTH * 0.92 : -HOODIE_HALF_WIDTH * 0.92,
+                HOODIE_HEIGHT * 0.61,
+                frontZ,
+            ],
+            rotationFix: [0, 0, isLeftSleeve ? -0.24 : 0.24],
+            scaleBase: 0.86,
+            maxScale: 1.2,
+        };
+    }
+
+    const isFront = normalizedSide !== 'back';
+    return {
+        areaWidth: HOODIE_HALF_WIDTH * 1.2,
+        areaHeight: HOODIE_HEIGHT * 0.4,
+        offset: [
+            0,
+            normalizedSide === 'chest' ? HOODIE_HEIGHT * 0.62 : HOODIE_HEIGHT * 0.45,
+            isFront ? frontZ : -0.08,
+        ],
+        rotationFix: [0, isFront ? 0 : Math.PI, 0],
+        scaleBase: normalizedSide === 'chest' ? 0.5 : 0.9,
+    };
+}
+
 export function Hoodie({ config = null, preview = false, position = [0, 0, 0] }) {
     const state = useConfigurator();
     const color = config?.hoodieColor ?? state.hoodieColor;
-    const printSide = config?.hoodiePrintSide ?? state.hoodiePrintSide;
+    const printSide = normalizeHoodiePrintSide(config?.hoodiePrintSide ?? state.hoodiePrintSide);
     const logos = config?.hoodieLogos ?? state.hoodieLogos;
 
     const geometry = useMemo(() => {
@@ -88,13 +128,6 @@ export function Hoodie({ config = null, preview = false, position = [0, 0, 0] })
         });
     }, []);
 
-    const printAreaWidth = HOODIE_HALF_WIDTH * 1.2;
-    const printAreaHeight = HOODIE_HEIGHT * 0.4;
-    const isFront = printSide !== 'back';
-    const logoZ = isFront ? HOODIE_DEPTH + 0.08 : -0.08;
-    const logoYaw = isFront ? 0 : Math.PI;
-    const logoY = printSide === 'chest' ? HOODIE_HEIGHT * 0.62 : HOODIE_HEIGHT * 0.45;
-
     return (
         <group position={[position[0], position[1] - HOODIE_HEIGHT / 2 + 0.6, position[2]]} rotation={preview ? [0.16, -0.4, 0] : [0.04, -0.18, 0]}>
             <mesh geometry={geometry} castShadow receiveShadow>
@@ -103,17 +136,24 @@ export function Hoodie({ config = null, preview = false, position = [0, 0, 0] })
             <HoodieHood color={color} />
             <KangarooPocket color={color} />
 
-            {logos.map((image) => (
-                <MerchLogoPlane
-                    key={image.id}
-                    image={image}
-                    areaWidth={printAreaWidth}
-                    areaHeight={printAreaHeight}
-                    offset={[0, logoY, logoZ]}
-                    rotationFix={[0, logoYaw, 0]}
-                    scaleBase={printSide === 'chest' ? 0.5 : 0.9}
-                />
-            ))}
+            {logos.map((image) => {
+                const logoSide = normalizeHoodiePrintSide(image.side ?? printSide);
+                const area = getHoodieLogoArea(logoSide);
+                const safeImage = area.maxScale
+                    ? { ...image, scale: Math.min(image.scale ?? 0.6, area.maxScale) }
+                    : image;
+                return (
+                    <MerchLogoPlane
+                        key={image.id}
+                        image={safeImage}
+                        areaWidth={area.areaWidth}
+                        areaHeight={area.areaHeight}
+                        offset={area.offset}
+                        rotationFix={area.rotationFix}
+                        scaleBase={area.scaleBase}
+                    />
+                );
+            })}
         </group>
     );
 }

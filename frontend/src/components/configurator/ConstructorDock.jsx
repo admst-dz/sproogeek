@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { LogoUploadModal } from '../shared/LogoUploadModal';
 
@@ -332,15 +332,64 @@ export const LogoList = ({ logos, selectedLogoId, selectLogo, removeLogo, metaFo
     );
 };
 
+const roundPadCoordinate = (value) => Math.round(value * 1000) / 1000;
+
 export const TransformPad = ({ label, value = [0, 0], onChange, onReset, xRange = 1, yRange = 1, aspect = 'aspect-square' }) => {
+    const [draftValue, setDraftValue] = useState(value);
+    const draggingRef = useRef(false);
+    const frameRef = useRef(null);
+    const pendingValueRef = useRef(value);
+
+    useEffect(() => {
+        if (!draggingRef.current) {
+            setDraftValue(value);
+            pendingValueRef.current = value;
+        }
+    }, [value]);
+
+    useEffect(() => () => {
+        if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    }, []);
+
+    const flushPending = () => {
+        if (frameRef.current !== null) {
+            cancelAnimationFrame(frameRef.current);
+            frameRef.current = null;
+        }
+        const [x, y] = pendingValueRef.current;
+        onChange(x, y);
+    };
+
+    const scheduleChange = (nextValue) => {
+        pendingValueRef.current = nextValue;
+        setDraftValue(nextValue);
+        if (frameRef.current !== null) return;
+        frameRef.current = requestAnimationFrame(() => {
+            frameRef.current = null;
+            const [x, y] = pendingValueRef.current;
+            onChange(x, y);
+        });
+    };
+
     const updatePos = (e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
         const ny = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-        onChange((nx * 2 - 1) * xRange, -(ny * 2 - 1) * yRange);
+        scheduleChange([
+            roundPadCoordinate((nx * 2 - 1) * xRange),
+            roundPadCoordinate(-(ny * 2 - 1) * yRange),
+        ]);
     };
-    const x = ((value[0] / xRange + 1) / 2) * 100;
-    const y = (1 - (value[1] / yRange + 1) / 2) * 100;
+
+    const endDrag = (e) => {
+        draggingRef.current = false;
+        flushPending();
+        if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+        }
+    };
+    const x = ((draftValue[0] / xRange + 1) / 2) * 100;
+    const y = (1 - (draftValue[1] / yRange + 1) / 2) * 100;
 
     return (
         <div className="space-y-1.5">
@@ -354,10 +403,10 @@ export const TransformPad = ({ label, value = [0, 0], onChange, onReset, xRange 
             </div>
             <div
                 className={`relative w-full ${aspect} min-h-[72px] md:min-h-[108px] max-h-[128px] md:max-h-[168px] rounded-[8px] border border-white/18 bg-white/8 touch-none select-none overflow-hidden cursor-crosshair`}
-                onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); updatePos(e); }}
+                onPointerDown={(e) => { draggingRef.current = true; e.currentTarget.setPointerCapture(e.pointerId); updatePos(e); }}
                 onPointerMove={(e) => { if (e.buttons) updatePos(e); }}
-                onPointerUp={(e) => e.currentTarget.releasePointerCapture(e.pointerId)}
-                onPointerCancel={(e) => e.currentTarget.releasePointerCapture(e.pointerId)}
+                onPointerUp={endDrag}
+                onPointerCancel={endDrag}
             >
                 <div className="absolute inset-0 flex items-center pointer-events-none"><div className="w-full h-px bg-white/14" /></div>
                 <div className="absolute inset-0 flex justify-center pointer-events-none"><div className="h-full w-px bg-white/14" /></div>
