@@ -90,3 +90,14 @@ class EventLoggingMiddleware(BaseHTTPMiddleware):
                     "referer": request.headers.get("referer"),
                 },
             )
+
+logger.add(
+    "logs/app_{time:YYYY-MM-DD}.log",
+    format=custom_formatter,
+    level="INFO",
+    rotation="00:00",
+    retention="30 days",
+    compression="zip",
+    encoding="utf-8",
+    enqueue=True
+)
