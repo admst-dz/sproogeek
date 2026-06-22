@@ -4,6 +4,7 @@ import { t } from './i18n'
 import { CookieBanner } from './components/shared/CookieBanner'
 import { getInitialRouteState, getPathForRouteState } from './config/routes'
 import { fetchPublicSettings } from './api'
+import { applySeoMetadata } from './seo'
 
 const Home = lazy(() => import('./components/home/Home').then((module) => ({ default: module.Home })));
 const PrintCanvas = lazy(() => import('./components/print/PrintCanvas').then((module) => ({ default: module.PrintCanvas })));
@@ -544,6 +545,10 @@ function MainApp() {
             }
         }
     }, [activeProduct, clientTab, dealerTab, manufacturerTab, screen]);
+
+    useEffect(() => {
+        applySeoMetadata(screen, activeProduct);
+    }, [activeProduct, screen]);
 
     useEffect(() => {
         const handlePopState = () => {
