@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+
+Disallow: /api/
+Disallow: /auth/
+Disallow: /dashboard
+Disallow: /dealer
+Disallow: /manufacturer
+Disallow: /order
+Disallow: /mobile-logo/
+Disallow: /render/
+Disallow: /admin
+Disallow: /borodazaebal
+Disallow: /borodaadmin
+
+Sitemap: https://sproogeek.com/sitemap.xml
