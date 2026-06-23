@@ -62,8 +62,14 @@ VK_CLIENT_SECRET=<vk-secure-key>
 
 1. Убедиться, что renderer видит frontend render route.
 2. Задать `RENDER_FRONTEND_HOST`, `RENDER_FRONTEND_PORT`, `RENDER_FRONTEND_PATH`.
-3. Проверить создание render через создание тестового заказа.
-4. Проверить, что PNG появляется в `uploads/renders`.
+3. Для NVIDIA GPU-хоста запустить `docker compose -f docker-compose.prod.yml -f docker-compose.gpu.yml up -d`; override передаёт GPU контейнеру и включает аппаратный Chromium. Для CPU-only fallback задать `RENDER_GPU_MODE=software`.
+4. Настроить cloud-лимиты: `CLOUD_RENDER_MAX_SESSIONS`, `CLOUD_RENDER_FPS`, `CLOUD_RENDER_JPEG_QUALITY`, `CLOUD_RENDER_SESSION_TTL_MS`.
+5. Проверить `/cloud-render/poster/notebook.jpg`, затем открыть конфигуратор и убедиться, что виден индикатор `Cloud 3D`.
+6. Проверить создание render через создание тестового заказа и появление PNG в `uploads/renders`.
+
+MJPEG требует отключённой proxy/CDN-буферизации и долгого read timeout. Репозиторный `frontend/nginx.conf` уже задаёт `proxy_buffering off`, `X-Accel-Buffering: no` и timeout 3600 секунд для `/cloud-render/`. Аналогичные настройки нужны на внешнем reverse proxy.
+
+Рекомендуемые исходные значения для одного GPU-инстанса: 8 сессий, 15 FPS, JPEG quality 72, максимум 1600×1000. Поднимать FPS/качество следует только после измерения GPU, CPU encoder time и исходящего трафика. Переход на WebRTC + H.264/AV1/NVENC можно сделать позже, сохранив текущий API конфигурации и управления.
 
 ## Логи
 

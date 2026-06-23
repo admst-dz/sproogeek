@@ -1,6 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
-import { Canvas } from '@react-three/fiber'
-import { Experience } from './Experience'
+import { lazy, Suspense, useCallback, useRef, useState } from 'react'
 import { Interface, ZoomControls } from './Interface'
 import { ThermosInterface } from '../thermos/ThermosInterface'
 import { PowerbankInterface } from '../powerbank/PowerbankInterface'
@@ -8,8 +6,7 @@ import { StickerInterface } from '../sticker/StickerInterface'
 import { MerchInterface } from '../merch/MerchInterface'
 
 const MERCH_PRODUCTS = new Set(['shopper', 'tshirt', 'hoodie', 'lanyard'])
-import { SceneLoadingOverlay } from '../shared/VibeLoader'
-import { SceneHints } from '../shared/SceneHints'
+import { CloudModelViewport } from './CloudModelViewport'
 import { ConfirmModal } from '../shared/ConfirmModal'
 import { UndoRedoControls } from '../shared/UndoRedoControls'
 import { useUndoRedoHotkeys } from '../../hooks/useTemporalConfigurator'
@@ -19,9 +16,18 @@ import { t } from '../../i18n'
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 2.5;
 const clampZoom = (value) => Math.min(Math.max(value, MIN_ZOOM), MAX_ZOOM);
+const LocalModelViewport = lazy(() => import('./LocalModelViewport').then((module) => ({
+    default: module.LocalModelViewport,
+})));
+
+const cloudRenderingRequested = () => {
+    if (import.meta.env.VITE_CLOUD_RENDERING === 'false') return false;
+    return new URLSearchParams(window.location.search).get('local_render') !== 'true';
+};
 
 export function ConfiguratorScreen({ currentUser, userRole, logout, onNavigate, onFinish, onAuth }) {
     const configuratorCanvasRef = useRef(null);
+    const [useLocalRenderer, setUseLocalRenderer] = useState(() => !cloudRenderingRequested());
     const {
         activeProduct,
         language,
@@ -86,23 +92,20 @@ export function ConfiguratorScreen({ currentUser, userRole, logout, onNavigate, 
                         <div className="absolute bottom-3 right-3 z-10 md:hidden">
                             <ZoomControls zoomLevel={zoomLevel} setZoom={setZoom} />
                         </div>
-                        <Canvas
-                            shadows
-                            dpr={[1, 2]}
-                            camera={{ position: [0, 0, 4.5], fov: 45 }}
-                            gl={{
-                                antialias: true,
-                                preserveDrawingBuffer: true,
-                                alpha: true,
-                                stencil: true,
-                                powerPreference: 'high-performance',
-                                logarithmicDepthBuffer: true
-                            }}
-                        >
-                            <Experience />
-                        </Canvas>
-                        <SceneLoadingOverlay label={t(language, 'sceneLoading')} />
-                        <SceneHints containerRef={configuratorCanvasRef} />
+                        {useLocalRenderer ? (
+                            <Suspense fallback={null}>
+                                <LocalModelViewport
+                                    containerRef={configuratorCanvasRef}
+                                    loadingLabel={t(language, 'sceneLoading')}
+                                />
+                            </Suspense>
+                        ) : (
+                            <CloudModelViewport
+                                containerRef={configuratorCanvasRef}
+                                loadingLabel={t(language, 'sceneLoading')}
+                                onFallback={() => setUseLocalRenderer(true)}
+                            />
+                        )}
                     </div>
 
                     <div className="relative flex-1 min-h-0 w-full z-20 pointer-events-none md:absolute md:inset-x-0 md:bottom-5 md:top-auto md:h-auto md:px-6 md:flex md:justify-center lg:w-auto lg:inset-x-auto lg:right-5 lg:top-4 lg:bottom-5 lg:px-0 lg:justify-start">

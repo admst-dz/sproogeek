@@ -279,7 +279,11 @@ export const Experience = () => {
     }, [activeProduct, zoomLevel]);
 
     useFrame(() => {
-        if (!assetsLoading && progress >= 100) {
+        // In render mode the active model has already crossed the surrounding
+        // Suspense boundary when this frame callback runs. Ignore unrelated
+        // background preloads, otherwise one slow inactive GLB can block server
+        // screenshots and cloud posters forever.
+        if (isRenderMode || (!assetsLoading && progress >= 100)) {
             readyFrames.current += 1;
             if (readyFrames.current >= requiredReadyFrames) window.__3D_READY__ = true;
         } else {

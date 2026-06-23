@@ -6,6 +6,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:8000',
+      '/cloud-render': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/cloud-render/, '/cloud'),
+      },
     },
   },
   build: {

@@ -1,0 +1,8 @@
+# Optional production override for a host with NVIDIA Container Toolkit.
+# Usage: docker compose -f docker-compose.prod.yml -f docker-compose.gpu.yml up -d
+services:
+  renderer:
+    gpus: all
+    shm_size: 1gb
+    environment:
+      RENDER_GPU_MODE: gpu

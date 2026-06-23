@@ -61,8 +61,20 @@ const _persistCart = (items) => {
 };
 
 let _webglCanvas = null
+let _renderCaptureProvider = null
 export const registerWebGLCanvas = (el) => { _webglCanvas = el }
+export const registerRenderCaptureProvider = (provider) => {
+    _renderCaptureProvider = typeof provider === 'function' ? provider : null
+}
 export const captureRender = (options) => {
+    if (_renderCaptureProvider) {
+        try {
+            const captured = _renderCaptureProvider(options)
+            if (captured) return captured
+        } catch {
+            /* fall through to the local WebGL canvas */
+        }
+    }
     if (!_webglCanvas) return null
     try { return canvasToDataURL(_webglCanvas, options) } catch { return null }
 }
@@ -223,6 +235,21 @@ export const ALL_PRODUCT_DEFAULTS = {
     ...LANYARD_DEFAULTS,
 };
 const TRACKED_KEYS = Object.keys(ALL_PRODUCT_DEFAULTS);
+
+const RENDER_CONFIG_KEYS = [
+    'activeProduct',
+    'zoomLevel',
+    'isNotebookOpen',
+    ...TRACKED_KEYS,
+];
+
+// This is the wire contract for the cloud renderer. Keeping it explicit avoids
+// leaking auth/cart state and functions from the Zustand store over the network.
+export const getRenderConfigSnapshot = (state) => {
+    const config = {};
+    for (const key of RENDER_CONFIG_KEYS) config[key] = state[key];
+    return config;
+};
 
 const pickTracked = (state) => {
     const out = {};

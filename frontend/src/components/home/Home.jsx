@@ -1,336 +1,50 @@
-import { createElement, useEffect, Suspense, useMemo, useRef } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { useGLTF, Stage } from '@react-three/drei';
-import * as THREE from 'three';
+import { useEffect, useRef, useState } from 'react';
 import { THEME_SWITCHING_ENABLED, getNotebookBindingCapabilities, useConfigurator } from '../../store';
 import { t } from '../../i18n';
 import { getUserDisplayName } from '../../utils/user';
-import { SceneLoadingOverlay } from '../shared/VibeLoader';
-import termosModelUrl from '../../assets/termos3.glb?url';
-import powerbankModelUrl from '../../assets/poverbank.glb?url';
 import { FeedbackPanel } from './FeedbackPanel';
-import { Notebook } from '../shared/Notebook';
-import { Sticker } from '../sticker/Sticker';
-import { Shopper } from '../merch/Shopper';
-import { Tshirt } from '../merch/Tshirt';
-import { Hoodie } from '../merch/Hoodie';
-import { Lanyard } from '../merch/Lanyard';
 import { SiteFooter } from '../shared/SiteFooter';
 
-const NOTEBOOK_PREVIEW_CONFIG = {
-    bindingType: 'spiral',
-    coverColor: '#1565C0',
-    innerCoverColor: '#1565C0',
-    stitchColor: '#ffffff',
-    hasCorners: false,
-    hasElastic: true,
-    elasticColor: '#1a1a1a',
-    spiralColor: '#C0C0C0',
-    logos: [],
+const CLOUD_PREVIEW_TONES = {
+    notebook: ['#0d47a1', '#42a5f5'],
+    thermos: ['#8f2f08', '#f97316'],
+    powerbank: ['#263238', '#78909c'],
+    sticker: ['#7c2d12', '#facc15'],
+    shopper: ['#6b4f2a', '#e7d7b2'],
+    tshirt: ['#334155', '#f8fafc'],
+    hoodie: ['#111827', '#6d28d9'],
+    lanyard: ['#134e4a', '#2dd4bf'],
 };
 
-const POWERBANK_PREVIEW_POSE = {
-    position: [0, 0, 0],
-    rotation: [0.14, -0.56, -0.03],
-    scale: 0.85,
-    cameraPosition: [0, 0.45, 5],
-    cameraFov: 36,
-};
-
-const NOTEBOOK_PREVIEW_POSE = {
-    position: [0, -0.9, 0],
-    rotation: [0.18, 3.94, -0.03],
-    scale: 0.99,
-    cameraPosition: [0, 0.25, 5.2],
-    cameraFov: 36,
-    sway: 0.1,
-};
-
-function ThermosPreviewScene() {
-    const groupRef = useRef();
-    const { nodes } = useGLTF(termosModelUrl);
-    const meshes = Object.entries(nodes).filter(([, n]) => n.geometry);
-    const capMeshName = useMemo(() => {
-        const namedCap = meshes.find(([name]) => {
-            const lower = name.toLowerCase();
-            return lower.includes('cap') || lower.includes('lid') || lower.includes('top') || lower.includes('cover') || lower.includes('крышк');
-        });
-        if (namedCap) return namedCap[0];
-
-        const measured = meshes.map(([name, node]) => {
-            node.geometry.computeBoundingBox();
-            const box = node.geometry.boundingBox;
-            return { name, centerY: (box.max.y + box.min.y) / 2 };
-        });
-        return measured.sort((a, b) => b.centerY - a.centerY)[0]?.name;
-    }, [meshes]);
-
-    useFrame((_, delta) => {
-        if (groupRef.current) groupRef.current.rotation.y += delta * 0.6;
-    });
-
+function CloudProductPreview({ product }) {
+    const [failed, setFailed] = useState(false);
+    const [from, to] = CLOUD_PREVIEW_TONES[product] || ['#1e293b', '#64748b'];
     return (
-        <group ref={groupRef}>
-            {meshes.map(([name, node]) => (
-                <mesh key={name} geometry={node.geometry} position={name === capMeshName ? [0, 0.07, 0] : undefined} castShadow receiveShadow>
-                    <meshStandardMaterial color="#E65405" metalness={0.35} roughness={0.45} />
-                </mesh>
-            ))}
-        </group>
-    );
-}
-
-function ThermosPreview() {
-    return (
-        <div className="relative w-full h-full">
-            <Canvas camera={{ position: [0, 0.5, 4], fov: 40 }} gl={{ antialias: true, stencil: true }} style={{ pointerEvents: 'none' }}>
-                <ambientLight intensity={0.7} />
-                <directionalLight position={[5, 8, 5]} intensity={1.5} />
-                <directionalLight position={[-4, 3, 2]} intensity={0.6} />
-                <Suspense fallback={null}>
-                    <Stage environment="city" intensity={0.3} shadows={false} adjustCamera>
-                        <ThermosPreviewScene />
-                    </Stage>
-                </Suspense>
-            </Canvas>
-            <SceneLoadingOverlay compact label="3D" />
-        </div>
-    );
-}
-
-function PowerbankPreviewScene() {
-    const { nodes } = useGLTF(powerbankModelUrl);
-    const meshes = useMemo(() => (
-        Object.entries(nodes)
-            .filter(([, n]) => n.geometry || n.isMesh)
-            .map(([name, node]) => {
-                const geo = node.geometry;
-                geo.computeBoundingBox();
-                return { name, geo, bbox: geo.boundingBox };
-            })
-    ), [nodes]);
-
-    const bbox = useMemo(() => {
-        const box = new THREE.Box3();
-        meshes.forEach(mesh => box.union(mesh.bbox));
-        return box;
-    }, [meshes]);
-
-    const width = bbox.max.x - bbox.min.x;
-    const height = bbox.max.y - bbox.min.y;
-    const frontZ = bbox.max.z;
-    const centerX = (bbox.min.x + bbox.max.x) / 2;
-    const ringOuterRadius = Math.min(width * 0.34, height * 0.235);
-    const ringThickness = Math.max(width * 0.018, 0.018);
-    const capsuleWidth = width * 0.06;
-    const capsuleHeight = height * 0.18;
-    const centerY = (bbox.min.y + bbox.max.y) / 2;
-    const centerZ = (bbox.min.z + bbox.max.z) / 2;
-
-    const ringGeometry = useMemo(() => (
-        new THREE.RingGeometry(ringOuterRadius - ringThickness, ringOuterRadius, 96)
-    ), [ringOuterRadius, ringThickness]);
-
-    const capsuleGeometry = useMemo(() => {
-        const x = -capsuleWidth / 2;
-        const y = -capsuleHeight / 2;
-        const r = capsuleWidth / 2;
-        const shape = new THREE.Shape();
-
-        shape.moveTo(x + r, y);
-        shape.lineTo(x + capsuleWidth - r, y);
-        shape.quadraticCurveTo(x + capsuleWidth, y, x + capsuleWidth, y + r);
-        shape.lineTo(x + capsuleWidth, y + capsuleHeight - r);
-        shape.quadraticCurveTo(x + capsuleWidth, y + capsuleHeight, x + capsuleWidth - r, y + capsuleHeight);
-        shape.lineTo(x + r, y + capsuleHeight);
-        shape.quadraticCurveTo(x, y + capsuleHeight, x, y + capsuleHeight - r);
-        shape.lineTo(x, y + r);
-        shape.quadraticCurveTo(x, y, x + r, y);
-
-        return new THREE.ShapeGeometry(shape);
-    }, [capsuleWidth, capsuleHeight]);
-
-    return (
-        <group
-            position={POWERBANK_PREVIEW_POSE.position}
-            rotation={POWERBANK_PREVIEW_POSE.rotation}
-            scale={POWERBANK_PREVIEW_POSE.scale}
+        <div
+            className="relative h-full w-full overflow-hidden rounded-[14px] border border-white/10 bg-slate-900"
+            style={{ background: `radial-gradient(circle at 52% 38%, ${to}66, transparent 46%), linear-gradient(145deg, ${from}, #090d14 72%)` }}
         >
-            <group position={[-centerX, -centerY, -centerZ]}>
-                {meshes.map(({ name, geo }) => (
-                    <mesh key={name} geometry={geo} castShadow receiveShadow>
-                        <meshStandardMaterial color="#6b6f73" metalness={0.02} roughness={0.92} />
-                    </mesh>
-                ))}
-                <group position={[centerX, 0, frontZ + 0.006]}>
-                    <mesh
-                        geometry={ringGeometry}
-                        position={[0, bbox.min.y + height * 0.72, 0]}
-                        renderOrder={5}
-                    >
-                        <meshStandardMaterial color="#2f3235" roughness={0.88} metalness={0.02} depthWrite={false} />
-                    </mesh>
-                    <mesh
-                        geometry={capsuleGeometry}
-                        position={[0, bbox.min.y + height * 0.35, 0]}
-                        renderOrder={6}
-                    >
-                        <meshStandardMaterial color="#2f3235" roughness={0.88} metalness={0.02} depthWrite={false} />
-                    </mesh>
-                </group>
-            </group>
-        </group>
-    );
-}
-
-function PowerbankPreview() {
-    return (
-        <div className="relative w-full h-full">
-            <Canvas
-                camera={{ position: POWERBANK_PREVIEW_POSE.cameraPosition, fov: POWERBANK_PREVIEW_POSE.cameraFov }}
-                gl={{ antialias: true, stencil: true }}
-                style={{ pointerEvents: 'none' }}
-            >
-                <ambientLight intensity={0.7} />
-                <directionalLight position={[5, 8, 5]} intensity={1.5} />
-                <directionalLight position={[-4, 3, 2]} intensity={0.6} />
-                <Suspense fallback={null}>
-                    <Stage environment="city" intensity={0.3} shadows={false} adjustCamera={false}>
-                        <PowerbankPreviewScene />
-                    </Stage>
-                </Suspense>
-            </Canvas>
-            <SceneLoadingOverlay compact label="3D" />
-        </div>
-    );
-}
-
-function NotebookPreviewScene() {
-    const groupRef = useRef();
-
-    useFrame(({ clock }) => {
-        if (groupRef.current) {
-            groupRef.current.rotation.y = NOTEBOOK_PREVIEW_POSE.rotation[1]
-                + Math.sin(clock.elapsedTime * 0.7) * NOTEBOOK_PREVIEW_POSE.sway;
-        }
-    });
-
-    return (
-        <group
-            ref={groupRef}
-            position={NOTEBOOK_PREVIEW_POSE.position}
-            rotation={NOTEBOOK_PREVIEW_POSE.rotation}
-            scale={NOTEBOOK_PREVIEW_POSE.scale}
-        >
-            <Notebook config={NOTEBOOK_PREVIEW_CONFIG} />
-        </group>
-    );
-}
-
-function NotebookPreview() {
-    return (
-        <div className="relative w-full h-full">
-            <Canvas
-                camera={{ position: NOTEBOOK_PREVIEW_POSE.cameraPosition, fov: NOTEBOOK_PREVIEW_POSE.cameraFov }}
-                gl={{ antialias: true, stencil: true }}
-                style={{ pointerEvents: 'none' }}
-            >
-                <ambientLight intensity={0.75} />
-                <directionalLight position={[5, 8, 5]} intensity={1.5} />
-                <directionalLight position={[-4, 3, 2]} intensity={0.7} />
-                <Suspense fallback={null}>
-                    <NotebookPreviewScene />
-                </Suspense>
-            </Canvas>
-            <SceneLoadingOverlay compact label="3D" />
-        </div>
-    );
-}
-
-function MerchPreview({ model, previewConfig }) {
-    return (
-        <div className="relative h-full w-full">
-            <Canvas camera={{ position: [0, 0.2, 5.4], fov: 36 }} gl={{ antialias: true, stencil: true }} style={{ pointerEvents: 'none' }}>
-                <ambientLight intensity={0.78} />
-                <directionalLight position={[4, 6, 5]} intensity={1.4} />
-                <directionalLight position={[-4, 3, 2]} intensity={0.55} />
-                <Suspense fallback={null}>
-                    <Stage environment="city" intensity={0.22} shadows={false} adjustCamera>
-                        {createElement(model, { config: previewConfig, preview: true })}
-                    </Stage>
-                </Suspense>
-            </Canvas>
-            <SceneLoadingOverlay compact label="3D" />
-        </div>
-    );
-}
-
-const SHOPPER_PREVIEW_CONFIG = {
-    shopperColor: '#F5F0E1',
-    shopperMaterial: 'canvas_220',
-    shopperHandleType: 'long',
-    shopperPrintSide: 'front',
-    shopperLogos: [],
-};
-const TSHIRT_PREVIEW_CONFIG = {
-    tshirtColor: '#FFFFFF',
-    tshirtMaterial: 'cotton_180',
-    tshirtSize: 'M',
-    tshirtPrintSide: 'front',
-    tshirtLogos: [],
-};
-const HOODIE_PREVIEW_CONFIG = {
-    hoodieColor: '#1A1A1A',
-    hoodieMaterial: 'fleece_280',
-    hoodieSize: 'M',
-    hoodiePrintSide: 'front',
-    hoodieLogos: [],
-};
-const LANYARD_PREVIEW_CONFIG = {
-    lanyardColor: '#1565C0',
-    lanyardMaterial: 'polyester_15',
-    lanyardLengthMm: 450,
-    lanyardWidthMm: 15,
-    lanyardCarabiner: 'carabiner',
-    lanyardLogos: [],
-};
-const makeStickerPreviewLogo = (label, color) => {
-    const svg = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
-            <rect width="256" height="256" rx="48" fill="${color}"/>
-            <circle cx="128" cy="90" r="38" fill="white" opacity="0.92"/>
-            <text x="128" y="176" text-anchor="middle" font-family="Arial, sans-serif" font-size="58" font-weight="900" fill="white">${label}</text>
-        </svg>
-    `;
-
-    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-};
-const STICKER_PREVIEW_CONFIG = {
-    stickerSheetColor: '#FDD835',
-    stickerImages: [
-        { id: 'preview-sticker-1', texture: makeStickerPreviewLogo('S', '#1565C0'), filename: 'S', slot: 0, shape: 'circle', position: [0, 0], rotation: 0, scale: 0.86 },
-        { id: 'preview-sticker-2', texture: makeStickerPreviewLogo('P', '#EC407A'), filename: 'P', slot: 1, shape: 'square', position: [0, 0], rotation: 0, scale: 0.86 },
-        { id: 'preview-sticker-3', texture: makeStickerPreviewLogo('3D', '#43A047'), filename: '3D', slot: 2, shape: 'circle', position: [0, 0], rotation: 0, scale: 0.82 },
-        { id: 'preview-sticker-4', texture: makeStickerPreviewLogo('GO', '#111827'), filename: 'GO', slot: 3, shape: 'square', position: [0, 0], rotation: 0, scale: 0.82 },
-        { id: 'preview-sticker-5', texture: makeStickerPreviewLogo('★', '#F97316'), filename: 'Star', slot: 4, shape: 'square', position: [0, 0], rotation: 0, scale: 0.84 },
-        { id: 'preview-sticker-6', texture: makeStickerPreviewLogo('OK', '#5E366E'), filename: 'OK', slot: 5, shape: 'circle', position: [0, 0], rotation: 0, scale: 0.84 },
-    ],
-};
-
-function StickerPreview() {
-    return (
-        <div className="relative mx-auto h-full w-full max-w-[min(100%,220px)] overflow-hidden rounded-[8px] bg-[radial-gradient(circle_at_50%_22%,rgba(253,216,53,0.18),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.5),rgba(255,255,255,0.08))] dark:bg-[radial-gradient(circle_at_50%_22%,rgba(253,216,53,0.16),transparent_44%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]">
-            <Canvas camera={{ position: [0, 0.03, 8.1], fov: 30 }} gl={{ antialias: true, stencil: true }} style={{ pointerEvents: 'none' }}>
-                <ambientLight intensity={0.78} />
-                <directionalLight position={[4, 6, 5]} intensity={1.4} />
-                <directionalLight position={[-4, 3, 2]} intensity={0.55} />
-                <Suspense fallback={null}>
-                    <Stage environment="city" intensity={0.22} shadows={false} adjustCamera={false}>
-                        <Sticker config={STICKER_PREVIEW_CONFIG} preview position={[0, -0.05, 0]} />
-                    </Stage>
-                </Suspense>
-            </Canvas>
-            <SceneLoadingOverlay compact label="3D" />
+            {!failed && (
+                <img
+                    src={`/cloud-render/poster/${product}.jpg`}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.025]"
+                    onError={() => setFailed(true)}
+                />
+            )}
+            {failed && (
+                <div className="absolute inset-0 grid place-items-center">
+                    <svg width="74" height="74" viewBox="0 0 64 64" fill="none" className="text-white/65" aria-hidden="true">
+                        <path d="M32 7 54 19.5v25L32 57 10 44.5v-25L32 7Z" stroke="currentColor" strokeWidth="2.4" />
+                        <path d="m10 19.5 22 13 22-13M32 57V32.5" stroke="currentColor" strokeWidth="2.4" />
+                    </svg>
+                </div>
+            )}
+            <span className="absolute bottom-2.5 left-2.5 rounded-full border border-emerald-200/15 bg-black/45 px-2.5 py-1 text-[8px] font-black uppercase tracking-[0.16em] text-emerald-100/80 backdrop-blur-md">
+                Cloud render
+            </span>
         </div>
     );
 }
@@ -480,7 +194,7 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas, visibility = D
                     })}
                 >
                     <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
-                        <NotebookPreview />
+                        <CloudProductPreview product="notebook" />
                     </div>
                     <div className="relative z-10 mt-2 text-center">
                         <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'notebook')}</h3>
@@ -494,7 +208,7 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas, visibility = D
             {visibility.thermos !== false && (
                 <ProductCard glowColor="rgba(100, 116, 139, 0.22)" onClick={() => handleSelect('thermos', {})}>
                     <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
-                        <ThermosPreview />
+                        <CloudProductPreview product="thermos" />
                     </div>
                     <div className="relative z-10 mt-2 text-center">
                         <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'thermos')}</h3>
@@ -511,7 +225,7 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas, visibility = D
                     onClick={() => handleSelect('powerbank', {})}
                 >
                     <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
-                        <PowerbankPreview />
+                        <CloudProductPreview product="powerbank" />
                     </div>
                     <div className="relative z-10 mt-2 text-center">
                         <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'powerbank')}</h3>
@@ -528,7 +242,7 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas, visibility = D
                     onClick={() => handleSelect('sticker', {})}
                 >
                     <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
-                        <StickerPreview />
+                        <CloudProductPreview product="sticker" />
                     </div>
                     <div className="relative z-10 mt-2 text-center">
                         <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'sticker3d')}</h3>
@@ -545,7 +259,7 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas, visibility = D
                     onClick={() => handleSelect('shopper', {})}
                 >
                     <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
-                        <MerchPreview model={Shopper} previewConfig={SHOPPER_PREVIEW_CONFIG} />
+                        <CloudProductPreview product="shopper" />
                     </div>
                     <div className="relative z-10 mt-2 text-center">
                         <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'shopper')}</h3>
@@ -562,7 +276,7 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas, visibility = D
                     onClick={() => handleSelect('tshirt', {})}
                 >
                     <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
-                        <MerchPreview model={Tshirt} previewConfig={TSHIRT_PREVIEW_CONFIG} />
+                        <CloudProductPreview product="tshirt" />
                     </div>
                     <div className="relative z-10 mt-2 text-center">
                         <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'tshirt')}</h3>
@@ -579,7 +293,7 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas, visibility = D
                     onClick={() => handleSelect('hoodie', {})}
                 >
                     <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
-                        <MerchPreview model={Hoodie} previewConfig={HOODIE_PREVIEW_CONFIG} />
+                        <CloudProductPreview product="hoodie" />
                     </div>
                     <div className="relative z-10 mt-2 text-center">
                         <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'hoodie')}</h3>
@@ -596,7 +310,7 @@ export function ConfiguratorProductMenu({ onStart, onPrintCanvas, visibility = D
                     onClick={() => handleSelect('lanyard', {})}
                 >
                     <div className="home-product-preview relative z-10 h-36 w-full sm:h-40 md:h-44 xl:h-52 2xl:h-56">
-                        <MerchPreview model={Lanyard} previewConfig={LANYARD_PREVIEW_CONFIG} />
+                        <CloudProductPreview product="lanyard" />
                     </div>
                     <div className="relative z-10 mt-2 text-center">
                         <h3 className="text-base font-bold text-gray-900 transition-colors sm:text-lg dark:text-white">{t(language, 'lanyard')}</h3>
