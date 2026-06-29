@@ -20,6 +20,17 @@ import { SceneLoadingOverlay } from '../shared/VibeLoader';
 import { SiteFooter } from '../shared/SiteFooter';
 import { CLIENT_ORDER_STAGE_INDEX, CLIENT_ORDER_STAGES } from '../../config/orderStages';
 
+const DELIVERY_PICKUP = 'pickup';
+const DELIVERY_POSTAL = 'postal_service';
+
+const buildDeliveryAddress = ({ street, houseNumber, apartment }) => (
+    [
+        street?.trim(),
+        houseNumber?.trim(),
+        apartment?.trim() ? `кв. ${apartment.trim()}` : '',
+    ].filter(Boolean).join(', ')
+);
+
 const TabBtn = ({ active, children, onClick }) => (
     <button
         onClick={onClick}
@@ -165,8 +176,12 @@ export const ClientDashboard = ({
     const [expandedOrders, setExpandedOrders] = useState(new Set());
     const [orderSuccess, setOrderSuccess] = useState(false);
     const [clientType, setClientType] = useState('phys');
+    const [deliveryMethod, setDeliveryMethod] = useState(DELIVERY_PICKUP);
     const [isSample, setIsSample] = useState(false);
-    const [formData, setFormData] = useState({ name: '', phone: '', address: '', inn: '', contactPerson: '', comment: '' });
+    const [formData, setFormData] = useState({
+        name: '', phone: '', email: '', address: '', inn: '', contactPerson: '', comment: '',
+        deliveryRecipientFullName: '', deliveryStreet: '', deliveryHouseNumber: '', deliveryApartment: '',
+    });
     const [formError, setFormError] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
@@ -245,14 +260,36 @@ export const ClientDashboard = ({
             setFormError(t(language, 'cartEmpty'));
             return;
         }
+        const isPostalDelivery = deliveryMethod === DELIVERY_POSTAL;
+        const delivery = {
+            method: deliveryMethod,
+            recipient_full_name: formData.deliveryRecipientFullName.trim(),
+            street: formData.deliveryStreet.trim(),
+            house_number: formData.deliveryHouseNumber.trim(),
+            apartment: formData.deliveryApartment.trim(),
+        };
+        delivery.formatted_address = buildDeliveryAddress({
+            street: delivery.street,
+            houseNumber: delivery.house_number,
+            apartment: delivery.apartment,
+        });
+
         const contact = {
-            ...formData,
             name: formData.name.trim(),
             phone: formData.phone.trim(),
+            email: formData.email.trim(),
+            inn: formData.inn.trim(),
+            contactPerson: formData.contactPerson.trim(),
+            comment: formData.comment.trim(),
+            address: isPostalDelivery ? delivery.formatted_address : formData.address.trim(),
         };
 
         if (!contact.name || !contact.phone) {
             setFormError(t(language, 'fillNamePhone'));
+            return;
+        }
+        if (isPostalDelivery && (!delivery.recipient_full_name || !delivery.street || !delivery.house_number || !delivery.apartment)) {
+            setFormError(t(language, 'deliveryValidation'));
             return;
         }
         setFormError('');
@@ -282,6 +319,7 @@ export const ClientDashboard = ({
                     cart: cartPayload,
                     clientType,
                     contact,
+                    delivery,
                     isSample,
                 },
                 quantity: totalQuantity,
@@ -308,6 +346,7 @@ export const ClientDashboard = ({
                     cart: cartPayload,
                     clientType,
                     contact,
+                    delivery,
                     isSample,
                 },
             };
@@ -454,19 +493,43 @@ export const ClientDashboard = ({
                                             >{t(language, 'jurClient')}</button>
                                         </div>
 
+                                        <div className="bg-white/5 p-1.5 rounded-[14px] flex border border-white/8 min-w-0">
+                                            <button
+                                                onClick={() => setDeliveryMethod(DELIVERY_PICKUP)}
+                                                className={`flex-1 min-w-0 py-2.5 text-xs font-bold uppercase tracking-widest rounded-[12px] transition-all ${deliveryMethod === DELIVERY_PICKUP ? 'bg-white/15 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                                            >
+                                                <span className="flex flex-col items-center justify-center gap-1 leading-tight">
+                                                    <span>{t(language, 'deliveryPickup')}</span>
+                                                    <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-black tracking-wider text-emerald-300">
+                                                        {t(language, 'deliveryPickupDiscount')}
+                                                    </span>
+                                                </span>
+                                            </button>
+                                            <button
+                                                onClick={() => setDeliveryMethod(DELIVERY_POSTAL)}
+                                                className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-widest rounded-[12px] transition-all ${deliveryMethod === DELIVERY_POSTAL ? 'bg-white/15 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                                            >{t(language, 'deliveryPostal')}</button>
+                                        </div>
+
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {clientType === 'phys' ? (<>
                                                 <CartInput name="name" label={t(language, 'fullNameRequired')} placeholder={t(language, 'placeholderFullName')} value={formData.name} onChange={handleInputChange} required />
                                                 <CartInput name="phone" label={t(language, 'phoneRequired')} placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} required />
                                                 <CartInput name="email" label={t(language, 'emailLabel')} placeholder="mail@..." type="email" value={formData.email} onChange={handleInputChange} />
-                                                <div className="md:col-span-2">
+                                                {deliveryMethod === DELIVERY_PICKUP && <div className="md:col-span-2">
                                                     <CartInput name="address" label={t(language, 'orderAddress')} placeholder={t(language, 'placeholderCityStreet')} value={formData.address} onChange={handleInputChange} />
-                                                </div>
+                                                </div>}
                                             </>) : (<>
                                                 <CartInput name="name" label={t(language, 'companyRequired')} placeholder={t(language, 'placeholderCompany')} value={formData.name} onChange={handleInputChange} required />
                                                 <CartInput name="inn" label={t(language, 'unpInn')} placeholder="123456789" value={formData.inn} onChange={handleInputChange} />
                                                 <CartInput name="contactPerson" label={t(language, 'contactPersonRequired')} placeholder={t(language, 'placeholderFio')} value={formData.contactPerson} onChange={handleInputChange} />
                                                 <CartInput name="phone" label={t(language, 'phoneRequired')} placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} required />
+                                            </>)}
+                                            {deliveryMethod === DELIVERY_POSTAL && (<>
+                                                <CartInput name="deliveryRecipientFullName" label={`${t(language, 'deliveryRecipientFullName')} *`} placeholder={t(language, 'placeholderFullName')} value={formData.deliveryRecipientFullName} onChange={handleInputChange} required />
+                                                <CartInput name="deliveryStreet" label={`${t(language, 'deliveryStreet')} *`} placeholder={t(language, 'deliveryStreetPlaceholder')} value={formData.deliveryStreet} onChange={handleInputChange} required />
+                                                <CartInput name="deliveryHouseNumber" label={`${t(language, 'deliveryHouseNumber')} *`} placeholder={t(language, 'deliveryHousePlaceholder')} value={formData.deliveryHouseNumber} onChange={handleInputChange} required />
+                                                <CartInput name="deliveryApartment" label={`${t(language, 'deliveryApartment')} *`} placeholder={t(language, 'deliveryApartmentPlaceholder')} value={formData.deliveryApartment} onChange={handleInputChange} required />
                                             </>)}
                                             <div className="md:col-span-2">
                                                 <CartInput name="comment" label={t(language, 'orderComment')} placeholder={t(language, 'commentsPlaceholder')} value={formData.comment} onChange={handleInputChange} isTextarea />

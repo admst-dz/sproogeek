@@ -51,6 +51,8 @@ services:
       context: ./backend
     container_name: spruzhuk_backend
     restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:rootpassword@db:5432/spruzhuk}
       SECRET_KEY: ${SECRET_KEY:-dev-only-secret-change-before-production}
@@ -91,6 +93,8 @@ services:
       context: ./frontend
     container_name: spruzhuk_app
     restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     ports:
       - "8080:80"
     depends_on:
@@ -109,6 +113,8 @@ services:
     pull_policy: always
     container_name: spruzhuk_app_render
     restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     networks:
       - spruzhuk_net
     healthcheck:
@@ -125,6 +131,8 @@ services:
       context: ./microservices/renderer
     container_name: spruzhuk_renderer
     restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     environment:
       RENDER_FRONTEND_HOST: frontend-render
       RENDER_FRONTEND_PORT: 80
@@ -172,6 +180,8 @@ services:
       context: ./microservices/techcard
     container_name: spruzhuk_techcard
     restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     environment:
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
       S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
@@ -201,6 +211,8 @@ services:
       dockerfile: unwrap/Dockerfile
     container_name: spruzhuk_unwrap
     restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     networks:
       - spruzhuk_net
     healthcheck:
@@ -217,6 +229,8 @@ services:
       context: ./microservices/block_builder
     container_name: spruzhuk_block_builder
     restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     networks:
       - spruzhuk_net
     healthcheck:
@@ -236,6 +250,8 @@ services:
       dockerfile: microservices/glb-unwrapper/Dockerfile
     container_name: spruzhuk_glb_unwrapper
     restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     networks:
       - spruzhuk_net
     healthcheck:
@@ -256,8 +272,8 @@ services:
       DOCKER_API_VERSION: "1.41"
       DOCKER_CONFIG: /config
       WATCHTOWER_CLEANUP: "true"
-      WATCHTOWER_POLL_INTERVAL: "30"
-      WATCHTOWER_INCLUDE_RESTARTING: "true"
+      WATCHTOWER_POLL_INTERVAL: "300"
+      WATCHTOWER_LABEL_ENABLE: "true"
       WATCHTOWER_ROLLING_RESTART: "true"
     command: spruzhuk_app spruzhuk_app_render spruzhuk_backend spruzhuk_renderer spruzhuk_techcard spruzhuk_unwrap spruzhuk_block_builder spruzhuk_glb_unwrapper
 

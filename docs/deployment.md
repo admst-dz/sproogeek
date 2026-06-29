@@ -79,6 +79,32 @@ Backend пишет CSV-логи в `EVENT_LOG_DIR` или в `logs` внутри
 
 Один файл содержит максимум 10 000 строк. Новые файлы создаются автоматически.
 
+### Диагностика Watchtower
+
+Watchtower управляет перезапуском Docker-контейнеров при появлении новых образов.
+Если сервер внезапно перегружается или сервисы часто пересоздаются, сначала смотрите
+логи Watchtower и события Docker:
+
+```bash
+docker logs --tail=200 -f spruzhuk_watchtower
+docker events --since 30m --filter container=spruzhuk_watchtower
+docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
+```
+
+Для конкретного сервиса:
+
+```bash
+docker inspect -f '{{.RestartCount}} {{.State.Status}} {{.State.Error}}' spruzhuk_backend
+docker logs --tail=200 spruzhuk_backend
+```
+
+Если в логах Watchtower часто повторяются сообщения об обновлении одного и того же
+`:dev` образа, причина обычно в mutable-теге: registry получает новый digest под тем
+же тегом, и Watchtower честно пересоздает контейнер. В production лучше использовать
+уникальные теги релизов или commit SHA. В `docker-compose.yml` Watchtower ограничен
+label-allowlist и интервалом проверки 300 секунд, чтобы не трогать случайные
+контейнеры и не опрашивать registry слишком часто.
+
 ## Загруженные файлы
 
 Backend использует:
