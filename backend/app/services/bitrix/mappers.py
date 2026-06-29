@@ -114,6 +114,15 @@ def _build_comment(order: Order) -> str:
             parts.append(f"Телефон: {c['phone']}")
         if c.get("address"):
             parts.append(f"Адрес: {c['address']}")
+    if isinstance(cfg.get("delivery"), dict):
+        d = cfg["delivery"]
+        method = d.get("method")
+        if method:
+            parts.append(f"Получение: {'Доставка почтовым сервисом' if method == 'postal_service' else 'Самовывоз'}")
+        if d.get("recipient_full_name"):
+            parts.append(f"Получатель: {d['recipient_full_name']}")
+        if d.get("formatted_address") and not (isinstance(cfg.get("contact"), dict) and cfg["contact"].get("address")):
+            parts.append(f"Адрес: {d['formatted_address']}")
     if cfg.get("notes") or cfg.get("comment"):
         parts.append(f"Комментарий: {cfg.get('notes') or cfg.get('comment')}")
     return "\n".join(parts)

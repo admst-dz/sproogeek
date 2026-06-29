@@ -25,6 +25,16 @@ const PRINT_SIDE_LABELS = {
 };
 
 const printSideLabel = (side) => PRINT_SIDE_LABELS[side] || side;
+const DELIVERY_PICKUP = 'pickup';
+const DELIVERY_POSTAL = 'postal_service';
+
+const buildDeliveryAddress = ({ street, houseNumber, apartment }) => (
+    [
+        street?.trim(),
+        houseNumber?.trim(),
+        apartment?.trim() ? `кв. ${apartment.trim()}` : '',
+    ].filter(Boolean).join(', ')
+);
 
 export const Order = ({ onBack, onSuccess }) => {
     const {
@@ -43,12 +53,14 @@ export const Order = ({ onBack, onSuccess }) => {
     } = useConfigurator();
 
     const [clientType, setClientType] = useState('phys');
+    const [deliveryMethod, setDeliveryMethod] = useState(DELIVERY_PICKUP);
     const [quantity, setQuantity] = useState(1);
     const [isSample, setIsSample] = useState(false);
     const [loading, setLoading] = useState(false);
 
     const [formData, setFormData] = useState({
-        name: '', phone: '', email: '', address: '', inn: '', contactPerson: '', comment: ''
+        name: '', phone: '', email: '', address: '', inn: '', contactPerson: '', comment: '',
+        deliveryRecipientFullName: '', deliveryStreet: '', deliveryHouseNumber: '', deliveryApartment: '',
     });
 
     const handleInputChange = (e) => {
@@ -200,14 +212,36 @@ export const Order = ({ onBack, onSuccess }) => {
     };
 
     const handleSubmit = async () => {
+        const isPostalDelivery = deliveryMethod === DELIVERY_POSTAL;
+        const delivery = {
+            method: deliveryMethod,
+            recipient_full_name: formData.deliveryRecipientFullName.trim(),
+            street: formData.deliveryStreet.trim(),
+            house_number: formData.deliveryHouseNumber.trim(),
+            apartment: formData.deliveryApartment.trim(),
+        };
+        delivery.formatted_address = buildDeliveryAddress({
+            street: delivery.street,
+            houseNumber: delivery.house_number,
+            apartment: delivery.apartment,
+        });
+
         const contact = {
-            ...formData,
             name: formData.name.trim(),
             phone: formData.phone.trim(),
+            email: formData.email.trim(),
+            inn: formData.inn.trim(),
+            contactPerson: formData.contactPerson.trim(),
+            comment: formData.comment.trim(),
+            address: isPostalDelivery ? delivery.formatted_address : formData.address.trim(),
         };
 
         if (!contact.name || !contact.phone) {
             alert(t(language, 'orderValidation'));
+            return;
+        }
+        if (isPostalDelivery && (!delivery.recipient_full_name || !delivery.street || !delivery.house_number || !delivery.apartment)) {
+            alert(t(language, 'deliveryValidation'));
             return;
         }
         setLoading(true);
@@ -220,6 +254,7 @@ export const Order = ({ onBack, onSuccess }) => {
                 configuration: {
                     clientType,
                     contact,
+                    delivery,
                     isSample,
                     productConfig,
                 },
@@ -384,13 +419,31 @@ export const Order = ({ onBack, onSuccess }) => {
                             >{t(language, 'orderJur')}</button>
                         </div>
 
+                        <div className="bg-gray-100 dark:bg-white/5 p-1.5 rounded-[14px] flex shadow-inner dark:shadow-none border dark:border-white/8 min-w-0">
+                            <button
+                                onClick={() => setDeliveryMethod(DELIVERY_PICKUP)}
+                                className={`flex-1 min-w-0 py-3 text-xs md:text-sm font-bold uppercase tracking-widest rounded-[12px] transition-all duration-300 ${deliveryMethod === DELIVERY_PICKUP ? 'bg-white dark:bg-white/15 shadow text-black dark:text-white' : 'text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60'}`}
+                            >
+                                <span className="flex flex-col items-center justify-center gap-1 leading-tight">
+                                    <span>{t(language, 'deliveryPickup')}</span>
+                                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-black tracking-wider ${deliveryMethod === DELIVERY_PICKUP ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-emerald-500/10 text-emerald-600/80 dark:text-emerald-300/70'}`}>
+                                        {t(language, 'deliveryPickupDiscount')}
+                                    </span>
+                                </span>
+                            </button>
+                            <button
+                                onClick={() => setDeliveryMethod(DELIVERY_POSTAL)}
+                                className={`flex-1 py-3 text-xs md:text-sm font-bold uppercase tracking-widest rounded-[12px] transition-all duration-300 ${deliveryMethod === DELIVERY_POSTAL ? 'bg-white dark:bg-white/15 shadow text-black dark:text-white' : 'text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60'}`}
+                            >{t(language, 'deliveryPostal')}</button>
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {clientType === 'phys' ? (
                                 <>
                                     <InputGroup name="name" label={`${t(language, 'orderFullName')} *`} placeholder={t(language, 'placeholderFullName')} value={formData.name} onChange={handleInputChange} required />
                                     <InputGroup name="phone" label={`${t(language, 'orderPhone')} *`} placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} required />
                                     <InputGroup name="email" label="Email" placeholder="mail@..." type="email" value={formData.email} onChange={handleInputChange} />
-                                    <InputGroup name="address" label={t(language, 'orderAddress')} placeholder={t(language, 'placeholderCityStreet')} value={formData.address} onChange={handleInputChange} />
+                                    {deliveryMethod === DELIVERY_PICKUP && <InputGroup name="address" label={t(language, 'orderAddress')} placeholder={t(language, 'placeholderCityStreet')} value={formData.address} onChange={handleInputChange} />}
                                 </>
                             ) : (
                                 <>
@@ -398,6 +451,14 @@ export const Order = ({ onBack, onSuccess }) => {
                                     <InputGroup name="inn" label={t(language, 'orderInn')} placeholder="12345..." value={formData.inn} onChange={handleInputChange} />
                                     <InputGroup name="contactPerson" label={t(language, 'orderContactPerson')} placeholder={t(language, 'orderFullName')} value={formData.contactPerson} onChange={handleInputChange} />
                                     <InputGroup name="phone" label={`${t(language, 'orderPhone')} *`} placeholder="+375..." type="tel" value={formData.phone} onChange={handleInputChange} required />
+                                </>
+                            )}
+                            {deliveryMethod === DELIVERY_POSTAL && (
+                                <>
+                                    <InputGroup name="deliveryRecipientFullName" label={`${t(language, 'deliveryRecipientFullName')} *`} placeholder={t(language, 'placeholderFullName')} value={formData.deliveryRecipientFullName} onChange={handleInputChange} required />
+                                    <InputGroup name="deliveryStreet" label={`${t(language, 'deliveryStreet')} *`} placeholder={t(language, 'deliveryStreetPlaceholder')} value={formData.deliveryStreet} onChange={handleInputChange} required />
+                                    <InputGroup name="deliveryHouseNumber" label={`${t(language, 'deliveryHouseNumber')} *`} placeholder={t(language, 'deliveryHousePlaceholder')} value={formData.deliveryHouseNumber} onChange={handleInputChange} required />
+                                    <InputGroup name="deliveryApartment" label={`${t(language, 'deliveryApartment')} *`} placeholder={t(language, 'deliveryApartmentPlaceholder')} value={formData.deliveryApartment} onChange={handleInputChange} required />
                                 </>
                             )}
                             <div className="md:col-span-2">

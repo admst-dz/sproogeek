@@ -412,6 +412,7 @@ const normalizeDashboardOrder = (order) => ({
 
 const getOrderConfig = (order) => order.configuration?.productConfig || order.configuration || {};
 const getOrderContact = (order) => order.configuration?.contact || {};
+const getOrderDelivery = (order) => order.configuration?.delivery || {};
 const getProductType = (order) => {
     const cfg = getOrderConfig(order);
     const product = `${order.product || ''}`.toLowerCase();
@@ -510,10 +511,19 @@ const DealerOrderDetails = ({ order, language, full = false }) => {
                 )}
                 {full && (
                     <>
+                        {(() => {
+                            const delivery = getOrderDelivery(order);
+                            return (
+                                <>
+                                    <DetailRow label={t(language, 'deliveryMethod')} value={delivery.method === 'postal_service' ? t(language, 'deliveryPostal') : t(language, 'deliveryPickup')} />
+                                    <DetailRow label={t(language, 'deliveryRecipientFullName')} value={delivery.recipient_full_name} />
+                                </>
+                            );
+                        })()}
                         <DetailRow label={t(language, 'clientCol')} value={contact.name || contact.contactPerson || order.userEmail} />
                         <DetailRow label={t(language, 'emailLabel')} value={order.userEmail || contact.email} />
                         <DetailRow label={t(language, 'orderPhone')} value={contact.phone} />
-                        <DetailRow label={t(language, 'orderAddress')} value={contact.address} />
+                        <DetailRow label={t(language, 'orderAddress')} value={getOrderDelivery(order).formatted_address || contact.address} />
                         {selectedQuote && <DetailRow label={t(language, 'quotePricePlaceholder')} value={`${selectedQuote.price} ${selectedQuote.currency || 'BYN'}`} />}
                         {selectedQuote && <DetailRow label={t(language, 'quoteDaysPlaceholder')} value={`${selectedQuote.production_days} ${t(language, 'quoteDaysShort')}`} />}
                         {contact.comment && <DetailRow label={t(language, 'orderComment')} value={contact.comment} />}

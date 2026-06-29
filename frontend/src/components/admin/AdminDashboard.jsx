@@ -172,12 +172,15 @@ function orderSummaryRows(order, language) {
     const config = order.configuration || {};
     const productConfig = config.productConfig || {};
     const contact = config.contact || {};
+    const delivery = config.delivery || {};
     const bindingCaps = getNotebookBindingCapabilities(productConfig.bindingType);
     const rows = [
         [t(language, 'adminClientLabel'), contact.name || contact.contactPerson],
         [t(language, 'adminPhoneLabel'), contact.phone],
         ['Email', order.user_email || contact.email],
-        [t(language, 'adminAddressLabel'), contact.address],
+        [t(language, 'deliveryMethod'), delivery.method === 'postal_service' ? t(language, 'deliveryPostal') : t(language, 'deliveryPickup')],
+        [t(language, 'deliveryRecipientFullName'), delivery.recipient_full_name],
+        [t(language, 'adminAddressLabel'), delivery.formatted_address || contact.address],
         [t(language, 'adminCompanyInn'), [contact.name, contact.inn].filter(Boolean).join(' / ')],
         [t(language, 'adminClientType'), config.clientType === 'jur' ? t(language, 'adminJurLabel') : config.clientType === 'phys' ? t(language, 'adminPhysLabel') : config.clientType],
         [t(language, 'adminSampleOrder'), config.isSample || productConfig.isSample ? t(language, 'adminYes') : null],

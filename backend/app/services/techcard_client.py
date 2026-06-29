@@ -76,10 +76,12 @@ async def _build_request(order: Order, db: AsyncSession) -> dict[str, Any]:
     cfg = order.configuration or {}
     contact = cfg.get("contact") if isinstance(cfg.get("contact"), dict) else {}
     contact = contact or {}
+    delivery_cfg = cfg.get("delivery") if isinstance(cfg.get("delivery"), dict) else {}
+    delivery_cfg = delivery_cfg or {}
 
     client_name = contact.get("name") or contact.get("contactPerson") or client_name
     client_phone = contact.get("phone") or ""
-    client_address = contact.get("address") or ""
+    client_address = delivery_cfg.get("formatted_address") or contact.get("address") or ""
     notes = cfg.get("notes") or cfg.get("comment") or contact.get("comment") or ""
 
     manager_name = cfg.get("managerName") or ""
@@ -100,6 +102,11 @@ async def _build_request(order: Order, db: AsyncSession) -> dict[str, Any]:
             manager_name = manager_name or mfg_user.display_name or mfg_user.company_name or mfg_user.email or ""
 
     delivery = {
+        "method": delivery_cfg.get("method") or "pickup",
+        "recipient_full_name": delivery_cfg.get("recipient_full_name") or "",
+        "street": delivery_cfg.get("street") or "",
+        "house_number": delivery_cfg.get("house_number") or "",
+        "apartment": delivery_cfg.get("apartment") or "",
         "address": client_address,
         "phone": client_phone,
     }

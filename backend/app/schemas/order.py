@@ -8,6 +8,23 @@ ORDER_STATUSES = (
     "in_delivery", "done", "approved", "rejected", "cancelled",
 )
 
+DELIVERY_METHODS = {"pickup", "postal_service"}
+
+
+def _clean_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _build_delivery_address(delivery: Dict[str, Any]) -> str:
+    parts = [
+        _clean_text(delivery.get("street")),
+        _clean_text(delivery.get("house_number")),
+    ]
+    apartment = _clean_text(delivery.get("apartment"))
+    if apartment:
+        parts.append(f"кв. {apartment}")
+    return ", ".join(part for part in parts if part)
+
 
 class OrderCreate(BaseModel):
     user_id: Optional[str] = None
@@ -32,6 +49,37 @@ class OrderCreate(BaseModel):
 
         contact["name"] = name
         contact["phone"] = phone
+
+        delivery = self.configuration.get("delivery")
+        if not isinstance(delivery, dict):
+            delivery = {}
+            self.configuration["delivery"] = delivery
+
+        method = _clean_text(delivery.get("method") or self.configuration.get("deliveryMethod") or "pickup")
+        if method not in DELIVERY_METHODS:
+            raise ValueError("Delivery method is invalid")
+
+        delivery["method"] = method
+        if method == "postal_service":
+            required_fields = {
+                "recipient_full_name": "Delivery recipient full name is required",
+                "street": "Delivery street is required",
+                "house_number": "Delivery house number is required",
+                "apartment": "Delivery apartment is required",
+            }
+            for field, message in required_fields.items():
+                value = _clean_text(delivery.get(field) or delivery.get(field.replace("_", "")))
+                if not value:
+                    raise ValueError(message)
+                delivery[field] = value
+
+            formatted_address = _clean_text(delivery.get("formatted_address")) or _build_delivery_address(delivery)
+            delivery["formatted_address"] = formatted_address
+            contact["address"] = formatted_address
+            contact["deliveryRecipientFullName"] = delivery["recipient_full_name"]
+        else:
+            delivery.setdefault("formatted_address", "")
+
         return self
 
 
